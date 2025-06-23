@@ -4,6 +4,7 @@ import numpy as np
 import re
 from ..shared.agent import BaseAgent, layer_init
 from ..shared.nets import ImageEncoderResnet
+from torch.distributions import Categorical, Normal
 
 class PPOAgent(BaseAgent):
     def __init__(self, envs, config):
@@ -183,3 +184,29 @@ class PPOAgent(BaseAgent):
         # Project to latent space
         latent = self.latent_projector(features)
         return latent 
+
+    def get_action_and_value(self, x, action=None):
+        """Get action and value from policy for PPO (no imitation losses)."""
+        latent = self.encode_observations(x)
+        
+        if self.is_discrete:
+            logits = self.actor(latent)
+            probs = Categorical(logits=logits)
+            if action is None:
+                action = probs.sample()
+                # Convert to one-hot for environment
+                one_hot_action = torch.zeros_like(logits)
+                one_hot_action.scatter_(1, action.unsqueeze(1), 1.0)
+                return one_hot_action, probs.log_prob(action), probs.entropy(), self.critic(latent)
+            else:
+                # Convert one-hot action back to indices for log_prob calculation
+                action_indices = action.argmax(dim=1)
+                return action, probs.log_prob(action_indices), probs.entropy(), self.critic(latent)
+        else:
+            action_mean = self.actor_mean(latent)
+            action_logstd = self.actor_logstd.expand_as(action_mean)
+            action_std = torch.exp(action_logstd)
+            probs = Normal(action_mean, action_std)
+            if action is None:
+                action = probs.sample()
+            return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(latent) 

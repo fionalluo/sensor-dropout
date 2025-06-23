@@ -80,34 +80,34 @@ defaults:
 # ====================
 
 # Bandit 5
-gymnasium_bandit5: &gymnasium_bandit5
-  task: gymnasium_BanditPathEnv5-v0
-  total_timesteps: 100000
-  num_envs: 8  # Doubled from 8 to 16 for even more parallel exploration
-  num_steps: 256  # Doubled from 256 to collect more experience per update
-  learning_rate: 1e-4  # Further reduced for more stable learning during exploration
-  ent_coef: 0.05  # Doubled from 0.05 to encourage even more random actions
-  gamma: 0.99
-  gae_lambda: 0.95
-  num_minibatches: 8  # Increased to handle larger batch size
-  update_epochs: 4
-  norm_adv: true
-  clip_coef: 0.2
-  clip_vloss: true
-  vf_coef: 0.5
-  max_grad_norm: 0.5
-  eval:
-    eval_interval: 100
-    num_eval_episodes: 10
-    eval_envs: 4
-    video_log_interval: 2
-  full_keys: {mlp_keys: '\b(target|neighbors|distance|position)\b', cnn_keys: '^$'}
-  keys: {mlp_keys: '\b(neighbors_unprivileged|position)\b', cnn_keys: '^$'}
-  exp_name: "bandit5_distill"
+# gymnasium_bandit5: &gymnasium_bandit5
+#   task: gymnasium_BanditPathEnv5-v0
+#   total_timesteps: 100000
+#   num_envs: 8  # Doubled from 8 to 16 for even more parallel exploration
+#   num_steps: 256  # Doubled from 256 to collect more experience per update
+#   learning_rate: 1e-4  # Further reduced for more stable learning during exploration
+#   ent_coef: 0.05  # Doubled from 0.05 to encourage even more random actions
+#   gamma: 0.99
+#   gae_lambda: 0.95
+#   num_minibatches: 8  # Increased to handle larger batch size
+#   update_epochs: 4
+#   norm_adv: true
+#   clip_coef: 0.2
+#   clip_vloss: true
+#   vf_coef: 0.5
+#   max_grad_norm: 0.5
+#   eval:
+#     eval_interval: 100
+#     num_eval_episodes: 10
+#     eval_envs: 4
+#     video_log_interval: 2
+#   full_keys: {mlp_keys: '\b(target|neighbors|distance|position)\b', cnn_keys: '^$'}
+#   keys: {mlp_keys: '\b(neighbors_unprivileged|position)\b', cnn_keys: '^$'}
+#   exp_name: "bandit5_distill"
 
 # Tiger Key Door
 gymnasium_tigerkeydoor: &tigerkeydoor_base
-  task: gymnasium_BanditPathEnv5-v0
+  task: gymnasium_TigerDoorKey-v0
   total_timesteps: 150000
   num_envs: 8
   num_steps: 256
@@ -126,6 +126,7 @@ gymnasium_tigerkeydoor: &tigerkeydoor_base
     eval_interval: 100
     num_eval_episodes: 10
     eval_envs: 4
+  full_keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|distance_to_treasure|position|has_key)\b', cnn_keys: '^$'}
   keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|distance_to_treasure|position|has_key)\b', cnn_keys: '^$'}
   exp_name: "tigerkeydoor_ppo"
 

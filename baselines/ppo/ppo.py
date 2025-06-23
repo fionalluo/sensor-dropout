@@ -26,7 +26,22 @@ class PPOTrainer:
         )
         
         # Initialize storage - will be set up properly in collect_rollout
-        self.obs = None  # Will be initialized in collect_rollout
+        self.obs = {}
+        for key in self.agent.mlp_keys + self.agent.cnn_keys:
+            if key in self.envs.obs_space:
+                if len(self.envs.obs_space[key].shape) == 3 and self.envs.obs_space[key].shape[-1] == 3:  # Image observations
+                    self.obs[key] = torch.zeros(
+                        (self.config.num_steps, self.config.num_envs) + self.envs.obs_space[key].shape,
+                        dtype=torch.float32,
+                        device=self.device
+                    )
+                else:  # Non-image observations
+                    size = np.prod(self.envs.obs_space[key].shape)
+                    self.obs[key] = torch.zeros(
+                        (self.config.num_steps, self.config.num_envs, size),
+                        dtype=torch.float32,
+                        device=self.device
+                    )
         self.actions = torch.zeros(
             (config.num_steps, config.num_envs) + envs.act_space['action'].shape,
             dtype=torch.float32,
@@ -88,7 +103,26 @@ class PPOTrainer:
             wandb.log(metrics_dict, step=step)
 
     def collect_rollout(self):
-        """Collect a rollout of experiences."""
+        """Collect a rollout of experience."""
+        # Initialize observation storage if not already done
+        if not self.obs:
+            # Initialize observation storage for all keys
+            for key in self.agent.mlp_keys + self.agent.cnn_keys:
+                if key in self.envs.obs_space:
+                    if len(self.envs.obs_space[key].shape) == 3 and self.envs.obs_space[key].shape[-1] == 3:  # Image observations
+                        self.obs[key] = torch.zeros(
+                            (self.config.num_steps, self.config.num_envs) + self.envs.obs_space[key].shape,
+                            dtype=torch.float32,
+                            device=self.device
+                        )
+                    else:  # Non-image observations
+                        size = np.prod(self.envs.obs_space[key].shape)
+                        self.obs[key] = torch.zeros(
+                            (self.config.num_steps, self.config.num_envs, size),
+                            dtype=torch.float32,
+                            device=self.device
+                        )
+        
         # Get initial observations using the same logic as thesis
         action_shape = self.envs.act_space['action'].shape
         acts = {
@@ -104,32 +138,13 @@ class PPOTrainer:
                 next_obs[key] = torch.Tensor(obs_dict[key].astype(np.float32)).to(self.device)
         next_done = torch.Tensor(obs_dict['is_last'].astype(np.float32)).to(self.device)
         
-        # Initialize obs storage if not already done
-        if self.obs is None:
-            obs_keys = list(next_obs.keys())
-            if obs_keys:
-                key = obs_keys[0]  # Use the first key
-                self.obs = torch.zeros(
-                    (self.config.num_steps, self.config.num_envs) + next_obs[key].shape[1:],
-                    dtype=torch.float32,
-                    device=self.device
-                )
-            else:
-                # Fallback if no observations
-                self.obs = torch.zeros(
-                    (self.config.num_steps, self.config.num_envs, 1),
-                    dtype=torch.float32,
-                    device=self.device
-                )
-        
         for step in range(self.config.num_steps):
             self.global_step += self.config.num_envs
             
-            # Store observations - use the first key for storage
-            obs_keys = list(next_obs.keys())
-            if obs_keys:
-                key = obs_keys[0]
-                self.obs[step] = next_obs[key]
+            # Store observations for all keys
+            for key in self.agent.mlp_keys + self.agent.cnn_keys:
+                if key in next_obs:
+                    self.obs[key][step] = next_obs[key]
             self.dones[step] = next_done
             
             # Get action and value
@@ -172,6 +187,9 @@ class PPOTrainer:
                             "charts/episodic_return": episode_reward,
                             "charts/episodic_length": episode_length
                         }, step=self.episode_count)
+                        
+                        # Print episode info
+                        print(f"Episode {self.episode_count}: Return={episode_reward:.2f}, Length={episode_length}")
         
         # Compute advantages and returns
         with torch.no_grad():
@@ -189,15 +207,11 @@ class PPOTrainer:
                 advantages[t] = lastgaelam = delta + self.config.gamma * self.config.gae_lambda * nextnonterminal * lastgaelam
             returns = advantages + self.values
 
-        # Flatten the batch - need to handle different observation shapes
-        # For now, let's assume we have a single observation key
-        obs_keys = list(next_obs.keys())
-        if obs_keys:
-            key = obs_keys[0]  # Use the first key
-            b_obs = self.obs.reshape((-1,) + next_obs[key].shape[1:])
-        else:
-            # Fallback if no observations
-            b_obs = torch.zeros((self.config.num_steps * self.config.num_envs, 1), device=self.device)
+        # Flatten the batch - handle multiple observation keys properly
+        b_obs = {}
+        for key in self.agent.mlp_keys + self.agent.cnn_keys:
+            if key in next_obs:
+                b_obs[key] = self.obs[key].reshape(-1, *self.obs[key].shape[2:])
         
         b_logprobs = self.logprobs.reshape(-1)
         b_actions = self.actions.reshape((-1,) + self.envs.act_space['action'].shape)
@@ -209,18 +223,27 @@ class PPOTrainer:
 
     def update_policy(self, b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values):
         """Update the policy using PPO."""
+        # Calculate batch size like the thesis
+        batch_size = int(self.config.num_envs * self.config.num_steps)
+        minibatch_size = int(batch_size // self.config.num_minibatches)
+        
         # Optimize the policy and value function
-        b_inds = np.arange(self.config.batch_size)
+        b_inds = np.arange(batch_size)
         clipfracs = []
         
         for epoch in range(self.config.update_epochs):
             np.random.shuffle(b_inds)
-            for start in range(0, self.config.batch_size, self.config.minibatch_size):
-                end = start + self.config.minibatch_size
+            for start in range(0, batch_size, minibatch_size):
+                end = start + minibatch_size
                 mb_inds = b_inds[start:end]
                 
+                # Create minibatch observations dictionary
+                mb_obs = {}
+                for key in b_obs.keys():
+                    mb_obs[key] = b_obs[key][mb_inds]
+                
                 _, newlogprob, entropy, newvalue = self.agent.get_action_and_value(
-                    b_obs[mb_inds], b_actions.long()[mb_inds]
+                    mb_obs, b_actions[mb_inds]
                 )
                 logratio = newlogprob - b_logprobs[mb_inds]
                 ratio = logratio.exp()
@@ -302,6 +325,11 @@ class PPOTrainer:
             # Log iteration info
             if iteration % self.config.log_interval == 0:
                 print(f"Iteration {iteration}/{self.config.num_iterations}")
+                print(f"  Global step: {self.global_step}")
+                print(f"  Episodes completed: {self.episode_count}")
+                print(f"  Average return (last rollout): {b_returns.mean().item():.2f}")
+                print(f"  Average advantage: {b_advantages.mean().item():.2f}")
+                print("-" * 50)
         
         # Close logging
         self.writer.close()
