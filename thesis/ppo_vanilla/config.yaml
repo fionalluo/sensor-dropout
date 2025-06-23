@@ -1,0 +1,111 @@
+defaults:
+  exp_name: ppo_thesis_exp
+  seed: 0
+  torch_deterministic: true
+  cuda: true
+  track: true
+  wandb_project_name: "cleanrl-ppo"
+  wandb_entity: 'fionalluo'
+  capture_video: false
+
+  task: CartPole-v1
+  total_timesteps: 500000
+  learning_rate: 2.5e-4
+  num_envs: 4
+  num_steps: 128
+  anneal_lr: true
+  gamma: 0.99
+  gae_lambda: 0.95
+  num_minibatches: 4
+  update_epochs: 4
+  norm_adv: true
+  clip_coef: 0.2
+  clip_vloss: true
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  target_kl: None
+  full_keys: {mlp_keys: '.*', cnn_keys: '.*'}
+  keys: {mlp_keys: '.*', cnn_keys: '.*'}
+
+  save_model: false
+  log_keys_video: [image]
+
+  # PPO Encoder Architecture
+  encoder:
+    act: 'silu'   # Activation function for both CNN and MLP encoders # Options: silu, relu, tanh
+    norm: 'layer'  # Layer normalization # Options: layer, none
+    output_dim: 512 # Output dimension for both CNN and MLP encoders
+
+    # MLP encoder settings
+    mlp_layers: 2
+    mlp_units: 256
+    
+    # CNN encoder settings
+    cnn_depth: 48
+    cnn_blocks: 0
+    resize: 'bilinear'
+    minres: 4
+    
+  # encoder:
+  #   act: silu
+  #   norm: layer
+  #   mlp_layers: 5
+  #   mlp_units: 1024
+  #   cnn: resnet
+  #   cnn_depth: 96
+  #   cnn_blocks: 0
+  #   resize: stride
+  #   winit: normal
+  #   fan: avg
+  #   symlog_inputs: True
+  #   minres: 4
+
+  env:
+    atari: {size: [64, 64], repeat: 4, sticky: True, gray: False, actions: all, lives: unused, noops: 0, resize: opencv}
+    dmlab: {size: [64, 64], repeat: 4, episodic: True}
+    minecraft: {size: [64, 64], break_speed: 100.0}
+    dmc: {size: [64, 64], repeat: 2, camera: -1}
+    loconav: {size: [64, 64], repeat: 2, camera: -1}
+    gym: {obs_key: state}
+
+# ====================
+# Named Configs
+# ====================
+
+cartpole_small:
+  task: CartPole-v1
+  total_timesteps: 200000
+  learning_rate: 1e-3
+  num_envs: 2
+  num_steps: 64
+
+gymnasium_bandit5:
+  task: gymnasium_BanditPathEnv5-v0
+  total_timesteps: 50000
+  num_envs: 4
+  num_steps: 128
+  full_keys: {mlp_keys: '\b(target|neighbors|distance|position)\b', cnn_keys: '^$'}
+  keys: {mlp_keys: '\b(target_unprivileged|neighbors_unprivileged|position)\b', cnn_keys: '^$'}
+  exp_name: "bandit5"
+
+gymnasium_lavatrail8:
+  task: gymnasium_LavaTrail8x8-v0
+  total_timesteps: 50000
+  num_envs: 4
+  num_steps: 128
+  full_keys: {mlp_keys: '\b(neighbors|last_action|position)\b', cnn_keys: '^$'}
+  keys: {mlp_keys: '\b(neighbors_unprivileged|last_action|position)\b', cnn_keys: '^$'}
+  # full_keys: {mlp_keys: '\b(neighbors|last_action|grid|position)\b', cnn_keys: '^$'}
+  # keys: {mlp_keys: '\b(neighbors_unprivileged|last_action|grid_unprivileged|position)\b', cnn_keys: '^$'}
+  exp_name: "lavatrail8"
+
+gymnasium_blindpick:
+  task: gymnasium_FOFixedGripper2DBlind7cmPick-v0
+  total_timesteps: 50000
+  num_envs: 4
+  num_steps: 128
+  log_keys_video: [camera_front]
+  full_keys: {mlp_keys: '.*', cnn_keys: '.*'}
+  keys: {mlp_keys: '.*', cnn_keys: '^$'}
+  exp_name: "blindpick"

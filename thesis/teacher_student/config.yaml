@@ -1,0 +1,849 @@
+defaults:
+  exp_name: teacher_student_exp
+  seed: 0
+  torch_deterministic: true
+  cuda: true
+  track: true
+  wandb_project_name: "cleanrl-piano"
+  wandb_entity: 'fionalluo'
+  capture_video: false
+
+  task: CartPole-v1
+  total_timesteps: 500000
+  learning_rate: 3e-4  # Standard learning rate that works well across environments
+  num_envs: 4
+  num_steps: 128
+  anneal_lr: true  # Learning rate annealing helps with convergence
+  gamma: 0.99  # Standard discount factor
+  gae_lambda: 0.95  # Standard GAE lambda
+  num_minibatches: 4
+  update_epochs: 4
+  norm_adv: true  # Normalizing advantages is important for stability
+  clip_coef: 0.2  # Standard PPO clip coefficient
+  clip_vloss: true  # Clipping value loss helps with stability
+  ent_coef: 0.01  # Moderate entropy coefficient for exploration
+  vf_coef: 0.5  # Standard value function coefficient
+  max_grad_norm: 0.5  # Standard gradient clipping
+  target_kl: None  # Remove target KL to allow faster training
+
+  # Teacher and student observation keys
+  full_keys: {mlp_keys: '.*', cnn_keys: '.*'}  # Teacher sees everything
+  keys: {mlp_keys: '.*', cnn_keys: '.*'}  # Student sees all info (default)
+
+  save_model: false
+  log_keys_video: [image]
+
+  # PPO Encoder Architecture
+  encoder:
+    # act: "relu"  # Activation function
+    # norm: none  # Normalization type
+    # output_dim: 256  # Final output dimension
+
+    # mlp_layers: 2  # Number of MLP layers
+    # mlp_units: 128  # Number of units per MLP layer
+    act: "silu"  # Activation function
+    norm: "layer"  # Normalization type
+    output_dim: 512  # Final output dimension
+
+    mlp_layers: 2  # Number of MLP layers
+    mlp_units: 256  # Number of units per MLP layer
+
+    cnn_depth: 48  # Base depth for CNN
+    cnn_blocks: 0  # Number of residual blocks
+    resize: "bilinear"  # Resize strategy
+    minres: 4  # Minimum resolution
+
+    student_to_teacher_imitation: false  # Whether to enable student-to-teacher imitation
+    teacher_to_student_imitation: false  # Whether to enable teacher-to-student imitation
+    student_to_teacher_lambda: 0.0  # Weight for student-to-teacher imitation loss
+    teacher_to_student_lambda: 0.0  # Weight for teacher-to-student imitation loss
+  
+  # Actor and critic architecture
+  actor_critic:
+    act: "silu"  # Activation function
+    norm: "layer"  # Normalization type
+
+  # Behavioral Cloning settings
+  bc:
+    learning_rate: 3e-4  # Increased learning rate for faster convergence
+    batch_size: 128  # Larger batch size for better GPU utilization
+    num_steps: 256  # Reduced number of steps since we're doing more frequent updates
+    max_grad_norm: 0.5
+
+  env:
+    atari: {size: [64, 64], repeat: 4, sticky: True, gray: False, actions: all, lives: unused, noops: 0, resize: opencv}
+    dmlab: {size: [64, 64], repeat: 4, episodic: True}
+    minecraft: {size: [64, 64], break_speed: 100.0}
+    dmc: {size: [64, 64], repeat: 2, camera: -1}
+    loconav: {size: [64, 64], repeat: 2, camera: -1}
+    gym: {obs_key: state}
+  
+  # Evaluation settings
+  eval:
+    eval_interval: 1000  # Evaluate every 1000 steps
+    num_eval_episodes: 10  # Number of episodes to evaluate
+    eval_envs: 4  # Number of parallel environments for evaluation
+    video_log_interval: 1  # Log videos every 10 evaluation calls
+
+# ====================
+# Named Configs
+# ====================
+
+cartpole_small:
+  task: CartPole-v1
+  total_timesteps: 200000
+  learning_rate: 1e-3
+  num_envs: 2
+  num_steps: 64
+
+gymnasium_bandit5: &gymnasium_bandit5
+  task: gymnasium_BanditPathEnv5-v0
+  total_timesteps: 100000
+  num_envs: 8  # Doubled from 8 to 16 for even more parallel exploration
+  num_steps: 256  # Doubled from 256 to collect more experience per update
+  learning_rate: 1e-4  # Further reduced for more stable learning during exploration
+  ent_coef: 0.05  # Doubled from 0.05 to encourage even more random actions
+  gamma: 0.99
+  gae_lambda: 0.95
+  num_minibatches: 8  # Increased to handle larger batch size
+  update_epochs: 4
+  norm_adv: true
+  clip_coef: 0.2
+  clip_vloss: true
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  eval:
+    eval_interval: 100
+    num_eval_episodes: 10
+    eval_envs: 4
+    video_log_interval: 2
+  full_keys: {mlp_keys: '\b(target|neighbors|distance|position)\b', cnn_keys: '^$'}
+  keys: {mlp_keys: '\b(neighbors_unprivileged|position)\b', cnn_keys: '^$'}
+  exp_name: "bandit5_distill"
+
+gymnasium_bandit5_unprivileged:
+  <<: *gymnasium_bandit5
+  full_keys: {mlp_keys: '\b(neighbors_unprivileged|position)\b', cnn_keys: '^$'}
+  keys: {mlp_keys: '\b(neighbors_unprivileged|position)\b', cnn_keys: '^$'}
+  exp_name: "bandit5_unprivileged"
+
+gymnasium_bandit5_imitationlatent_0.1:
+  <<: *gymnasium_bandit5
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 0.1
+  exp_name: "bandit5_imitationlatent_0.1"
+
+gymnasium_bandit5_imitationlatent_1:
+  <<: *gymnasium_bandit5
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 1
+  exp_name: "bandit5_imitationlatent_1"
+
+gymnasium_bandit5_imitationlatent_2:
+  <<: *gymnasium_bandit5
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 2
+  exp_name: "bandit5_imitationlatent_2"
+
+gymnasium_bandit5_imitationlatent_4:
+  <<: *gymnasium_bandit5
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 4
+  exp_name: "bandit5_imitationlatent_4"
+
+gymnasium_bandit5_imitationlatent_10:
+  <<: *gymnasium_bandit5
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 10
+  exp_name: "bandit5_imitationlatent_10"
+
+  # Student-to-teacher imitation
+gymnasium_bandit5_studentteacherlatent_0.1:
+  <<: *gymnasium_bandit5
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 0.1
+  exp_name: "bandit5_studentteacherlatent_0.1"
+
+gymnasium_bandit5_studentteacherlatent_1:
+  <<: *gymnasium_bandit5
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 1
+  exp_name: "bandit5_studentteacherlatent_1"
+
+gymnasium_bandit5_studentteacherlatent_2:
+  <<: *gymnasium_bandit5
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 2
+  exp_name: "bandit5_studentteacherlatent_2"
+
+gymnasium_bandit5_studentteacherlatent_4:
+  <<: *gymnasium_bandit5
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 4
+  exp_name: "bandit5_studentteacherlatent_4"
+
+gymnasium_bandit5_studentteacherlatent_10:
+  <<: *gymnasium_bandit5
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 10
+  exp_name: "bandit5_studentteacherlatent_10"
+
+  # Teacher-to-student imitation
+gymnasium_bandit5_teacherstudentlatent_0.1:
+  <<: *gymnasium_bandit5
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 0.1
+  exp_name: "bandit5_teacherstudentlatent_0.1"
+
+gymnasium_bandit5_teacherstudentlatent_1:
+  <<: *gymnasium_bandit5
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 1
+  exp_name: "bandit5_teacherstudentlatent_1"
+
+gymnasium_bandit5_teacherstudentlatent_2:
+  <<: *gymnasium_bandit5
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 2
+  exp_name: "bandit5_teacherstudentlatent_2"
+
+gymnasium_bandit5_teacherstudentlatent_4:
+  <<: *gymnasium_bandit5
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 4
+  exp_name: "bandit5_teacherstudentlatent_4"
+
+gymnasium_bandit5_teacherstudentlatent_10:
+  <<: *gymnasium_bandit5
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 10
+  exp_name: "bandit5_teacherstudentlatent_10"
+
+
+gymnasium_lavatrail8: &gymnasium_lavatrail8
+  task: gymnasium_LavaTrail8x8-v0
+  total_timesteps: 150000  # Doubled from 40000 to allow much more exploration time
+  num_envs: 8  # Doubled from 8 to 16 for even more parallel exploration
+  num_steps: 256  # Doubled from 256 to collect more experience per update
+  learning_rate: 1e-4  # Further reduced for more stable learning during exploration
+  ent_coef: 0.05  # Doubled from 0.05 to encourage even more random actions
+  gamma: 0.99
+  gae_lambda: 0.95
+  num_minibatches: 8  # Increased to handle larger batch size
+  update_epochs: 4
+  norm_adv: true
+  clip_coef: 0.2
+  clip_vloss: true
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  # target_kl: 0.01  # Slightly reduced to allow more policy updates
+  eval:
+    eval_interval: 100
+    num_eval_episodes: 10
+    eval_envs: 4
+  full_keys: {mlp_keys: '\b(neighbors|last_action|position)\b', cnn_keys: '^$'}
+  keys: {mlp_keys: '\b(neighbors_unprivileged|last_action|position)\b', cnn_keys: '^$'}
+  exp_name: "lavatrail8_distill_explore"
+
+gymnasium_lavatrail8_unprivileged:
+  <<: *gymnasium_lavatrail8
+  full_keys: {mlp_keys: '\b(neighbors_unprivileged|last_action|position)\b', cnn_keys: '^$'}
+  keys: {mlp_keys: '\b(neighbors_unprivileged|last_action|position)\b', cnn_keys: '^$'}
+  exp_name: "lavatrail8_unprivileged"
+
+# Student-to-teacher imitation
+gymnasium_lavatrail8_studentteacherlatent_0.1:
+  <<: *gymnasium_lavatrail8
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 0.1
+  exp_name: "lavatrail8_studentteacherlatent_0.1"
+
+gymnasium_lavatrail8_studentteacherlatent_1:
+  <<: *gymnasium_lavatrail8
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 1
+  exp_name: "lavatrail8_studentteacherlatent_1"
+
+gymnasium_lavatrail8_studentteacherlatent_2:
+  <<: *gymnasium_lavatrail8
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 2
+  exp_name: "lavatrail8_studentteacherlatent_2"
+
+gymnasium_lavatrail8_studentteacherlatent_4:
+  <<: *gymnasium_lavatrail8
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 4
+  exp_name: "lavatrail8_studentteacherlatent_4"
+
+gymnasium_lavatrail8_studentteacherlatent_10:
+  <<: *gymnasium_lavatrail8
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 10
+  exp_name: "lavatrail8_studentteacherlatent_10"
+
+# Teacher-to-student imitation
+gymnasium_lavatrail8_teacherstudentlatent_0.1:
+  <<: *gymnasium_lavatrail8
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 0.1
+  exp_name: "lavatrail8_studentteacherlatent_0.1"
+
+gymnasium_lavatrail8_teacherstudentlatent_1:
+  <<: *gymnasium_lavatrail8
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 1
+  exp_name: "lavatrail8_teacherstudentlatent_1"
+
+gymnasium_lavatrail8_teacherstudentlatent_2:
+  <<: *gymnasium_lavatrail8
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 2
+  exp_name: "lavatrail8_teacherstudentlatent_2"
+
+gymnasium_lavatrail8_teacherstudentlatent_4:
+  <<: *gymnasium_lavatrail8
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 4
+  exp_name: "lavatrail8_teacherstudentlatent_4"
+
+gymnasium_lavatrail8_teacherstudentlatent_10:
+  <<: *gymnasium_lavatrail8
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 10
+  exp_name: "lavatrail8_teacherstudentlatent_10"
+
+# Imitation of both directions
+gymnasium_lavatrail8_imitationlatent_0.1:
+  <<: *gymnasium_lavatrail8
+  encoder:
+    student_to_teacher_imitation: true
+    teacher_to_student_imitation: true
+    student_to_teacher_lambda: 0.1
+    teacher_to_student_lambda: 0.1
+  exp_name: "lavatrail8_imitationlatent_0.1"
+
+gymnasium_lavatrail8_imitationlatent_1:
+  <<: *gymnasium_lavatrail8
+  encoder:
+    student_to_teacher_imitation: true
+    teacher_to_student_imitation: true
+    student_to_teacher_lambda: 1
+    teacher_to_student_lambda: 1
+  exp_name: "lavatrail8_imitationlatent_1"
+
+gymnasium_lavatrail8_imitationlatent_2:
+  <<: *gymnasium_lavatrail8
+  encoder:
+    student_to_teacher_imitation: true
+    teacher_to_student_imitation: true
+    student_to_teacher_lambda: 2
+    teacher_to_student_lambda: 2
+  exp_name: "lavatrail8_imitationlatent_2"
+
+gymnasium_lavatrail8_imitationlatent_4:
+  <<: *gymnasium_lavatrail8
+  encoder:
+    student_to_teacher_imitation: true
+    teacher_to_student_imitation: true
+    student_to_teacher_lambda: 4
+    teacher_to_student_lambda: 4
+  exp_name: "lavatrail8_imitationlatent_4"
+
+gymnasium_lavatrail8_imitationlatent_10:
+  <<: *gymnasium_lavatrail8
+  encoder:
+    student_to_teacher_imitation: true
+    teacher_to_student_imitation: true
+    student_to_teacher_lambda: 10
+    teacher_to_student_lambda: 10
+
+# Blind Pick
+gymnasium_blindpick: &gymnasium_blindpick
+  task: gymnasium_FOFixedGripper2DBlind7cmPick-v0
+  total_timesteps: 200000
+  num_envs: 4
+  num_steps: 128
+  log_keys_video: [camera_front]
+  eval:
+    eval_interval: 1000
+    num_eval_episodes: 100
+    eval_envs: 4
+    video_log_interval: 1
+  full_keys: {mlp_keys: '.*', cnn_keys: '.*'}
+  keys: {mlp_keys: '.*', cnn_keys: '^$'}
+  exp_name: "blindpick_distill"
+
+# Piano configuration
+robopianist_piano: &piano
+  task: "robopianist_RoboPianist-debug-TwinkleTwinkleRousseau-v0"
+  total_timesteps: 5000000
+  num_envs: 4
+  num_steps: 256
+  learning_rate: 3e-4
+  ent_coef: 0.05
+  gamma: 0.99
+  gae_lambda: 0.95
+  num_minibatches: 4
+  update_epochs: 4
+  norm_adv: true
+  clip_coef: 0.2
+  clip_vloss: true
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  eval:
+    eval_interval: 500
+    num_eval_episodes: 50
+    eval_envs: 4
+    video_log_interval: 10
+  # full_keys: {mlp_keys: '.*', cnn_keys: '^$'}
+  # keys: {mlp_keys: '\b(lh|rh|log_f1)\b', cnn_keys: '^$'}
+  full_keys: {mlp_keys: '\b(lh_shadow_hand/joints_pos|rh_shadow_hand/joints_pos|piano/state|piano/sustain_state|goal|fingering|obs_reward)\b', cnn_keys: '^$'}
+  keys: {mlp_keys: '\b(lh_shadow_hand/joints_pos|rh_shadow_hand/joints_pos)\b', cnn_keys: '^$'}
+  exp_name: "piano_distill"
+
+# robopianist_asymtwinkle:
+#   task: "robopianist_RoboPianist-debug-TwinkleTwinkleRousseau-v0"
+#   run.steps: 5100000
+#   horizon: 6
+#   envs.amount: 4
+#   run.script: 'train_full_eval'
+#   run.eval_eps: 10
+#   run.eval_every: 15000
+#   # run.log_keys_video: [camera_hand] # TODO.
+#   run.log_keys_max: 'log_f1' 
+#   run.train_ratio: 16
+#   dual_encoder: {full_mlp_keys: '.*', mlp_keys: '(lh|rh)', full_cnn_keys: '^$', cnn_keys: '^$'}
+#   decoder: {mlp_keys: '.*', cnn_keys: '^$'}
+#   full_decoder: {mlp_keys: '.*', cnn_keys: '^$'}
+
+robopianist_piano_unprivileged:
+  <<: *piano
+  full_keys: {mlp_keys: '\b(lh|rh)\b', cnn_keys: '^$'}
+  keys: {mlp_keys: '\b(lh|rh)\b', cnn_keys: '^$'}
+  exp_name: "piano_unprivileged"
+
+robopianist_piano_imitationlatent_0.1:
+  <<: *piano
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 0.1
+  exp_name: "piano_imitationlatent_0.1"
+
+robopianist_piano_imitationlatent_1:
+  <<: *piano
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 1
+  exp_name: "piano_imitationlatent_1"
+
+robopianist_piano_imitationlatent_2:
+  <<: *piano
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 2
+  exp_name: "piano_imitationlatent_2"
+
+robopianist_piano_imitationlatent_4:
+  <<: *piano
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 4
+  exp_name: "piano_imitationlatent_4" 
+
+robopianist_piano_imitationlatent_10:
+  <<: *piano
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 10
+  exp_name: "piano_imitationlatent_10"
+
+
+robopianist_piano_studentteacherlatent_0.1:
+  <<: *piano
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 0.1
+  exp_name: "piano_studentteacherlatent_0.1"
+
+robopianist_piano_studentteacherlatent_1:
+  <<: *piano
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 1
+  exp_name: "piano_studentteacherlatent_1"
+
+robopianist_piano_studentteacherlatent_2:
+  <<: *piano
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 2
+  exp_name: "piano_studentteacherlatent_2"
+
+robopianist_piano_studentteacherlatent_4:
+  <<: *piano
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 4
+  exp_name: "piano_studentteacherlatent_4"
+
+
+robopianist_piano_studentteacherlatent_10:
+  <<: *piano
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 10
+  exp_name: "piano_studentteacherlatent_10"
+
+
+robopianist_piano_teacherstudentlatent_0.1:
+  <<: *piano
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 0.1
+  exp_name: "piano_teacherstudentlatent_0.1"
+
+robopianist_piano_teacherstudentlatent_1:
+  <<: *piano
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 1
+  exp_name: "piano_teacherstudentlatent_1"
+
+robopianist_piano_teacherstudentlatent_2:
+  <<: *piano 
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 2
+  exp_name: "piano_teacherstudentlatent_2"
+
+robopianist_piano_teacherstudentlatent_4:
+  <<: *piano
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 4
+  exp_name: "piano_teacherstudentlatent_4"
+
+robopianist_piano_teacherstudentlatent_10:
+  <<: *piano
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 10
+  exp_name: "piano_teacherstudentlatent_10"
+
+
+# Blind Cube Rotation configuration
+gymnasium_blindcuberotate: &base_blindcuberotate
+  task: "gymnasium_PrivilegedHandManipulateBlockRotateZ_BooleanTouchSensorsDense-v1"
+  total_timesteps: 5000000
+  num_envs: 4
+  num_steps: 256
+  learning_rate: 3e-4
+  ent_coef: 0.05
+  gamma: 0.99
+  gae_lambda: 0.95
+  num_minibatches: 4
+  update_epochs: 4
+  norm_adv: true
+  clip_coef: 0.2
+  clip_vloss: true
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  eval:
+    eval_interval: 15000
+    num_eval_episodes: 100
+    eval_envs: 4
+    video_log_interval: 1
+  full_keys: {mlp_keys: '\b(observation|desired_goal|touch|object)\b', cnn_keys: '^$'}
+  keys: {mlp_keys: '\b(observation|desired_goal)\b', cnn_keys: '^$'}
+  exp_name: "blindcuberotate_distill"
+
+gymnasium_blindcuberotate_unprivileged:
+  <<: *base_blindcuberotate
+  full_keys: {mlp_keys: '\b(observation|desired_goal)\b', cnn_keys: '^$'}
+  keys: {mlp_keys: '\b(observation|desired_goal)\b', cnn_keys: '^$'}
+  exp_name: "blindcuberotate_unprivileged"
+
+gymnasium_blindcuberotate_imitationlatent_0.1:
+  <<: *base_blindcuberotate
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 0.1
+  exp_name: "blindcuberotate_imitationlatent_0.1"
+
+gymnasium_blindcuberotate_imitationlatent_1:
+  <<: *base_blindcuberotate
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 1
+  exp_name: "blindcuberotate_imitationlatent_1"
+
+gymnasium_blindcuberotate_imitationlatent_2:
+  <<: *base_blindcuberotate
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 2
+  exp_name: "blindcuberotate_imitationlatent_2"
+
+gymnasium_blindcuberotate_imitationlatent_4:
+  <<: *base_blindcuberotate
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 4
+  exp_name: "blindcuberotate_imitationlatent_4"
+
+gymnasium_blindcuberotate_imitationlatent_10:
+  <<: *base_blindcuberotate
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 10
+  exp_name: "blindcuberotate_imitationlatent_10"
+
+gymnasium_blindcuberotate_studentteacherlatent_0.1:
+  <<: *base_blindcuberotate
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 0.1
+  exp_name: "blindcuberotate_studentteacherlatent_0.1"
+
+gymnasium_blindcuberotate_studentteacherlatent_1:
+  <<: *base_blindcuberotate
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 1
+  exp_name: "blindcuberotate_studentteacherlatent_1"
+
+gymnasium_blindcuberotate_studentteacherlatent_2:
+  <<: *base_blindcuberotate
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 2
+  exp_name: "blindcuberotate_studentteacherlatent_2"
+
+gymnasium_blindcuberotate_studentteacherlatent_4:
+  <<: *base_blindcuberotate
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 4
+  exp_name: "blindcuberotate_studentteacherlatent_4"
+
+gymnasium_blindcuberotate_studentteacherlatent_10:
+  <<: *base_blindcuberotate
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 10
+  exp_name: "blindcuberotate_studentteacherlatent_10"
+
+gymnasium_blindcuberotate_teacherstudentlatent_0.1:
+  <<: *base_blindcuberotate
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 0.1
+  exp_name: "blindcuberotate_teacherstudentlatent_0.1"
+
+gymnasium_blindcuberotate_teacherstudentlatent_1:
+  <<: *base_blindcuberotate
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 1
+  exp_name: "blindcuberotate_teacherstudentlatent_1"
+
+gymnasium_blindcuberotate_teacherstudentlatent_2:
+  <<: *base_blindcuberotate
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 2
+  exp_name: "blindcuberotate_teacherstudentlatent_2"
+
+gymnasium_blindcuberotate_teacherstudentlatent_4:
+  <<: *base_blindcuberotate
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 4
+  exp_name: "blindcuberotate_teacherstudentlatent_4"
+
+gymnasium_blindcuberotate_teacherstudentlatent_10:
+  <<: *base_blindcuberotate
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 10
+  exp_name: "blindcuberotate_teacherstudentlatent_10"
+
+# HalfCheetah Dynamic Hurdles configuration
+gymnasium_blindcheetah: &base_halfcheetah
+  task: "gymnasium_FOHalfCheetahDynamicHurdles-v0"
+  total_timesteps: 600000
+  num_envs: 8
+  num_steps: 256
+  learning_rate: 3e-4
+  ent_coef: 0.05
+  gamma: 0.99
+  gae_lambda: 0.95
+  num_minibatches: 4
+  update_epochs: 4
+  norm_adv: true
+  clip_coef: 0.2
+  clip_vloss: true
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  eval:
+    eval_interval: 5000
+    num_eval_episodes: 100
+    eval_envs: 4
+    video_log_interval: 1
+  log_keys_video: [track]
+  full_keys: {mlp_keys: '\b(robot)\b', cnn_keys: '.*'}
+  keys: {mlp_keys: '\b(robot)\b', cnn_keys: '^$'}
+  exp_name: "halfcheetah_distill"
+
+gymnasium_blindcheetah_unprivileged:
+  <<: *base_halfcheetah
+  full_keys: {mlp_keys: '\b(robot)\b', cnn_keys: '^$'}
+  keys: {mlp_keys: '\b(robot)\b', cnn_keys: '^$'}
+  exp_name: "halfcheetah_unprivileged"
+
+gymnasium_blindcheetah_imitationlatent_0.1:
+  <<: *base_halfcheetah
+  encoder:
+    student_to_teacher_imitation: true
+    teacher_to_student_imitation: true
+    student_to_teacher_lambda: 0.1
+    teacher_to_student_lambda: 0.1
+  exp_name: "halfcheetah_imitationlatent_0.1"
+
+gymnasium_blindcheetah_imitationlatent_1:
+  <<: *base_halfcheetah
+  encoder:
+    student_to_teacher_imitation: true
+    teacher_to_student_imitation: true
+    student_to_teacher_lambda: 1
+    teacher_to_student_lambda: 1
+  exp_name: "halfcheetah_imitationlatent_1"
+
+gymnasium_blindcheetah_imitationlatent_2:
+  <<: *base_halfcheetah
+  encoder:
+    student_to_teacher_imitation: true
+    teacher_to_student_imitation: true
+    student_to_teacher_lambda: 2
+    teacher_to_student_lambda: 2
+  exp_name: "halfcheetah_imitationlatent_2"
+
+gymnasium_blindcheetah_imitationlatent_4:
+  <<: *base_halfcheetah
+  encoder:
+    student_to_teacher_imitation: true
+    teacher_to_student_imitation: true
+    student_to_teacher_lambda: 4
+    teacher_to_student_lambda: 4
+  exp_name: "halfcheetah_imitationlatent_4"
+
+gymnasium_blindcheetah_imitationlatent_10:
+  <<: *base_halfcheetah
+  encoder:
+    student_to_teacher_imitation: true
+    teacher_to_student_imitation: true
+    student_to_teacher_lambda: 10
+    teacher_to_student_lambda: 10
+  exp_name: "halfcheetah_imitationlatent_10"
+
+gymnasium_blindcheetah_studentteacherlatent_0.1:
+  <<: *base_halfcheetah
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 0.1
+  exp_name: "halfcheetah_studentteacherlatent_0.1"
+
+gymnasium_blindcheetah_studentteacherlatent_1:
+  <<: *base_halfcheetah
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 1
+  exp_name: "halfcheetah_studentteacherlatent_1"
+
+gymnasium_blindcheetah_studentteacherlatent_2:
+  <<: *base_halfcheetah
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 2
+  exp_name: "halfcheetah_studentteacherlatent_2"
+
+gymnasium_blindcheetah_studentteacherlatent_4:
+  <<: *base_halfcheetah
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 4
+  exp_name: "halfcheetah_studentteacherlatent_4"
+
+gymnasium_blindcheetah_studentteacherlatent_10:
+  <<: *base_halfcheetah
+  encoder:
+    student_to_teacher_imitation: true
+    student_to_teacher_lambda: 10
+  exp_name: "halfcheetah_studentteacherlatent_10"
+
+gymnasium_blindcheetah_teacherstudentlatent_0.1:
+  <<: *base_halfcheetah
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 0.1
+  exp_name: "halfcheetah_teacherstudentlatent_0.1"
+
+gymnasium_blindcheetah_teacherstudentlatent_1:
+  <<: *base_halfcheetah
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 1
+  exp_name: "halfcheetah_teacherstudentlatent_1"
+
+gymnasium_blindcheetah_teacherstudentlatent_2:
+  <<: *base_halfcheetah
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 2
+  exp_name: "halfcheetah_teacherstudentlatent_2"
+
+gymnasium_blindcheetah_teacherstudentlatent_4:
+  <<: *base_halfcheetah
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 4
+  exp_name: "halfcheetah_teacherstudentlatent_4"
+
+gymnasium_blindcheetah_teacherstudentlatent_10:
+  <<: *base_halfcheetah
+  encoder:
+    teacher_to_student_imitation: true
+    teacher_to_student_lambda: 10
+  exp_name: "halfcheetah_teacherstudentlatent_10"
+
+
+
+
+
+
