@@ -6,11 +6,13 @@ generate_unique_seed() {
 }
 
 # Base log directory
-BASE_LOGDIR=~/logdir_teacher_student
+BASE_LOGDIR=~/logdir/baselines/ppo
 
 # List of configs to run
 CONFIGS=(
   # "gymnasium_blindpick"
+  "gymnasium_tigerkeydoor"
+  # "gymnasium_bandit5"
 )
 
 NUM_SEEDS=1
@@ -28,9 +30,9 @@ for CONFIG in "${CONFIGS[@]}"; do
   for SEED in "${SEEDS[@]}"; do
     LOGDIR="${BASE_LOGDIR}/${CONFIG}_${SEED}"
 
-    echo "Running Teacher-Student with config ${CONFIG} and seed ${SEED}, logging to ${LOGDIR}"
+    echo "Running PPO baseline with config ${CONFIG} and seed ${SEED}, logging to ${LOGDIR}"
 
-    timeout 4h python3 -u thesis/teacher_student/train.py \
+    timeout 4h python3 -u baselines/ppo/train.py \
       --configs ${CONFIG} \
       --seed "$SEED"
 
