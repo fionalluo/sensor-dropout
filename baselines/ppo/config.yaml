@@ -32,7 +32,6 @@ defaults:
   # Teacher and student observation keys
   full_keys: {mlp_keys: '.*', cnn_keys: '.*'}
   keys: {mlp_keys: '.*', cnn_keys: '.*'}  # Only one set of keys for now
-  num_eval_configs: 4
   eval_keys:
     env1:
       mlp_keys: '.*'
@@ -88,6 +87,7 @@ defaults:
     num_eval_episodes: 10  # Number of episodes to evaluate
     eval_envs: 4  # Number of parallel environments for evaluation
     video_log_interval: 1  # Log videos every evaluation call
+    num_eval_configs: 4
 
 # ====================
 # Named Configs
@@ -140,11 +140,12 @@ gymnasium_tigerkeydoor: &tigerkeydoor_base
     eval_interval: 100
     num_eval_episodes: 10
     eval_envs: 4
-  full_keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|distance_to_treasure|position|has_key)\b', cnn_keys: '^$'}
-  keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|distance_to_treasure|position|has_key)\b', cnn_keys: '^$'}
+    num_eval_configs: 4
+  full_keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
+  keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
   eval_keys:
     env1:
-      mlp_keys: '\b(neighbors|door|doors_unlocked|distance_to_treasure|position|has_key)\b'
+      mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b'
       cnn_keys: '^$'
 
     env2: # must press button to reveal tiger/treasure up-down relative position

@@ -6,7 +6,12 @@ import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 import wandb
 from .agent import PPOAgent
-from baselines.shared.eval_utils import evaluate_agent, run_periodic_evaluation, run_initial_evaluation
+from baselines.shared.eval_utils import (
+    evaluate_agent, 
+    evaluate_agent_with_observation_subsets,
+    run_periodic_evaluation, 
+    run_initial_evaluation
+)
 
 class PPOTrainer:
     def __init__(self, envs, config, seed):
