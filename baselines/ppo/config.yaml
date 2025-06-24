@@ -32,6 +32,20 @@ defaults:
   # Teacher and student observation keys
   full_keys: {mlp_keys: '.*', cnn_keys: '.*'}
   keys: {mlp_keys: '.*', cnn_keys: '.*'}  # Only one set of keys for now
+  num_eval_configs: 4
+  eval_keys:
+    env1:
+      mlp_keys: '.*'
+      cnn_keys: '.*'
+    env2:
+      mlp_keys: '.*'
+      cnn_keys: '.*'
+    env3:
+      mlp_keys: '.*'
+      cnn_keys: '.*'
+    env4:
+      mlp_keys: '.*'
+      cnn_keys: '.*'
 
   save_model: false
   log_keys_video: [image]
@@ -128,6 +142,23 @@ gymnasium_tigerkeydoor: &tigerkeydoor_base
     eval_envs: 4
   full_keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|distance_to_treasure|position|has_key)\b', cnn_keys: '^$'}
   keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|distance_to_treasure|position|has_key)\b', cnn_keys: '^$'}
+  eval_keys:
+    env1:
+      mlp_keys: '\b(neighbors|door|doors_unlocked|distance_to_treasure|position|has_key)\b'
+      cnn_keys: '^$'
+
+    env2: # must press button to reveal tiger/treasure up-down relative position
+      mlp_keys: '\b(neighbors_unprivileged|door_unprivileged|doors_unlocked|position|has_key)\b'
+      cnn_keys: '^$'
+
+    env3:  # must get key to reveal unlocked doors
+      mlp_keys: '\b(neighbors_unprivileged|door|doors_unlocked_unprivileged|position|has_key)\b'
+      cnn_keys: '^$'
+
+    env4:  # must press button and get key to reveal unlocked doors and tiger/treasure relative position
+      mlp_keys: '\b(neighbors_unprivileged|door_unprivileged|doors_unlocked_unprivileged|position|has_key)\b'
+      cnn_keys: '^$'
+
   exp_name: "tigerkeydoor_ppo"
 
 # Blind Pick environment

@@ -30,6 +30,32 @@ baselines/
 └── README.md              # This file
 ```
 
+## Shared Evaluation Module
+
+The evaluation functionality is shared across all baselines through `thesis/shared/evaluation.py`:
+
+### Key Functions
+
+- **`evaluate_policy(agent, envs, device, config, log_video=False)`**: Evaluates a policy for a specified number of episodes
+- **`log_evaluation_metrics(metrics_dict, step, use_wandb=False, writer=None)`**: Logs evaluation metrics to wandb and/or tensorboard
+- **`log_evaluation_videos(video_frames, step, use_wandb=False, prefix="")`**: Logs evaluation videos to wandb
+- **`process_video_frames(frames, key)`**: Processes video frames for logging
+
+### Evaluation Metrics
+
+The evaluation module logs the following metrics:
+- `eval/mean_return`: Mean episode return across evaluation episodes
+- `eval/std_return`: Standard deviation of episode returns
+- `eval/mean_length`: Mean episode length
+- `eval/std_length`: Standard deviation of episode lengths
+
+### Video Logging
+
+Evaluation videos are logged to wandb with configurable prefixes:
+- `videos/eval_{key}`: Default format for single agent evaluation
+- `videos/teacher_{key}`: For teacher agent evaluation
+- `videos/student_{key}`: For student agent evaluation
+
 ## Usage
 
 ### Running PPO Baseline
@@ -66,6 +92,18 @@ The `config.yaml` file contains all hyperparameters and can be extended with dif
 - `state_only`: Only state observations
 - `no_wandb`: Disable wandb logging
 
+### Evaluation Configuration
+
+Evaluation settings are configured in the `eval` section of the config:
+
+```yaml
+eval:
+  eval_interval: 1000        # Evaluate every 1000 steps
+  num_eval_episodes: 10      # Number of episodes to evaluate
+  eval_envs: 4               # Number of parallel environments for evaluation
+  video_log_interval: 1      # Log videos every N evaluation calls
+```
+
 ### Logging
 
 The framework supports both TensorBoard and Weights & Biases (wandb) logging:
@@ -79,6 +117,7 @@ The framework supports both TensorBoard and Weights & Biases (wandb) logging:
 #### Logged Metrics
 - **Training metrics**: Policy loss, value loss, entropy, KL divergence
 - **Performance metrics**: Episodic return, episodic length, steps per second
+- **Evaluation metrics**: Mean/std return and length from evaluation episodes
 - **Hyperparameters**: Learning rate, batch size, network architecture, etc.
 
 #### Example wandb usage:
@@ -110,12 +149,14 @@ python train.py --wandb_project sensor-dropout-experiments
 - Handles rollout collection and policy updates
 - Includes GAE advantage estimation and value function clipping
 - Supports both TensorBoard and wandb logging
+- **Includes periodic evaluation** using the shared evaluation module
 
 ## Training Process
 
 1. **Teacher Training**: Train agents with full privileged information
 2. **Student Training**: Train agents with limited observations
 3. **Evaluation**: Deploy trained agents on different observation subsets
+4. **Periodic Evaluation**: Regular evaluation during training to track performance
 
 ## Observation Keys
 
@@ -132,7 +173,16 @@ To add a new baseline:
 2. Implement agent class inheriting from `BaseAgent`
 3. Implement training algorithm
 4. Create training script and configuration
-5. Update this README
+5. **Use the shared evaluation module** for consistent evaluation across baselines
+6. Update this README
+
+## Testing
+
+Test the shared evaluation module:
+
+```bash
+python test_evaluation.py
+```
 
 ## Dependencies
 

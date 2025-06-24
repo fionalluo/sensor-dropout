@@ -6,118 +6,7 @@ import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 import wandb
 from .agent import PPOAgent
-
-def evaluate_policy(agent, envs, device, config, log_video=False):
-    """Evaluate a policy for a specified number of episodes.
-    
-    Args:
-        agent: PPO agent to evaluate
-        envs: Vectorized environment
-        device: Device to run evaluation on
-        config: Configuration object
-        log_video: Whether to log video frames
-        
-    Returns:
-        dict of evaluation metrics
-    """
-    # Initialize metrics
-    episode_returns = []
-    episode_lengths = []
-    num_episodes = config.eval.num_eval_episodes
-    
-    # Initialize video logging if enabled
-    video_frames = {key: [] for key in envs.obs_space.keys() if key in config.log_keys_video} if log_video else {}
-    
-    # Initialize observation storage
-    obs = {}
-    all_keys = agent.mlp_keys + agent.cnn_keys
-    for key in all_keys:
-        if key in envs.obs_space:
-            if len(envs.obs_space[key].shape) == 3 and envs.obs_space[key].shape[-1] == 3:  # Image observations
-                obs[key] = torch.zeros((envs.num_envs,) + envs.obs_space[key].shape).to(device)
-            else:  # Non-image observations
-                size = np.prod(envs.obs_space[key].shape)
-                obs[key] = torch.zeros((envs.num_envs, size)).to(device)
-    
-    # Initialize actions with zeros and reset flags
-    action_shape = envs.act_space['action'].shape
-    acts = {
-        'action': np.zeros((envs.num_envs,) + action_shape, dtype=np.float32),
-        'reset': np.ones(envs.num_envs, dtype=bool)
-    }
-    
-    # Get initial observations
-    obs_dict = envs.step(acts)
-    next_obs = {}
-    for key in all_keys:
-        if key in obs_dict:
-            next_obs[key] = torch.Tensor(obs_dict[key].astype(np.float32)).to(device)
-    next_done = torch.Tensor(obs_dict['is_last'].astype(np.float32)).to(device)
-    
-    # Track episode returns and lengths for each environment
-    env_returns = np.zeros(envs.num_envs)
-    env_lengths = np.zeros(envs.num_envs)
-    
-    # Run evaluation until we have enough episodes
-    while len(episode_returns) < num_episodes:
-        # Get action from policy
-        with torch.no_grad():
-            action, _, _, _ = agent.get_action_and_value(next_obs)
-        
-        # Step environment
-        action_np = action.cpu().numpy()
-        if hasattr(agent, 'is_discrete') and agent.is_discrete:
-            action_np = action_np.reshape(envs.num_envs, -1)
-        
-        acts = {
-            'action': action_np,
-            'reset': next_done.cpu().numpy()
-        }
-        
-        obs_dict = envs.step(acts)
-        
-        # Store video frames if logging
-        if log_video:
-            for key in video_frames.keys():
-                if key in obs_dict:
-                    video_frames[key].append(obs_dict[key][0].copy())
-        
-        # Process observations
-        for key in all_keys:
-            if key in obs_dict:
-                next_obs[key] = torch.Tensor(obs_dict[key].astype(np.float32)).to(device)
-        next_done = torch.Tensor(obs_dict['is_last'].astype(np.float32)).to(device)
-        
-        # Update episode tracking
-        for env_idx in range(envs.num_envs):
-            env_returns[env_idx] += obs_dict['reward'][env_idx]
-            env_lengths[env_idx] += 1
-            
-            if obs_dict['is_last'][env_idx]:
-                # Store episode metrics if we haven't collected enough episodes yet
-                if len(episode_returns) < num_episodes:
-                    episode_returns.append(env_returns[env_idx])
-                    episode_lengths.append(env_lengths[env_idx])
-                
-                # Reset environment tracking
-                env_returns[env_idx] = 0
-                env_lengths[env_idx] = 0
-    
-    # Convert lists to numpy arrays for statistics
-    episode_returns = np.array(episode_returns)
-    episode_lengths = np.array(episode_lengths)
-    
-    metrics = {
-        'mean_return': np.mean(episode_returns),
-        'std_return': np.std(episode_returns),
-        'mean_length': np.mean(episode_lengths),
-        'std_length': np.std(episode_lengths)
-    }
-    
-    if log_video:
-        metrics['video_frames'] = video_frames
-    
-    return metrics
+from baselines.shared.eval_utils import evaluate_agent, run_periodic_evaluation, run_initial_evaluation
 
 class PPOTrainer:
     def __init__(self, envs, config, seed):
@@ -426,67 +315,16 @@ class PPOTrainer:
             "charts/SPS": int(self.global_step / (time.time() - self.start_time))
         })
 
-    def evaluate(self, eval_envs=None, log_video=False, make_envs_func=None):
-        """Run evaluation and log metrics."""
-        if eval_envs is None:
-            # Create evaluation environments
-            if make_envs_func is None:
-                from baselines.ppo.train import make_envs
-                make_envs_func = make_envs
-            eval_envs = make_envs_func(self.config, num_envs=self.config.eval.eval_envs)
-            eval_envs.num_envs = self.config.eval.eval_envs
-        
-        # Run evaluation
-        eval_metrics = evaluate_policy(self.agent, eval_envs, self.device, self.config, log_video=log_video)
-        
-        # Log evaluation metrics
-        self.log_metrics({
-            "eval/mean_return": eval_metrics['mean_return'],
-            "eval/std_return": eval_metrics['std_return'],
-            "eval/mean_length": eval_metrics['mean_length'],
-            "eval/std_length": eval_metrics['std_length'],
-        })
-        
-        # Log video if available
-        if log_video and 'video_frames' in eval_metrics and self.use_wandb:
-            for key, frames in eval_metrics['video_frames'].items():
-                if frames:
-                    frames = np.stack(frames)
-                    # Process frames for wandb (similar to thesis code)
-                    if len(frames.shape) == 3:  # Single image [H, W, C]
-                        if frames.shape[-1] == 3 and np.max(frames) > 1:
-                            processed_frames = frames
-                        else:
-                            frames = np.clip(255 * frames, 0, 255).astype(np.uint8)
-                            processed_frames = np.transpose(frames, [2, 0, 1])
-                    elif len(frames.shape) == 4:  # Video [T, H, W, C]
-                        frames = np.transpose(frames, [0, 3, 1, 2])
-                        if np.issubdtype(frames.dtype, np.floating):
-                            frames = np.clip(255 * frames, 0, 255).astype(np.uint8)
-                        processed_frames = frames
-                    
-                    wandb.log({
-                        f"videos/eval_{key}": wandb.Video(
-                            processed_frames,
-                            fps=10,
-                            format="gif"
-                        )
-                    }, step=self.global_step)
-        
-        return eval_metrics
-
     def train(self):
         """Main training loop."""
         self.start_time = time.time()
         
-        # Create evaluation environments once
+        # Run initial evaluation using shared utility
         from baselines.ppo.train import make_envs
-        eval_envs = make_envs(self.config, num_envs=self.config.eval.eval_envs)
-        eval_envs.num_envs = self.config.eval.eval_envs
-        
-        # Run initial evaluation
-        print("Running initial evaluation...")
-        self.evaluate(eval_envs, log_video=True, make_envs_func=make_envs)
+        eval_envs, _ = run_initial_evaluation(
+            self.agent, self.config, self.device, make_envs, 
+            writer=self.writer, use_wandb=self.use_wandb
+        )
         
         for iteration in range(self.config.num_iterations):
             # Collect rollout
@@ -495,15 +333,11 @@ class PPOTrainer:
             # Update policy
             self.update_policy(b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values)
             
-            # Periodic evaluation
-            if self.global_step - self.last_eval >= self.config.eval.eval_interval * self.config.num_envs:
-                # Determine if we should log video based on video_log_interval
-                eval_count = self.global_step // (self.config.eval.eval_interval * self.config.num_envs)
-                log_video = (eval_count % self.config.eval.video_log_interval == 0)
-                
-                print(f"Running evaluation at step {self.global_step}...")
-                self.evaluate(eval_envs, log_video=log_video, make_envs_func=make_envs)
-                self.last_eval = self.global_step
+            # Periodic evaluation using shared utility
+            self.last_eval, eval_envs = run_periodic_evaluation(
+                self.agent, self.config, self.device, self.global_step, self.last_eval, eval_envs,
+                make_envs_func=make_envs, writer=self.writer, use_wandb=self.use_wandb
+            )
             
             # Log iteration info
             if iteration % self.config.log_interval == 0:
