@@ -45,6 +45,18 @@ defaults:
     env4:
       mlp_keys: '.*'
       cnn_keys: '.*'
+    env5:
+      mlp_keys: '.*'
+      cnn_keys: '.*'
+    env6:
+      mlp_keys: '.*'
+      cnn_keys: '.*'
+    env7:
+      mlp_keys: '.*'
+      cnn_keys: '.*'
+    env8:
+      mlp_keys: '.*'
+      cnn_keys: '.*'
 
   save_model: false
   log_keys_video: [image]
@@ -161,6 +173,57 @@ gymnasium_tigerkeydoor: &tigerkeydoor_base
       cnn_keys: '^$'
 
   exp_name: "tigerkeydoor_ppo"
+
+gymnasium_maze: &maze_base
+  task: gymnasium_Maze11x11-v0
+  total_timesteps: 150000
+  num_envs: 8
+  num_steps: 256
+  learning_rate: 1e-4
+  ent_coef: 0.05
+  gamma: 0.99
+  gae_lambda: 0.95
+  num_minibatches: 8
+  update_epochs: 4
+  norm_adv: true
+  clip_coef: 0.2
+  clip_vloss: true
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  eval:
+    eval_interval: 100
+    num_eval_episodes: 10
+    eval_envs: 4
+    num_eval_configs: 6  # sets of eval keys
+  
+  full_keys: {mlp_keys: '\b(goal_position|position)\b', cnn_keys: '\b(neighbors_3x3|neighbors_5x5)\b'}  # omit the distance key
+  keys: {mlp_keys: '\b(goal_position|position)\b', cnn_keys: '\b(neighbors_3x3|neighbors_5x5)\b'}
+  eval_keys:
+    env1:  # Full privileged observations
+      mlp_keys: '\b(goal_position|position)\b'
+      cnn_keys: '\b(neighbors_3x3|neighbors_5x5)\b'
+    
+    env2:  # Only using neighbors_3x3
+      mlp_keys: '\b(goal_position_unprivileged|position)\b'
+      cnn_keys: '\b(neighbors_3x3|neighbors_5x5_unprivileged)\b'
+
+    env3:  # Only using neighbors_5x5
+      mlp_keys: '\b(goal_position_unprivileged|position)\b'
+      cnn_keys: '\b(neighbors_3x3_unprivileged|neighbors_5x5)\b'
+
+    env4:  # Use neighbors 3x3 and goal position
+      mlp_keys: '\b(goal_position|position)\b'
+      cnn_keys: '\b(neighbors_3x3|neighbors_5x5_unprivileged)\b'
+    
+    env5: # Use neighbors 5x5 and goal position
+      mlp_keys: '\b(goal_position|position)\b'
+      cnn_keys: '\b(neighbors_3x3_unprivileged|neighbors_5x5)\b'
+    
+    env6: # Only using both sets of neighbors, no goal position
+      mlp_keys: '\b(goal_position_unprivileged|position)\b'
+      cnn_keys: '\b(neighbors_3x3|neighbors_5x5)\b'
+
+  exp_name: "maze_ppo"
 
 # Blind Pick environment
 gymnasium_blindpick: &blindpick_base
