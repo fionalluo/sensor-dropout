@@ -239,7 +239,7 @@ class PPOAgent(BaseAgent):
         
         # Project to latent space
         latent = self.latent_projector(features)
-        return latent
+        return latent 
 
     def get_action_and_value(self, x, action=None):
         """Get action and value from policy for PPO (no imitation losses)."""

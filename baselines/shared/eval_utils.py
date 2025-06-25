@@ -67,31 +67,63 @@ def filter_observations_by_keys(obs_dict, mlp_keys_pattern, cnn_keys_pattern):
         else:
             return re.search(pattern, key) is not None
     
+    # First pass: collect all keys that match the patterns (these are the "available" keys)
+    available_keys = set()
+    
     # Process MLP keys
     for key, value in obs_dict.items():
+        if key in ['reward', 'is_first', 'is_last', 'is_terminal']:
+            continue
         if matches_pattern(key, mlp_keys_pattern):
-            filtered_obs[key] = value
-        elif key.endswith('_unprivileged'):
-            # Check if the privileged version is in the pattern
-            privileged_key = key[:-13]  # Remove '_unprivileged' suffix
-            if matches_pattern(privileged_key, mlp_keys_pattern):
-                # Substitute unprivileged for privileged
-                filtered_obs[privileged_key] = value
+            available_keys.add(key)
     
-    # Process CNN keys (same logic)
+    # Process CNN keys
     for key, value in obs_dict.items():
+        if key in ['reward', 'is_first', 'is_last', 'is_terminal']:
+            continue
         if matches_pattern(key, cnn_keys_pattern):
+            available_keys.add(key)
+    
+    # Second pass: for each key in obs_dict, if it's in available_keys, add it to filtered_obs
+    for key, value in obs_dict.items():
+        if key in available_keys:
             filtered_obs[key] = value
-        elif key.endswith('_unprivileged'):
-            privileged_key = key[:-13]
-            if matches_pattern(privileged_key, cnn_keys_pattern):
-                filtered_obs[privileged_key] = value
     
     return filtered_obs
 
 
+def substitute_unprivileged_for_agent(agent_keys, filtered_obs_dict, obs_dict):
+    """Substitute unprivileged keys for privileged keys that the agent needs.
+    
+    Args:
+        agent_keys: List of keys the agent expects
+        filtered_obs_dict: Dictionary of available filtered observations
+        obs_dict: Original observation dictionary
+        
+    Returns:
+        dict: Final observations with substitutions for the agent
+    """
+    final_obs = {}
+    
+    for key in agent_keys:
+        if key in filtered_obs_dict:
+            # Key is directly available
+            final_obs[key] = filtered_obs_dict[key]
+        else:
+            # Key is not available, check for unprivileged version
+            unprivileged_key = key + '_unprivileged'
+            if unprivileged_key in filtered_obs_dict:
+                # Use unprivileged version as substitute
+                final_obs[key] = filtered_obs_dict[unprivileged_key]
+            else:
+                # Neither privileged nor unprivileged available, will be zeroed later
+                final_obs[key] = None
+    
+    return final_obs
+
+
 def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_envs_func=None, 
-                                          writer=None, use_wandb=False, global_step=0):
+                                          writer=None, use_wandb=False, global_step=0, debug=False):
     """Evaluate agent across multiple observation subsets defined in eval_keys.
     
     Args:
@@ -103,6 +135,7 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         writer: TensorBoard writer (optional)
         use_wandb: Whether to use wandb logging
         global_step: Current global step for logging
+        debug: Whether to print detailed debugging information
         
     Returns:
         dict: Combined evaluation metrics
@@ -116,10 +149,11 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
     all_episode_lengths = []
     env_metrics = {}
     
-    print(f"Running evaluation across {num_eval_configs} observation subsets...")
+    if debug:
+        print(f"Running evaluation across {num_eval_configs} observation subsets...")
     
-    for env_idx in range(1, num_eval_configs + 1):
-        env_name = f"env{env_idx}"
+    for subset_idx in range(1, num_eval_configs + 1):
+        env_name = f"env{subset_idx}"
         
         # Get eval keys for this environment
         if hasattr(config, 'eval_keys') and hasattr(config.eval_keys, env_name):
@@ -127,15 +161,55 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
             mlp_keys_pattern = eval_keys.mlp_keys
             cnn_keys_pattern = eval_keys.cnn_keys
         else:
-            print(f"Warning: No eval_keys.{env_name} found, using default patterns")
+            if debug:
+                print(f"Warning: No eval_keys.{env_name} found, using default patterns")
             mlp_keys_pattern = '.*'
             cnn_keys_pattern = '.*'
+        
+        if debug:
+            print(f"\n=== {env_name} Configuration ===")
+            print(f"MLP keys pattern: {mlp_keys_pattern}")
+            print(f"CNN keys pattern: {cnn_keys_pattern}")
         
         # Create evaluation environments
         if make_envs_func is None:
             raise ValueError("make_envs_func must be provided")
         eval_envs = make_envs_func(config, num_envs=config.eval.eval_envs)
         eval_envs.num_envs = config.eval.eval_envs
+        
+        # If this is env1, compare with training configuration
+        if env_name == "env1" and debug:
+            print(f"\n--- Comparing env1 with training configuration ---")
+            print(f"Training MLP keys: {agent.mlp_keys}")
+            print(f"Training CNN keys: {agent.cnn_keys}")
+            print(f"Training full_keys MLP pattern: {getattr(config.full_keys, 'mlp_keys', 'N/A')}")
+            print(f"Training full_keys CNN pattern: {getattr(config.full_keys, 'cnn_keys', 'N/A')}")
+            
+            # Check if patterns are equivalent
+            training_mlp_matches = []
+            training_cnn_matches = []
+            
+            for key in eval_envs.obs_space.keys():
+                if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                    if re.search(getattr(config.full_keys, 'mlp_keys', '.*'), key):
+                        training_mlp_matches.append(key)
+                    if re.search(getattr(config.full_keys, 'cnn_keys', '.*'), key):
+                        training_cnn_matches.append(key)
+            
+            print(f"Training would match MLP keys: {training_mlp_matches}")
+            print(f"Training would match CNN keys: {training_cnn_matches}")
+        
+        # Print available observation keys in environment
+        if debug:
+            print(f"Available observation keys in environment:")
+            for key, space in eval_envs.obs_space.items():
+                if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                    print(f"  {key}: {space.shape}")
+            
+            # Print agent's expected keys
+            print(f"Agent expects these keys:")
+            print(f"  MLP keys: {agent.mlp_keys}")
+            print(f"  CNN keys: {agent.cnn_keys}")
         
         # Run evaluation with observation filtering
         env_episode_returns = []
@@ -170,9 +244,32 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         # Filter and substitute observations
         filtered_obs_dict = filter_observations_by_keys(obs_dict, mlp_keys_pattern, cnn_keys_pattern)
         
+        if debug:
+            print(f"After filtering, available keys:")
+            for key in filtered_obs_dict.keys():
+                if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                    print(f"  {key}: {filtered_obs_dict[key].shape}")
+        
+        # Apply substitution logic for agent keys
+        final_obs_dict = substitute_unprivileged_for_agent(all_keys, filtered_obs_dict, obs_dict)
+        
+        if debug:
+            print(f"Keys that will be zeroed out (agent expects but not in filtered):")
+            for key in all_keys:
+                if final_obs_dict[key] is None:
+                    print(f"  {key}")
+            
+            # Debug: Show what the agent will actually receive
+            print(f"Final observation keys that agent will receive:")
+            for key in all_keys:
+                if final_obs_dict[key] is not None:
+                    print(f"  {key}: {final_obs_dict[key].shape} (from {key if key in filtered_obs_dict else key + '_unprivileged'})")
+                else:
+                    print(f"  {key}: zeroed out")
+        
         for key in all_keys:
-            if key in filtered_obs_dict:
-                next_obs[key] = torch.Tensor(filtered_obs_dict[key].astype(np.float32)).to(device)
+            if final_obs_dict[key] is not None:
+                next_obs[key] = torch.Tensor(final_obs_dict[key].astype(np.float32)).to(device)
             else:
                 # Zero out missing observations
                 if key in obs:
@@ -214,10 +311,13 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
             # Filter and substitute observations
             filtered_obs_dict = filter_observations_by_keys(obs_dict, mlp_keys_pattern, cnn_keys_pattern)
             
+            # Apply substitution logic for agent keys
+            final_obs_dict = substitute_unprivileged_for_agent(all_keys, filtered_obs_dict, obs_dict)
+            
             # Process observations
             for key in all_keys:
-                if key in filtered_obs_dict:
-                    next_obs[key] = torch.Tensor(filtered_obs_dict[key].astype(np.float32)).to(device)
+                if final_obs_dict[key] is not None:
+                    next_obs[key] = torch.Tensor(final_obs_dict[key].astype(np.float32)).to(device)
                 else:
                     # Zero out missing observations
                     if key in obs:
@@ -333,7 +433,7 @@ def evaluate_agent(agent, envs, device, config, log_video=False, make_envs_func=
 
 
 def run_periodic_evaluation(agent, config, device, global_step, last_eval, eval_envs, 
-                          make_envs_func=None, writer=None, use_wandb=False):
+                          make_envs_func=None, writer=None, use_wandb=False, debug=False):
     """Run periodic evaluation if enough steps have passed.
     
     Args:
@@ -346,6 +446,7 @@ def run_periodic_evaluation(agent, config, device, global_step, last_eval, eval_
         make_envs_func: Function to create evaluation environments
         writer: TensorBoard writer (optional)
         use_wandb: Whether to use wandb logging
+        debug: Whether to print detailed debugging information
         
     Returns:
         tuple: (new_last_eval, eval_envs)
@@ -373,7 +474,8 @@ def run_periodic_evaluation(agent, config, device, global_step, last_eval, eval_
             make_envs_func=make_envs_func,
             writer=writer,
             use_wandb=use_wandb,
-            global_step=global_step
+            global_step=global_step,
+            debug=debug
         )
         
         last_eval = global_step
@@ -381,7 +483,7 @@ def run_periodic_evaluation(agent, config, device, global_step, last_eval, eval_
     return last_eval, eval_envs
 
 
-def run_initial_evaluation(agent, config, device, make_envs_func, writer=None, use_wandb=False):
+def run_initial_evaluation(agent, config, device, make_envs_func, writer=None, use_wandb=False, debug=False):
     """Run initial evaluation at the start of training.
     
     Args:
@@ -391,6 +493,7 @@ def run_initial_evaluation(agent, config, device, make_envs_func, writer=None, u
         make_envs_func: Function to create evaluation environments
         writer: TensorBoard writer (optional)
         use_wandb: Whether to use wandb logging
+        debug: Whether to print detailed debugging information
         
     Returns:
         tuple: (eval_envs, eval_metrics)
@@ -417,7 +520,8 @@ def run_initial_evaluation(agent, config, device, make_envs_func, writer=None, u
         make_envs_func=make_envs_func,
         writer=writer,
         use_wandb=use_wandb,
-        global_step=0
+        global_step=0,
+        debug=debug
     )
     
     return eval_envs, eval_metrics 

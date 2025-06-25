@@ -25,8 +25,8 @@ def evaluate_policy(agent, envs, device, config, log_video=False):
     episode_lengths = []
     num_episodes = config.eval.num_eval_episodes
     
-    # Initialize video logging if enabled
-    video_frames = {key: [] for key in envs.obs_space.keys() if key in config.log_keys_video} if log_video else {}
+    # Initialize video logging if enabled - only for specified keys
+    video_frames = {key: [] for key in getattr(config, 'log_keys_video', [])} if log_video else {}
     
     # Initialize observation storage
     obs = {}
@@ -95,8 +95,8 @@ def evaluate_policy(agent, envs, device, config, log_video=False):
         
         obs_dict = envs.step(acts)
         
-        # Store video frames if logging
-        if log_video:
+        # Store video frames for the first episode only (to log 1 video per evaluation)
+        if log_video and len(episode_returns) == 0:  # Only for the first episode
             for key in video_frames.keys():
                 if key in obs_dict:
                     video_frames[key].append(obs_dict[key][0].copy())
@@ -133,7 +133,7 @@ def evaluate_policy(agent, envs, device, config, log_video=False):
         'std_length': np.std(episode_lengths)
     }
     
-    if log_video:
+    if log_video and video_frames:
         metrics['video_frames'] = video_frames
     
     return metrics
