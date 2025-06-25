@@ -142,6 +142,9 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         env_episode_lengths = []
         num_episodes = config.eval.num_eval_episodes
         
+        # Initialize video logging for this environment
+        video_frames = {key: [] for key in getattr(config, 'log_keys_video', [])}
+        
         # Initialize observation storage
         obs = {}
         all_keys = agent.mlp_keys + agent.cnn_keys
@@ -202,6 +205,12 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
             
             obs_dict = eval_envs.step(acts)
             
+            # Store video frames for the first episode only (to log 1 video per evaluation)
+            if len(env_episode_returns) == 0:  # Only for the first episode
+                for key in video_frames.keys():
+                    if key in obs_dict:
+                        video_frames[key].append(obs_dict[key][0].copy())
+            
             # Filter and substitute observations
             filtered_obs_dict = filter_observations_by_keys(obs_dict, mlp_keys_pattern, cnn_keys_pattern)
             
@@ -244,6 +253,10 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         
         print(f"  {env_name}: mean_return={env_metrics[env_name]['mean_return']:.2f}, "
               f"std_return={env_metrics[env_name]['std_return']:.2f}")
+        
+        # Log video for this environment if we have frames
+        if video_frames and any(frames for frames in video_frames.values()):
+            log_evaluation_videos(video_frames, global_step, use_wandb, prefix=f"subset_{env_name}_")
     
     # Calculate overall metrics (averaged across all environments)
     all_episode_returns = np.array(all_episode_returns)
@@ -314,7 +327,7 @@ def evaluate_agent(agent, envs, device, config, log_video=False, make_envs_func=
     
     # Log video if available using shared function
     if log_video and 'video_frames' in eval_metrics:
-        log_evaluation_videos(eval_metrics['video_frames'], global_step, use_wandb)
+        log_evaluation_videos(eval_metrics['video_frames'], global_step, use_wandb, prefix="eval_")
     
     return eval_metrics
 

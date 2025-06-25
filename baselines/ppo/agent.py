@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 import re
 from ..shared.agent import BaseAgent, layer_init
-from ..shared.nets import ImageEncoderResnet
+from ..shared.nets import ImageEncoderResnet, LightweightImageEncoder
 from torch.distributions import Categorical, Normal
 
 class PPOAgent(BaseAgent):
@@ -13,12 +13,20 @@ class PPOAgent(BaseAgent):
         # Use full keys (all observations) for baselines
         self.mlp_keys = []
         self.cnn_keys = []
+        self.lightweight_cnn_keys = []  # Keys for small images
+        self.heavyweight_cnn_keys = []  # Keys for large images
+        
         for k in envs.obs_space.keys():
             if k in ['reward', 'is_first', 'is_last', 'is_terminal']:
                 continue
             if len(envs.obs_space[k].shape) == 3 and envs.obs_space[k].shape[-1] == 3:  # Image observations
                 if re.match(config.full_keys.cnn_keys, k):
                     self.cnn_keys.append(k)
+                    # Check if image is very small (≤ 7x7 in first two dimensions)
+                    if envs.obs_space[k].shape[0] <= 7 and envs.obs_space[k].shape[1] <= 7:
+                        self.lightweight_cnn_keys.append(k)
+                    else:
+                        self.heavyweight_cnn_keys.append(k)
             else:  # Non-image observations
                 if re.match(config.full_keys.mlp_keys, k):
                     self.mlp_keys.append(k)
@@ -44,28 +52,52 @@ class PPOAgent(BaseAgent):
         else:
             raise ValueError(f"Unknown activation function: {config.encoder.act}")
         
-        # Calculate CNN output dimension
-        if self.cnn_keys:
+        # Calculate CNN output dimensions
+        self.cnn_output_dim = 0
+        
+        # Heavyweight CNN encoder for large images
+        if self.heavyweight_cnn_keys:
             # Calculate number of stages based on minres
             input_size = 64  # From config.env.atari.size
             stages = int(np.log2(input_size) - np.log2(config.encoder.minres))
             final_depth = config.encoder.cnn_depth * (2 ** (stages - 1))
-            self.cnn_output_dim = final_depth * config.encoder.minres * config.encoder.minres
+            heavyweight_output_dim = final_depth * config.encoder.minres * config.encoder.minres
             
-            # CNN encoder for image observations
-            self.cnn_encoder = nn.Sequential(
+            # Heavyweight CNN encoder for large image observations
+            self.heavyweight_cnn_encoder = nn.Sequential(
                 ImageEncoderResnet(
                     depth=config.encoder.cnn_depth,
                     blocks=config.encoder.cnn_blocks,
                     resize=config.encoder.resize,
                     minres=config.encoder.minres,
-                    output_dim=self.cnn_output_dim
+                    output_dim=heavyweight_output_dim
                 ),
-                nn.LayerNorm(self.cnn_output_dim) if config.encoder.norm == 'layer' else nn.Identity()
+                nn.LayerNorm(heavyweight_output_dim) if config.encoder.norm == 'layer' else nn.Identity()
             )
+            self.cnn_output_dim += heavyweight_output_dim
         else:
-            self.cnn_encoder = None
-            self.cnn_output_dim = 0
+            self.heavyweight_cnn_encoder = None
+        
+        # Lightweight CNN encoder for small images
+        if self.lightweight_cnn_keys:
+            # Calculate total channels for all lightweight images
+            total_lightweight_channels = 0
+            for key in self.lightweight_cnn_keys:
+                total_lightweight_channels += envs.obs_space[key].shape[-1]  # channels dimension
+            
+            lightweight_output_dim = 64  # Reduced output dimension for lightweight encoder
+            
+            # Lightweight CNN encoder for small image observations
+            self.lightweight_cnn_encoder = nn.Sequential(
+                LightweightImageEncoder(
+                    in_channels=total_lightweight_channels,
+                    output_dim=lightweight_output_dim
+                ),
+                nn.LayerNorm(lightweight_output_dim) if config.encoder.norm == 'layer' else nn.Identity()
+            )
+            self.cnn_output_dim += lightweight_output_dim
+        else:
+            self.lightweight_cnn_encoder = None
         
         # MLP encoder for non-image observations
         if self.mlp_keys:
@@ -86,7 +118,7 @@ class PPOAgent(BaseAgent):
             self.mlp_encoder = None
         
         # Calculate total input dimension for latent projector
-        total_input_dim = (self.cnn_output_dim if self.cnn_encoder is not None else 0) + (config.encoder.mlp_units if self.mlp_encoder is not None else 0)
+        total_input_dim = self.cnn_output_dim + (config.encoder.mlp_units if self.mlp_encoder is not None else 0)
         
         # Project concatenated features to latent space
         self.latent_projector = nn.Sequential(
@@ -122,21 +154,45 @@ class PPOAgent(BaseAgent):
             x = filtered_x
             
             # Process CNN observations
-            cnn_features = None
-            if self.cnn_keys and self.cnn_encoder is not None:
-                # Stack all CNN observations along channels
-                cnn_inputs = []
-                for key in self.cnn_keys:
+            cnn_features = []
+            
+            # Process heavyweight CNN observations (large images)
+            if self.heavyweight_cnn_keys and self.heavyweight_cnn_encoder is not None:
+                heavyweight_inputs = []
+                for key in self.heavyweight_cnn_keys:
                     if key not in x:  # Skip if key doesn't exist
                         continue
                     batch_size = x[key].shape[0]
                     img = x[key].permute(0, 3, 1, 2) / 255.0  # Convert to [B, C, H, W] and normalize
-                    cnn_inputs.append(img)
+                    heavyweight_inputs.append(img)
                 
-                if cnn_inputs:  # Only process if we have any CNN features
+                if heavyweight_inputs:  # Only process if we have any heavyweight CNN features
                     # Stack along channel dimension
-                    cnn_input = torch.cat(cnn_inputs, dim=1)
-                    cnn_features = self.cnn_encoder(cnn_input)
+                    heavyweight_input = torch.cat(heavyweight_inputs, dim=1)
+                    heavyweight_features = self.heavyweight_cnn_encoder(heavyweight_input)
+                    cnn_features.append(heavyweight_features)
+            
+            # Process lightweight CNN observations (small images)
+            if self.lightweight_cnn_keys and self.lightweight_cnn_encoder is not None:
+                lightweight_inputs = []
+                for key in self.lightweight_cnn_keys:
+                    if key not in x:  # Skip if key doesn't exist
+                        continue
+                    batch_size = x[key].shape[0]
+                    img = x[key].permute(0, 3, 1, 2) / 255.0  # Convert to [B, C, H, W] and normalize
+                    lightweight_inputs.append(img)
+                
+                if lightweight_inputs:  # Only process if we have any lightweight CNN features
+                    # Stack along channel dimension
+                    lightweight_input = torch.cat(lightweight_inputs, dim=1)
+                    lightweight_features = self.lightweight_cnn_encoder(lightweight_input)
+                    cnn_features.append(lightweight_features)
+            
+            # Combine all CNN features
+            if cnn_features:
+                cnn_features = torch.cat(cnn_features, dim=1)
+            else:
+                cnn_features = None
             
             # Process MLP observations
             mlp_features = None
@@ -183,7 +239,7 @@ class PPOAgent(BaseAgent):
         
         # Project to latent space
         latent = self.latent_projector(features)
-        return latent 
+        return latent
 
     def get_action_and_value(self, x, action=None):
         """Get action and value from policy for PPO (no imitation losses)."""

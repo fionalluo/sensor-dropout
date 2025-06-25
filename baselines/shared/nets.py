@@ -5,6 +5,43 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class LightweightImageEncoder(nn.Module):
+    """Ultra-lightweight CNN encoder for very small images (≤ 7x7)."""
+    
+    def __init__(self, in_channels, output_dim=64):
+        super().__init__()
+        self.in_channels = in_channels
+        self.output_dim = output_dim
+        
+        # Single conv layer for tiny images
+        self.conv_layer = nn.Conv2d(in_channels, 32, kernel_size=3, stride=1, padding=1)
+        self.relu = nn.ReLU()
+        
+        # Initialize weights
+        nn.init.orthogonal_(self.conv_layer.weight)
+        nn.init.zeros_(self.conv_layer.bias)
+    
+    def forward(self, x):
+        x = x.float() - 0.5  # Normalize input
+        x = self.conv_layer(x)
+        x = self.relu(x)
+        
+        # Flatten the feature maps
+        batch_size = x.shape[0]
+        x = x.reshape(batch_size, -1)
+        
+        # Use a flexible projection layer that can handle variable input sizes
+        if not hasattr(self, 'projection') or self.projection.in_features != x.shape[1]:
+            # Create projection layer dynamically based on input size
+            self.projection = nn.Linear(x.shape[1], self.output_dim).to(x.device)
+            nn.init.orthogonal_(self.projection.weight)
+            nn.init.zeros_(self.projection.bias)
+        
+        x = self.projection(x)
+        x = F.relu(x)
+        return x
+
+
 class ImageEncoderResnet(nn.Module):
 
   def __init__(self, depth, blocks, resize, minres, output_dim=512, in_channels=None, **kw):
