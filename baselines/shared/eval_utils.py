@@ -150,7 +150,7 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
     env_metrics = {}
     
     if debug:
-    print(f"Running evaluation across {num_eval_configs} observation subsets...")
+        print(f"Running evaluation across {num_eval_configs} observation subsets...")
     
     for subset_idx in range(1, num_eval_configs + 1):
         env_name = f"env{subset_idx}"
@@ -162,7 +162,7 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
             cnn_keys_pattern = eval_keys.cnn_keys
         else:
             if debug:
-            print(f"Warning: No eval_keys.{env_name} found, using default patterns")
+                print(f"Warning: No eval_keys.{env_name} found, using default patterns")
             mlp_keys_pattern = '.*'
             cnn_keys_pattern = '.*'
         
@@ -286,7 +286,16 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
             # Get action from policy
             with torch.no_grad():
                 if hasattr(agent, 'get_action_and_value'):
-                    action, _, _, _ = agent.get_action_and_value(next_obs)
+                    result = agent.get_action_and_value(next_obs)
+                    if len(result) == 4:
+                        # Regular PPO agent: (action, log_prob, entropy, value)
+                        action, _, _, _ = result
+                    elif len(result) == 5:
+                        # PPO RNN agent: (action, log_prob, entropy, value, lstm_state)
+                        action, _, _, _, _ = result
+                    else:
+                        # Fallback: just take the first value as action
+                        action = result[0]
                 else:
                     action = agent.get_action(next_obs)
             

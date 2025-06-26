@@ -6,7 +6,12 @@ import time
 from typing import Dict, Any
 from ..shared.agent import BaseAgent
 from .agent import PPORnnAgent
-from ..shared.eval_utils import evaluate_agent, evaluate_agent_with_observation_subsets
+from ..shared.eval_utils import (
+    evaluate_agent, 
+    evaluate_agent_with_observation_subsets,
+    run_periodic_evaluation, 
+    run_initial_evaluation
+)
 from torch.utils.tensorboard import SummaryWriter
 import wandb
 import os
@@ -334,6 +339,15 @@ class PPORnnTrainer:
 
     def train(self):
         """Main training loop for PPO RNN."""
+        self.start_time = time.time()
+        
+        # Run initial evaluation using shared utility
+        from baselines.ppo_rnn.train import make_envs
+        eval_envs, _ = run_initial_evaluation(
+            self.agent, self.config, self.device, make_envs, 
+            writer=self.writer, use_wandb=self.use_wandb
+        )
+        
         num_iterations = self.config.total_timesteps // (self.config.num_envs * self.config.num_steps)
         
         for iteration in range(1, num_iterations + 1):
@@ -362,15 +376,24 @@ class PPORnnTrainer:
             # Update policy
             self.update_policy(b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values)
             
-            # Evaluation
-            if iteration % getattr(self.config.eval, 'eval_interval', 10) == 0:
-                self.evaluate()
+            # Periodic evaluation using shared utility
+            self.last_eval, eval_envs = run_periodic_evaluation(
+                self.agent, self.config, self.device, self.global_step, self.last_eval, eval_envs,
+                make_envs_func=make_envs, writer=self.writer, use_wandb=self.use_wandb
+            )
             
             # Print progress
-            print(f"Iteration {iteration}/{num_iterations}, Global step: {self.global_step}")
+            if iteration % getattr(self.config, 'log_interval', 10) == 0:
+                print(f"Iteration {iteration}/{num_iterations}, Global step: {self.global_step}")
+                print(f"  Episodes completed: {self.episode_count}")
+                print(f"  Average return (last rollout): {b_returns.mean().item():.2f}")
+                print(f"  Average advantage: {b_advantages.mean().item():.2f}")
+                print("-" * 50)
         
         self.envs.close()
         self.writer.close()
+        if self.use_wandb:
+            wandb.finish()
 
     def evaluate(self, debug=False):
         """Evaluate the agent."""
@@ -406,19 +429,17 @@ class PPORnnTrainer:
 def train_ppo_rnn(envs, config, seed, num_iterations=None):
     """Main entry point for PPO RNN training."""
     trainer = PPORnnTrainer(envs, config, seed)
-    trainer.train()
-    return trainer.agent
+    
+    # Override num_iterations if provided
+    if num_iterations is not None:
+        trainer.config.num_iterations = num_iterations
+    
+    return trainer.train()
 
 def main():
     """Main entry point for PPO RNN training."""
-    config = load_config()
-    
-    # Set up logging directory
-    os.makedirs("runs", exist_ok=True)
-    
-    # Initialize trainer and start training
-    trainer = PPORnnTrainer(config)
-    trainer.train()
+    # This function is kept for compatibility but the main logic is in train.py
+    pass
 
 if __name__ == "__main__":
     main() 

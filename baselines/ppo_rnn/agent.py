@@ -304,10 +304,19 @@ class PPORnnAgent(BaseAgent):
 
     def get_value(self, x, lstm_state=None, done=None):
         """Get value from observations and LSTM state."""
-        if lstm_state is None or done is None:
-            # Fallback to non-RNN version for compatibility
-            latent = self.encode_observations(x)
-            return self.critic(latent)
+        # Handle case where LSTM states are not provided (e.g., during evaluation)
+        if lstm_state is None:
+            # Create default LSTM states for evaluation
+            batch_size = x[list(x.keys())[0]].shape[0] if isinstance(x, dict) else x.shape[0]
+            lstm_state = (
+                torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size, device=self.device),
+                torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size, device=self.device)
+            )
+        
+        if done is None:
+            # Create default done flags for evaluation
+            batch_size = x[list(x.keys())[0]].shape[0] if isinstance(x, dict) else x.shape[0]
+            done = torch.zeros(batch_size, device=self.device)
         
         hidden, _ = self.get_states(x, lstm_state, done)
         return self.critic(hidden)
@@ -324,9 +333,19 @@ class PPORnnAgent(BaseAgent):
         Returns:
             tuple: (action, log_prob, entropy, value, new_lstm_state)
         """
-        if lstm_state is None or done is None:
-            # Fallback to non-RNN version for compatibility
-            return super().get_action_and_value(x, action)
+        # Handle case where LSTM states are not provided (e.g., during evaluation)
+        if lstm_state is None:
+            # Create default LSTM states for evaluation
+            batch_size = x[list(x.keys())[0]].shape[0] if isinstance(x, dict) else x.shape[0]
+            lstm_state = (
+                torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size, device=self.device),
+                torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size, device=self.device)
+            )
+        
+        if done is None:
+            # Create default done flags for evaluation
+            batch_size = x[list(x.keys())[0]].shape[0] if isinstance(x, dict) else x.shape[0]
+            done = torch.zeros(batch_size, device=self.device)
         
         hidden, lstm_state = self.get_states(x, lstm_state, done)
         

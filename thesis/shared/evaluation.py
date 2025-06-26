@@ -78,7 +78,16 @@ def evaluate_policy(agent, envs, device, config, log_video=False):
         with torch.no_grad():
             if hasattr(agent, 'get_action_and_value'):
                 # For PPO-style agents
-                action, _, _, _ = agent.get_action_and_value(next_obs)
+                result = agent.get_action_and_value(next_obs)
+                if len(result) == 4:
+                    # Regular PPO agent: (action, log_prob, entropy, value)
+                    action, _, _, _ = result
+                elif len(result) == 5:
+                    # PPO RNN agent: (action, log_prob, entropy, value, lstm_state)
+                    action, _, _, _, _ = result
+                else:
+                    # Fallback: just take the first value as action
+                    action = result[0]
             else:
                 # For other agent types
                 action = agent.get_action(next_obs)
