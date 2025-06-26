@@ -5,15 +5,15 @@ generate_unique_seed() {
   date +%s%N | sha256sum | awk '{ print "0x" substr($1, 1, 8) }'
 }
 
-# Base log directory
-BASE_LOGDIR=~/logdir/baselines/ppo_rnn
+# Base output directory
+BASE_OUTPUT_DIR=~/policies
 
 # List of configs to run
 CONFIGS=(
-  # "gymnasium_tigerkeydoor"
+  "gymnasium_tigerkeydoor"
   # "gymnasium_tigerkeydoorlarge"
   # "gymnasium_maze"
-  "gymnasium_blindpick"
+  # "gymnasium_blindpick"
 )
 
 NUM_SEEDS=1
@@ -26,16 +26,20 @@ done
 
 export MUJOCO_GL=egl;
 
-# Iterate
+# Iterate through configs
 for CONFIG in "${CONFIGS[@]}"; do
   for SEED in "${SEEDS[@]}"; do
-    LOGDIR="${BASE_LOGDIR}/${CONFIG}_${SEED}"
+    OUTPUT_DIR="${BASE_OUTPUT_DIR}/${CONFIG}_${SEED}"
 
-    echo "Running PPO RNN baseline with config ${CONFIG} and seed ${SEED}, logging to ${LOGDIR}"
+    echo "Training subset policies for config ${CONFIG} with seed ${SEED}"
+    echo "Output directory: ${OUTPUT_DIR}"
 
-    timeout 4h python3 -u baselines/ppo_rnn/train.py \
+    timeout 8h python3 -u subset_policies/train_subset_policies.py \
       --configs ${CONFIG} \
-      --seed "$SEED"
+      --seed "$SEED" \
+      --output_dir "$OUTPUT_DIR" \
+      --cuda \
+      --debug
 
     if [ $? -eq 124 ]; then
       echo "Command timed out for config ${CONFIG} and seed ${SEED}."
@@ -47,4 +51,4 @@ for CONFIG in "${CONFIGS[@]}"; do
   done
 done
 
-echo "All tasks complete." 
+echo "All subset policy training complete." 
