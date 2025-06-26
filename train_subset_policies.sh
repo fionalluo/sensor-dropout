@@ -6,7 +6,7 @@ generate_unique_seed() {
 }
 
 # Base output directory
-BASE_OUTPUT_DIR=~/policies
+BASE_OUTPUT_DIR=./policies
 
 # List of configs to run
 CONFIGS=(

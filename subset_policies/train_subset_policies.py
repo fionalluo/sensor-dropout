@@ -183,6 +183,12 @@ def train_subset_policy(config, subset_name, eval_keys, output_dir, device, debu
     # Keep the original full_keys for encoder building
     # subset_config.full_keys remains unchanged from the original config
     
+    # Update exp_name to include subset name for distinct wandb logging
+    if hasattr(subset_config, 'exp_name'):
+        subset_config.exp_name = f"{subset_config.exp_name}_{subset_name}"
+    else:
+        subset_config.exp_name = f"subset_{subset_name}"
+    
     # Create environment normally (no wrapper needed)
     envs = make_envs(config, num_envs=config.num_envs)
     
@@ -199,6 +205,11 @@ def train_subset_policy(config, subset_name, eval_keys, output_dir, device, debu
     
     # Save the trained agent
     policy_path = os.path.join(policy_dir, 'policy.pt')
+    
+    # Check if policy already exists
+    if os.path.exists(policy_path):
+        print(f"Overwriting existing policy at {policy_path}")
+    
     torch.save({
         'agent_state_dict': trained_agent.state_dict(),
         'config': subset_config,

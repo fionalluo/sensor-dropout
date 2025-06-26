@@ -112,7 +112,7 @@ defaults:
 # Tiger Key Door
 gymnasium_tigerkeydoor: &tigerkeydoor_base
   task: gymnasium_TigerDoorKey-v0
-  total_timesteps: 500000 # 150000
+  total_timesteps: 150000
   num_envs: 8
   num_steps: 256
   learning_rate: 1e-4

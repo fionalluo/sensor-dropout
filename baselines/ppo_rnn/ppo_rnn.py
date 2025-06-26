@@ -394,6 +394,8 @@ class PPORnnTrainer:
         self.writer.close()
         if self.use_wandb:
             wandb.finish()
+        
+        return self.agent
 
     def evaluate(self, debug=False):
         """Evaluate the agent."""
