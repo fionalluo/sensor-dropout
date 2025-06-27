@@ -185,18 +185,6 @@ The evaluation system uses a **prefix-based substitution** approach:
   - MLP: `.*` (all)
   - CNN: `camera_side`
 
-## Testing
-
-You can test the functionality using the provided test scripts:
-
-```bash
-# Test training environment parameter
-python baselines/ppo_rnn/test_training_env.py
-
-# Test prefix-based substitution
-python baselines/ppo_rnn/test_prefix_substitution.py
-```
-
 ## Logging
 
 When using the `--training_env` parameter, the run name will include the environment subset:

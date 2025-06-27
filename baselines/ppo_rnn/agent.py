@@ -183,7 +183,7 @@ class PPORnnAgent(BaseAgent):
             nn.LayerNorm(config.encoder.output_dim) if config.encoder.norm == 'layer' else nn.Identity()
         )
         
-        # LSTM layer
+        # LSTM layer with better initialization
         self.lstm = nn.LSTM(config.encoder.output_dim, config.rnn.hidden_size)
         for name, param in self.lstm.named_parameters():
             if "bias" in name:
@@ -191,27 +191,36 @@ class PPORnnAgent(BaseAgent):
             elif "weight" in name:
                 nn.init.orthogonal_(param, 1.0)
         
-        # Actor and critic networks operating on LSTM output
-        self.critic = nn.Sequential(
-            layer_init(nn.Linear(config.rnn.hidden_size, config.rnn.hidden_size // 2)),
-            self.act,
-            layer_init(nn.Linear(config.rnn.hidden_size // 2, 1), std=1.0),
-        )
+        # Improved actor and critic networks
+        hidden_size = config.rnn.hidden_size
+        actor_hidden_size = hidden_size // 2
+        critic_hidden_size = hidden_size // 2
         
+        # Actor network
         if self.is_discrete:
             self.actor = nn.Sequential(
-                layer_init(nn.Linear(config.rnn.hidden_size, config.rnn.hidden_size // 2)),
+                layer_init(nn.Linear(hidden_size, actor_hidden_size)),
                 self.act,
-                layer_init(nn.Linear(config.rnn.hidden_size // 2, envs.act_space['action'].shape[0]), std=0.01),
+                nn.LayerNorm(actor_hidden_size) if config.encoder.norm == 'layer' else nn.Identity(),
+                layer_init(nn.Linear(actor_hidden_size, envs.act_space['action'].shape[0]), std=0.01),
             )
         else:
             action_size = np.prod(envs.act_space['action'].shape)
             self.actor_mean = nn.Sequential(
-                layer_init(nn.Linear(config.rnn.hidden_size, config.rnn.hidden_size // 2)),
+                layer_init(nn.Linear(hidden_size, actor_hidden_size)),
                 self.act,
-                layer_init(nn.Linear(config.rnn.hidden_size // 2, action_size), std=0.01),
+                nn.LayerNorm(actor_hidden_size) if config.encoder.norm == 'layer' else nn.Identity(),
+                layer_init(nn.Linear(actor_hidden_size, action_size), std=0.01),
             )
             self.actor_logstd = nn.Parameter(torch.zeros(1, action_size))
+        
+        # Critic network
+        self.critic = nn.Sequential(
+            layer_init(nn.Linear(hidden_size, critic_hidden_size)),
+            self.act,
+            nn.LayerNorm(critic_hidden_size) if config.encoder.norm == 'layer' else nn.Identity(),
+            layer_init(nn.Linear(critic_hidden_size, 1), std=1.0),
+        )
 
     def encode_observations(self, x):
         """Encode observations into a latent representation.
@@ -337,11 +346,13 @@ class PPORnnAgent(BaseAgent):
         """
         hidden = self.encode_observations(x)
         
-        # LSTM logic
+        # LSTM logic with proper batch handling
         batch_size = lstm_state[0].shape[1]
         hidden = hidden.reshape((-1, batch_size, self.lstm.input_size))
         done = done.reshape((-1, batch_size))
         new_hidden = []
+        
+        # Process each timestep
         for h, d in zip(hidden, done):
             h, lstm_state = self.lstm(
                 h.unsqueeze(0),
@@ -351,6 +362,7 @@ class PPORnnAgent(BaseAgent):
                 ),
             )
             new_hidden += [h]
+        
         new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
         return new_hidden, lstm_state
 

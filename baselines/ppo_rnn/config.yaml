@@ -12,7 +12,7 @@ defaults:
   total_timesteps: 500000
   learning_rate: 3e-4
   num_envs: 8
-  num_steps: 2048
+  num_steps: 512
   anneal_lr: true
   gamma: 0.99
   gae_lambda: 0.95
@@ -24,10 +24,10 @@ defaults:
   ent_coef: 0.01
   vf_coef: 0.5
   max_grad_norm: 0.5
-  target_kl: null
+  target_kl: 0.015
   eps: 1e-5
-  batch_size: 8192
-  minibatch_size: 2048
+  batch_size: 4096
+  minibatch_size: 1024
 
   # RNN settings
   rnn:
@@ -75,10 +75,10 @@ defaults:
   encoder:
     act: "silu"  # Activation function
     norm: "layer"  # Normalization type
-    output_dim: 512  # Final output dimension
+    output_dim: 256  # Final output dimension
     mlp_layers: 2  # Number of MLP layers
-    mlp_units: 256  # Number of units per MLP layer
-    cnn_depth: 48  # Base depth for CNN
+    mlp_units: 128  # Number of units per MLP layer
+    cnn_depth: 32  # Base depth for CNN
     cnn_blocks: 0  # Number of residual blocks
     resize: "bilinear"  # Resize strategy
     minres: 4  # Minimum resolution
@@ -99,10 +99,10 @@ defaults:
   
   # Evaluation settings
   eval:
-    eval_interval: 1000  # Evaluate every 1000 steps
-    num_eval_episodes: 10  # Number of episodes to evaluate
-    eval_envs: 4  # Number of parallel environments for evaluation
-    video_log_interval: 1  # Log videos every evaluation call
+    eval_interval: 50
+    num_eval_episodes: 10
+    eval_envs: 4
+    video_log_interval: 1
     num_eval_configs: 4
 
 # ====================
@@ -112,22 +112,23 @@ defaults:
 # Tiger Key Door
 gymnasium_tigerkeydoor: &tigerkeydoor_base
   task: gymnasium_TigerDoorKey-v0
-  total_timesteps: 300000
+  total_timesteps: 400000
   num_envs: 8
-  num_steps: 256
-  learning_rate: 1e-4
-  ent_coef: 0.05
+  num_steps: 512
+  learning_rate: 3e-4
+  ent_coef: 0.01
   gamma: 0.99
   gae_lambda: 0.95
-  num_minibatches: 8
+  num_minibatches: 4
   update_epochs: 4
   norm_adv: true
   clip_coef: 0.2
   clip_vloss: true
   vf_coef: 0.5
   max_grad_norm: 0.5
+  target_kl: 0.015
   eval:
-    eval_interval: 100
+    eval_interval: 50
     num_eval_episodes: 10
     eval_envs: 4
     num_eval_configs: 4
@@ -149,6 +150,23 @@ gymnasium_tigerkeydoor: &tigerkeydoor_base
     env4:  # must press button and get key to reveal unlocked doors and tiger/treasure relative position. starts with nothing
       mlp_keys: '\b(neighbors_unprivileged|door_unprivileged|doors_unlocked_unprivileged|position|has_key)\b'
       cnn_keys: '^$'
+
+  # Improved encoder architecture for tiger key door
+  encoder:
+    act: "silu"
+    norm: "layer"
+    output_dim: 256
+    mlp_layers: 2
+    mlp_units: 128
+    cnn_depth: 32
+    cnn_blocks: 0
+    resize: "bilinear"
+    minres: 4
+
+  # Improved RNN architecture
+  rnn:
+    hidden_size: 128
+    num_layers: 1
 
   exp_name: "tigerkeydoor_ppo_rnn"
 

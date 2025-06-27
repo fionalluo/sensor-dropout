@@ -28,7 +28,7 @@ class PPORnnTrainer:
         self.device = self.agent.device
         self.agent = self.agent.to(self.device)
         
-        # Initialize optimizer
+        # Initialize optimizer with better defaults
         self.optimizer = optim.Adam(
             self.agent.parameters(),
             lr=config.learning_rate,
@@ -78,8 +78,13 @@ class PPORnnTrainer:
             device=self.device
         )
         
-        # LSTM state storage
-        self.lstm_states = torch.zeros(
+        # LSTM state storage - store both hidden and cell states
+        self.lstm_hidden = torch.zeros(
+            (config.num_steps, config.num_envs, self.agent.lstm.num_layers, self.agent.lstm.hidden_size),
+            dtype=torch.float32,
+            device=self.device
+        )
+        self.lstm_cell = torch.zeros(
             (config.num_steps, config.num_envs, self.agent.lstm.num_layers, self.agent.lstm.hidden_size),
             dtype=torch.float32,
             device=self.device
@@ -180,6 +185,10 @@ class PPORnnTrainer:
                     self.obs[key][step] = next_obs[key]
             self.dones[step] = next_done
             
+            # Store LSTM states
+            self.lstm_hidden[step] = self.next_lstm_state[0].transpose(0, 1)
+            self.lstm_cell[step] = self.next_lstm_state[1].transpose(0, 1)
+            
             # Get action and value with LSTM state
             with torch.no_grad():
                 action, logprob, _, value, self.next_lstm_state = self.agent.get_action_and_value(
@@ -231,11 +240,10 @@ class PPORnnTrainer:
         self.next_done = next_done
 
     def compute_advantages(self):
-        """Compute advantages using GAE."""
+        """Compute advantages using GAE with proper RNN handling."""
         # Bootstrap value if not done
         with torch.no_grad():
             # Use the final observations from the rollout for bootstrapping
-            # This matches how the original PPO works
             next_value = self.agent.get_value(self.next_obs, self.next_lstm_state, self.next_done).reshape(1, -1)
             advantages = torch.zeros_like(self.rewards).to(self.device)
             lastgaelam = 0
@@ -253,7 +261,7 @@ class PPORnnTrainer:
         return advantages, returns
 
     def update_policy(self, b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values):
-        """Update the policy using PPO."""
+        """Update the policy using PPO with proper LSTM state handling."""
         # Optimizing the policy and value network
         assert self.config.num_envs % self.config.num_minibatches == 0
         envsperbatch = self.config.num_envs // self.config.num_minibatches
@@ -274,9 +282,10 @@ class PPORnnTrainer:
                     mb_obs[key] = b_obs[key][mb_inds]
                 
                 # Get initial LSTM state for this mini-batch
+                # Use the stored LSTM states from the beginning of the rollout
                 initial_lstm_state = (
-                    self.next_lstm_state[0][:, mbenvinds].clone(),
-                    self.next_lstm_state[1][:, mbenvinds].clone()
+                    self.lstm_hidden[0, mbenvinds].transpose(0, 1).clone(),
+                    self.lstm_cell[0, mbenvinds].transpose(0, 1).clone()
                 )
                 
                 _, newlogprob, entropy, newvalue, _ = self.agent.get_action_and_value(
