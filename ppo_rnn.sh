@@ -10,8 +10,8 @@ BASE_LOGDIR=~/logdir/baselines/ppo_rnn
 
 # List of configs to run
 CONFIGS=(
-  # "gymnasium_tigerkeydoor"
-  # "gymnasium_tigerkeydoorlarge"
+  # "gymnasium_tigerdoorkey"
+  # "gymnasium_tigerdoorkeylarge"
   # "gymnasium_maze"
   "gymnasium_blindpick"
 )

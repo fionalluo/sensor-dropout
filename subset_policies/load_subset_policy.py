@@ -21,6 +21,12 @@ import embodied
 from embodied import wrappers
 from baselines.ppo_rnn.ppo_rnn import PPORnnAgent
 from baselines.shared.eval_utils import filter_observations_by_keys
+from baselines.shared.policy_utils import (
+    load_policy_with_metadata, 
+    find_policy_files, 
+    load_metadata_from_dir,
+    convert_obs_to_tensor
+)
 
 class SubsetPolicyLoader:
     """Class to load and use trained subset policies."""
@@ -39,10 +45,7 @@ class SubsetPolicyLoader:
         self.metadata = None
         
         # Load metadata
-        metadata_path = os.path.join(policy_dir, 'metadata.yaml')
-        if os.path.exists(metadata_path):
-            with open(metadata_path, 'r') as f:
-                self.metadata = yaml.safe_load(f)
+        self.metadata = load_metadata_from_dir(policy_dir)
         
         # Load all available policies
         self._load_policies()
@@ -52,13 +55,8 @@ class SubsetPolicyLoader:
         if not os.path.exists(self.policy_dir):
             raise FileNotFoundError(f"Policy directory not found: {self.policy_dir}")
         
-        # Find all policy directories
-        for item in os.listdir(self.policy_dir):
-            item_path = os.path.join(self.policy_dir, item)
-            if os.path.isdir(item_path) and item.startswith('env'):
-                policy_path = os.path.join(item_path, 'policy.pt')
-                if os.path.exists(policy_path):
-                    self.policies[item] = policy_path
+        # Find all policy files using shared utility
+        self.policies = find_policy_files(self.policy_dir)
         
         print(f"Loaded {len(self.policies)} policies: {list(self.policies.keys())}")
     
@@ -76,68 +74,16 @@ class SubsetPolicyLoader:
             raise ValueError(f"Policy {subset_name} not found. Available: {list(self.policies.keys())}")
         
         policy_path = self.policies[subset_name]
-        checkpoint = torch.load(policy_path, map_location=self.device)
         
-        # Extract components
-        agent_state_dict = checkpoint['agent_state_dict']
-        config = checkpoint['config']
-        eval_keys = checkpoint['eval_keys']
-        
-        # Create environment to get observation space
-        env = self._create_env(config)
-        
-        # Create agent
-        agent = PPORnnAgent(
-            env.obs_space,
-            env.act_space,
-            config,
-            device=self.device
+        # Use shared utility to load policy
+        agent, config, metadata = load_policy_with_metadata(
+            policy_path, PPORnnAgent, self.device
         )
         
-        # Load state dict
-        agent.load_state_dict(agent_state_dict)
-        agent.eval()
+        # Extract eval_keys from metadata
+        eval_keys = metadata.get('eval_keys', {})
         
         return agent, config, eval_keys
-    
-    def _create_env(self, config):
-        """Create a single environment for getting observation space."""
-        suite, task = config.task.split('_', 1)
-        
-        ctor = {
-            'gymnasium': 'embodied.envs.from_gymnasium:FromGymnasium',
-        }[suite]
-        
-        if isinstance(ctor, str):
-            module, cls = ctor.split(':')
-            module = __import__(module, fromlist=[cls])
-            ctor = getattr(module, cls)
-        
-        kwargs = getattr(config.env, suite, {})
-        env = ctor(task, **kwargs)
-        return self._wrap_env(env, config)
-    
-    def _wrap_env(self, env, config):
-        """Wrap environment with standard wrappers."""
-        args = getattr(config, 'wrapper', {})
-        for name, space in env.act_space.items():
-            if name == 'reset':
-                continue
-            elif space.discrete:
-                env = wrappers.OneHotAction(env, name)
-            else:
-                env = wrappers.NormalizeAction(env, name)
-
-        env = wrappers.ExpandScalars(env)
-
-        if hasattr(args, 'length') and args.length:
-            env = wrappers.TimeLimit(env, args.length, getattr(args, 'reset', True))
-
-        for name, space in env.act_space.items():
-            if not space.discrete:
-                env = wrappers.ClipAction(env, name)
-
-        return env
     
     def get_action(self, subset_name, obs, lstm_state=None):
         """
@@ -158,13 +104,13 @@ class SubsetPolicyLoader:
             obs, eval_keys['mlp_keys'], eval_keys['cnn_keys']
         )
         
-        # Convert to tensor and add batch dimension
-        obs_tensor = {}
-        for key, value in filtered_obs.items():
-            if isinstance(value, np.ndarray):
-                obs_tensor[key] = torch.from_numpy(value).unsqueeze(0).to(self.device)
-            else:
-                obs_tensor[key] = torch.tensor([value], dtype=torch.float32).to(self.device)
+        # Convert to tensor using shared utility
+        obs_tensor = convert_obs_to_tensor(filtered_obs, self.device)
+        
+        # Add batch dimension if needed
+        for key in obs_tensor:
+            if obs_tensor[key].dim() == 1:
+                obs_tensor[key] = obs_tensor[key].unsqueeze(0)
         
         # Get action from agent
         with torch.no_grad():

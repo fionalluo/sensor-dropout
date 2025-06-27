@@ -5,8 +5,11 @@ generate_unique_seed() {
   date +%s%N | sha256sum | awk '{ print "0x" substr($1, 1, 8) }'
 }
 
-# Base output directory
-BASE_OUTPUT_DIR=./policies
+# Base log directory
+BASE_LOGDIR=~/logdir/baselines/ppo_distill
+
+# Base policy directory
+BASE_POLICY_DIR=./policies
 
 # List of configs to run
 CONFIGS=(
@@ -31,17 +34,28 @@ for CONFIG in "${CONFIGS[@]}"; do
   for SEED in "${SEEDS[@]}"; do
     # Extract clean task name (remove any prefix_ and any -vN suffix)
     TASK_NAME=$(echo "$CONFIG" | sed 's/^[^_]*_//' | sed 's/-v[0-9]*$//')
-    OUTPUT_DIR="${BASE_OUTPUT_DIR}/${TASK_NAME}"
+    EXPERT_POLICY_DIR="${BASE_POLICY_DIR}/${TASK_NAME}"
+    LOGDIR="${BASE_LOGDIR}/${CONFIG}_${SEED}"
 
-    echo "Training subset policies for config ${CONFIG} with seed ${SEED}"
-    echo "Output directory: ${OUTPUT_DIR}"
+    # Check if expert policies exist
+    if [ ! -d "$EXPERT_POLICY_DIR" ]; then
+      echo "Error: Expert policy directory not found: $EXPERT_POLICY_DIR"
+      echo "Please run train_subset_policies.sh first to create expert policies for $TASK_NAME."
+      echo "Skipping config ${CONFIG} with seed ${SEED}."
+      echo "-----------------------"
+      continue
+    fi
 
-    timeout 8h python3 -u subset_policies/train_subset_policies.py \
+    echo "Running PPO Distill baseline with config ${CONFIG} and seed ${SEED}"
+    echo "Expert policy directory: ${EXPERT_POLICY_DIR}"
+    echo "Logging to: ${LOGDIR}"
+
+    timeout 8h python3 -u baselines/ppo_distill/train.py \
       --configs ${CONFIG} \
+      --expert_policy_dir "$EXPERT_POLICY_DIR" \
       --seed "$SEED" \
-      --output_dir "$OUTPUT_DIR" \
       --cuda \
-      --debug
+      --track
 
     if [ $? -eq 124 ]; then
       echo "Command timed out for config ${CONFIG} and seed ${SEED}."
@@ -53,4 +67,4 @@ for CONFIG in "${CONFIGS[@]}"; do
   done
 done
 
-echo "All subset policy training complete." 
+echo "All PPO Distill tasks complete." 

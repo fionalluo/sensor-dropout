@@ -105,8 +105,8 @@ defaults:
 # Named Configs
 # ====================
 
-# Tiger Key Door
-gymnasium_tigerkeydoor: &tigerkeydoor_base
+# Tiger Door Key
+gymnasium_tigerdoorkey: &tigerdoorkey_base
   task: gymnasium_TigerDoorKey-v0
   total_timesteps: 500000 # 150000
   num_envs: 8
@@ -146,13 +146,13 @@ gymnasium_tigerkeydoor: &tigerkeydoor_base
       mlp_keys: '\b(neighbors_unprivileged|door_unprivileged|doors_unlocked_unprivileged|position|has_key)\b'
       cnn_keys: '^$'
 
-  exp_name: "tigerkeydoor_ppo"
+  exp_name: "tigerdoorkey_ppo"
 
-gymnasium_tigerkeydoorlarge:
-  << : *tigerkeydoor_base
-  task: gymnasium_TigerDoorKeyLarge-v0
+gymnasium_tigerdoorkeylarge:
+  << : *tigerdoorkey_base
+  task: "gymnasium_tigerdoorkeylarge"
   total_timesteps: 500000
-  exp_name: "tigerkeydoorlarge_ppo"
+  exp_name: "tigerdoorkeylarge_ppo"
 
 gymnasium_maze: &maze_base
   task: gymnasium_Maze7x7-v0

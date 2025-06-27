@@ -1,84 +1,68 @@
 # Subset Policy Training and Deployment
 
-This directory contains scripts to train PPO RNN policies for each subset of eval_keys and easily deploy them for inference.
+This directory contains utilities for training and deploying subset policies for sensor dropout experiments.
 
 ## Overview
 
-For configurations like `gymnasium_tigerkeydoor`, this system trains 4 separate policies:
-- `env1`: Full privileged observations
-- `env2`: Unprivileged door observations  
-- `env3`: Unprivileged key observations
-- `env4`: All unprivileged observations
+For configurations like `gymnasium_tigerdoorkey`, this system trains 4 separate policies:
 
-Each policy is trained on its specific subset of observations and saved in a structured format for easy deployment.
+- **env1**: Policies trained with door and key observations only
+- **env2**: Policies trained with tiger and key observations only  
+- **env3**: Policies trained with tiger and door observations only
+- **env4**: Policies trained with tiger, door, and key observations
 
-## Files
-
-- `train_subset_policies.py`: Main training script
-- `load_subset_policy.py`: Utility to load and use trained policies
-- `example_usage.py`: Example showing how to use the trained policies
-- `README.md`: This documentation
-
-## Training Policies
+## Training Subset Policies
 
 ### Quick Start
 
 ```bash
-# Train policies for gymnasium_tigerkeydoor (from project root)
+# Train policies for gymnasium_tigerdoorkey (from project root)
 ./train_subset_policies.sh
 ```
 
 ### Manual Training
 
 ```bash
-# Train for a specific config (from project root)
-python subset_policies/train_subset_policies.py \
-  --configs gymnasium_tigerkeydoor \
-  --seed 12345 \
-  --output_dir ~/policies \
-  --cuda \
-  --debug
+# Train subset policies manually
+python3 subset_policies/train_subset_policies.py \
+    --configs gymnasium_tigerdoorkey \
+    --output_dir ./policies/tigerdoorkey \
+    --cuda \
+    --debug
 ```
 
 ### Output Structure
 
-Policies are saved in the following structure:
 ```
 policies/
-└── tigerkeydoor_12345/
+└── tigerdoorkey/
     ├── env1/
-    │   └── policy.pt
+    │   └── policy_20241201_143022.pt
     ├── env2/
-    │   └── policy.pt
+    │   └── policy_20241201_143156.pt
     ├── env3/
-    │   └── policy.pt
+    │   └── policy_20241201_143245.pt
     ├── env4/
-    │   └── policy.pt
+    │   └── policy_20241201_143334.pt
     └── metadata.yaml
 ```
 
-Each `policy.pt` contains:
-- `agent_state_dict`: Trained model weights
-- `config`: Configuration used for training
-- `eval_keys`: Observation filtering patterns
-- `subset_name`: Name of the subset (env1, env2, etc.)
-
-## Loading and Using Policies
+## Using Trained Policies
 
 ### List Available Policies
 
 ```bash
 python subset_policies/load_subset_policy.py \
-  --policy_dir ~/policies/tigerkeydoor_12345 \
-  --list
+    --policy_dir ~/policies/tigerdoorkey \
+    --list
 ```
 
 ### Load Specific Policy
 
 ```bash
 python subset_policies/load_subset_policy.py \
-  --policy_dir ~/policies/tigerkeydoor_12345 \
-  --subset env1
+    --policy_dir ~/policies/tigerdoorkey \
+    --subset env1
 ```
 
 ### Programmatic Usage
@@ -86,21 +70,9 @@ python subset_policies/load_subset_policy.py \
 ```python
 from subset_policies.load_subset_policy import SubsetPolicyLoader
 
-# Load all policies
-loader = SubsetPolicyLoader("~/policies/tigerkeydoor_12345", device='cpu')
-
-# Get action from a specific policy
-action, lstm_state = loader.get_action('env1', observation_dict, lstm_state)
-
-# Load specific policy for direct access
+# Load a pre-trained subset policy
+loader = SubsetPolicyLoader("~/policies/tigerdoorkey", device='cpu')
 agent, config, eval_keys = loader.load_policy('env1')
-```
-
-### Example Usage
-
-```bash
-# Run the example script (update policy_dir first)
-python subset_policies/example_usage.py
 ```
 
 ## Configuration

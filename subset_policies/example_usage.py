@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Example script showing how to use trained subset policies.
-This demonstrates loading policies and using them for inference.
+Example usage of the subset policy loader.
+This script demonstrates how to load and use trained subset policies.
 """
 
 import os
@@ -13,7 +13,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from load_subset_policy import SubsetPolicyLoader
+from subset_policies.load_subset_policy import SubsetPolicyLoader
 import embodied
 from embodied import wrappers
 
@@ -45,90 +45,83 @@ def create_env(task_name):
     
     return env
 
-def example_usage():
-    """Example of how to use trained subset policies."""
+def example_list_policies():
+    """Example of listing available policies."""
+    print("Listing available policies...")
     
-    # Example policy directory (adjust this path)
-    policy_dir = "~/policies/gymnasium_tigerkeydoor_12345678"  # Replace with actual path
+    # Update this path to your actual policy directory
+    policy_dir = "~/policies/tigerdoorkey"  # Replace with actual path
     
-    print("Loading subset policies...")
-    loader = SubsetPolicyLoader(policy_dir, device='cpu')
-    
-    # List available policies
-    loader.list_policies()
-    
-    # Create environment for testing
-    env = create_env("gymnasium_TigerDoorKey-v0")
-    
-    print("\nTesting policies with environment...")
-    
-    # Test each policy
-    for subset_name in sorted(loader.policies.keys()):
-        print(f"\n--- Testing {subset_name} ---")
-        
-        # Reset environment
-        obs = env.reset()
-        
-        # Initialize LSTM state
-        lstm_state = None
-        
-        # Run a few steps
-        total_reward = 0
-        for step in range(10):
-            # Get action from policy
-            action, lstm_state = loader.get_action(subset_name, obs, lstm_state)
-            
-            # Convert action back to environment format
-            if isinstance(action, dict):
-                # Handle one-hot actions
-                for key, value in action.items():
-                    if hasattr(env.act_space[key], 'discrete') and env.act_space[key].discrete:
-                        action[key] = value.argmax(dim=-1).cpu().numpy()[0]
-                    else:
-                        action[key] = value.cpu().numpy()[0]
-            
-            # Step environment
-            obs, reward, done, info = env.step(action)
-            total_reward += reward
-            
-            print(f"  Step {step}: Action={action}, Reward={reward:.2f}")
-            
-            if done:
-                break
-        
-        print(f"  Total reward: {total_reward:.2f}")
+    try:
+        loader = SubsetPolicyLoader(policy_dir, device='cpu')
+        loader.list_policies()
+    except FileNotFoundError:
+        print(f"Policy directory not found: {policy_dir}")
+        print("Please run train_subset_policies.sh first to create policies.")
 
 def example_load_specific_policy():
     """Example of loading a specific policy."""
-    
-    policy_dir = "~/policies/gymnasium_tigerkeydoor_12345678"  # Replace with actual path
-    
     print("Loading specific policy...")
-    loader = SubsetPolicyLoader(policy_dir, device='cpu')
     
-    # Load a specific policy
-    agent, config, eval_keys = loader.load_policy('env1')
+    # Update this path to your actual policy directory
+    policy_dir = "~/policies/tigerdoorkey"  # Replace with actual path
     
-    print(f"Loaded policy env1")
-    print(f"Task: {config.task}")
-    print(f"MLP keys pattern: {eval_keys['mlp_keys']}")
-    print(f"CNN keys pattern: {eval_keys['cnn_keys']}")
+    try:
+        loader = SubsetPolicyLoader(policy_dir, device='cpu')
+        
+        # Load a specific policy
+        agent, config, eval_keys = loader.load_policy('env1')
+        
+        print(f"Loaded policy env1")
+        print(f"MLP keys pattern: {eval_keys['mlp_keys']}")
+        print(f"CNN keys pattern: {eval_keys['cnn_keys']}")
+        print(f"Task: {config.task}")
+        
+    except FileNotFoundError:
+        print(f"Policy directory not found: {policy_dir}")
+        print("Please run train_subset_policies.sh first to create policies.")
+    except ValueError as e:
+        print(f"Error loading policy: {e}")
+
+def example_get_action():
+    """Example of getting actions from a policy."""
+    print("Getting action from policy...")
     
-    # You can now use the agent directly
-    print(f"Agent type: {type(agent)}")
+    # Update this path to your actual policy directory
+    example_policy_dir = "~/policies/tigerdoorkey"
+    
+    try:
+        loader = SubsetPolicyLoader(example_policy_dir, device='cpu')
+        
+        # Create a dummy observation (replace with real observations)
+        dummy_obs = {
+            'tiger': [1.0, 0.0, 0.0],  # Example tiger observation
+            'door': [0.0, 1.0, 0.0],   # Example door observation
+            'key': [0.0, 0.0, 1.0],    # Example key observation
+        }
+        
+        # Get action from env1 policy
+        action, lstm_state = loader.get_action('env1', dummy_obs)
+        
+        print(f"Action from env1 policy: {action}")
+        print(f"LSTM state shape: {lstm_state[0].shape if lstm_state else 'None'}")
+        
+    except FileNotFoundError:
+        print(f"Policy directory not found: {example_policy_dir}")
+        print("Please run train_subset_policies.sh first to create policies.")
 
 if __name__ == "__main__":
     print("Subset Policy Usage Examples")
     print("=" * 40)
     
-    # Check if policy directory exists
-    example_policy_dir = "~/policies/gymnasium_tigerkeydoor_12345678"
-    if os.path.exists(os.path.expanduser(example_policy_dir)):
-        example_usage()
-        example_load_specific_policy()
-    else:
-        print(f"Example policy directory not found: {example_policy_dir}")
-        print("Please run train_subset_policies.sh first to create policies.")
-        print("\nTo use with your own policies:")
-        print("1. Update the policy_dir path in this script")
-        print("2. Run the script again") 
+    # Run examples
+    example_list_policies()
+    print()
+    
+    example_load_specific_policy()
+    print()
+    
+    example_get_action()
+    print()
+    
+    print("Examples completed!") 

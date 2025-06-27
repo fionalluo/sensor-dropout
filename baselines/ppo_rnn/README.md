@@ -1,13 +1,35 @@
-# PPO RNN Implementation
+# PPO RNN Baseline
 
-This directory contains a PPO (Proximal Policy Optimization) implementation with RNN (Recurrent Neural Network) support for handling sequential observations. The implementation is based on the existing PPO baseline but adds LSTM layers to process temporal information.
+A PPO (Proximal Policy Optimization) implementation with RNN (Recurrent Neural Network) support for sensor dropout experiments.
+
+## Quick Start
+
+```bash
+# Basic training
+python train.py --configs gymnasium_tigerdoorkey
+
+# With specific seed
+python train.py --configs gymnasium_tigerdoorkey --seed 42
+
+# With wandb logging
+python train.py --configs gymnasium_tigerdoorkey --track
+
+# With debug mode
+python train.py --configs gymnasium_tigerdoorkey --debug
+```
+
+## Supported Environments
+
+- `gymnasium_tigerdoorkey`: Tiger Door Key environment
+- `gymnasium_maze`: Maze environment
+- `gymnasium_blindpick`: Blind Pick environment
 
 ## Features
 
 - **PPO Algorithm**: Standard PPO implementation with GAE (Generalized Advantage Estimation)
 - **RNN Support**: LSTM layers for processing sequential observations
 - **Flexible Encoders**: Support for both CNN and MLP encoders
-- **Multi-Environment Support**: Works with tiger key door, maze, and blind pick environments
+- **Multi-Environment Support**: Works with tiger door key, maze, and blind pick environments
 - **Evaluation**: Comprehensive evaluation with observation subset testing
 - **Logging**: TensorBoard and wandb integration
 
@@ -27,23 +49,23 @@ The PPO RNN agent consists of:
 
 ```bash
 # Basic training
-python train.py --configs gymnasium_tigerkeydoor
+python train.py --configs gymnasium_tigerdoorkey
 
 # With custom seed
-python train.py --configs gymnasium_tigerkeydoor --seed 42
+python train.py --configs gymnasium_tigerdoorkey --seed 42
 
 # With wandb tracking
-python train.py --configs gymnasium_tigerkeydoor --track
+python train.py --configs gymnasium_tigerdoorkey --track
 
 # Debug mode
-python train.py --configs gymnasium_tigerkeydoor --debug
+python train.py --configs gymnasium_tigerdoorkey --debug
 ```
 
 ### Configuration
 
 The training uses a YAML configuration file (`config.yaml`) with named configs for different environments:
 
-- `gymnasium_tigerkeydoor`: Tiger Door Key environment
+- `gymnasium_tigerdoorkey`: Tiger Door Key environment
 - `gymnasium_maze`: Maze environment  
 - `gymnasium_blindpick`: Blind Pick environment
 

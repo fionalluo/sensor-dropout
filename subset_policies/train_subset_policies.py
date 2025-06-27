@@ -246,9 +246,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() and config.cuda else "cpu")
     print(f"Using device: {device}")
     
-    # Create output directory
-    task_name = config.task.replace('gymnasium_', '').replace('-v0', '').lower()
-    output_dir = os.path.join(args.output_dir, task_name)
+    # Use output directory directly (shell script already provides the correct name)
+    output_dir = args.output_dir
     os.makedirs(output_dir, exist_ok=True)
     
     print(f"Training policies for task: {config.task}")

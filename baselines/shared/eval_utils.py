@@ -301,21 +301,42 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         env_returns = np.zeros(eval_envs.num_envs)
         env_lengths = np.zeros(eval_envs.num_envs)
         
+        # Initialize LSTM state for RNN agents
+        lstm_state = None
+        if hasattr(agent, 'get_initial_lstm_state'):
+            # Get initial state and expand to correct batch size
+            initial_state = agent.get_initial_lstm_state()
+            lstm_state = (
+                initial_state[0].expand(-1, eval_envs.num_envs, -1),
+                initial_state[1].expand(-1, eval_envs.num_envs, -1)
+            )
+        
         # Run evaluation until we have enough episodes
         while len(env_episode_returns) < num_episodes:
             # Get action from policy
             with torch.no_grad():
                 if hasattr(agent, 'get_action_and_value'):
-                    result = agent.get_action_and_value(next_obs)
-                    if len(result) == 4:
-                        # Regular PPO agent: (action, log_prob, entropy, value)
-                        action, _, _, _ = result
-                    elif len(result) == 5:
-                        # PPO RNN agent: (action, log_prob, entropy, value, lstm_state)
-                        action, _, _, _, _ = result
+                    if hasattr(agent, 'get_initial_lstm_state'):
+                        # PPO RNN agent: needs lstm_state and done
+                        result = agent.get_action_and_value(next_obs, lstm_state, next_done)
+                        if len(result) == 5:
+                            # PPO RNN agent: (action, log_prob, entropy, value, new_lstm_state)
+                            action, _, _, _, lstm_state = result
+                        elif len(result) == 6:
+                            # PPO Distill agent: (action, log_prob, entropy, value, new_lstm_state, expert_actions)
+                            action, _, _, _, lstm_state, _ = result
+                        else:
+                            # Fallback: just take the first value as action
+                            action = result[0]
                     else:
-                        # Fallback: just take the first value as action
-                        action = result[0]
+                        # Regular PPO agent
+                        result = agent.get_action_and_value(next_obs)
+                        if len(result) == 4:
+                            # Regular PPO agent: (action, log_prob, entropy, value)
+                            action, _, _, _ = result
+                        else:
+                            # Fallback: just take the first value as action
+                            action = result[0]
                 else:
                     action = agent.get_action(next_obs)
             

@@ -1,5 +1,5 @@
 defaults:
-  exp_name: ppo_rnn_baseline
+  exp_name: ppo_distill_baseline
   seed: 0
   torch_deterministic: true
   cuda: true
@@ -33,6 +33,11 @@ defaults:
   rnn:
     hidden_size: 128
     num_layers: 1
+
+  # Distillation settings
+  distill_coef: 0.1  # Coefficient for distillation loss
+  expert_coef: 0.5   # Coefficient for expert guidance
+  cycle_mode: "episode"  # How to cycle configurations: "episode" or "batch"
 
   # Teacher and student observation keys
   full_keys: {mlp_keys: '.*', cnn_keys: '.*'}
@@ -151,6 +156,11 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
       mlp_keys: '\b(neighbors_unprivileged|door_unprivileged|doors_unlocked_unprivileged|position|has_key)\b'
       cnn_keys: '^$'
 
+  # Distillation settings for tiger door key
+  distill_coef: 0.1
+  expert_coef: 0.5
+  cycle_mode: "episode"
+
   # Improved encoder architecture for tiger door key
   encoder:
     act: "silu"
@@ -168,13 +178,13 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
     hidden_size: 128
     num_layers: 1
 
-  exp_name: "tigerdoorkey_ppo_rnn"
+  exp_name: "tigerdoorkey_ppo_distill"
 
 gymnasium_tigerdoorkeylarge:
   << : *tigerdoorkey_base
   task: gymnasium_TigerDoorKeyLarge-v0
   total_timesteps: 500000
-  exp_name: "tigerdoorkeylarge_ppo_rnn"
+  exp_name: "tigerdoorkeylarge_ppo_distill"
 
 gymnasium_maze: &maze_base
   task: gymnasium_Maze7x7-v0
@@ -225,7 +235,12 @@ gymnasium_maze: &maze_base
       mlp_keys: '\b(goal_position_unprivileged|position|neighbors_3x3)\b'
       cnn_keys: '\b(neighbors_5x5)\b'
 
-  exp_name: "maze_ppo_rnn"
+  # Distillation settings for maze
+  distill_coef: 0.1
+  expert_coef: 0.5
+  cycle_mode: "episode"
+
+  exp_name: "maze_ppo_distill"
 
 # Blind Pick environment
 gymnasium_blindpick: &blindpick_base
@@ -265,17 +280,41 @@ gymnasium_blindpick: &blindpick_base
       mlp_keys: '.*'
       cnn_keys: 'camera_side'
 
-  exp_name: "blindpick_ppo_rnn"
+  # Distillation settings for blind pick
+  distill_coef: 0.1
+  expert_coef: 0.5
+  cycle_mode: "episode"
+
+  exp_name: "blindpick_ppo_distill"
 
 # Logging configurations
 no_wandb:
   use_wandb: false
-  exp_name: "ppo_rnn_no_wandb"
+  exp_name: "ppo_distill_no_wandb"
 
 wandb_debug:
   use_wandb: true
   wandb_project: "sensor-dropout-debug"
-  exp_name: "ppo_rnn_debug"
+  exp_name: "ppo_distill_debug"
+
+# Distillation-specific configurations
+high_distill:
+  distill_coef: 0.5
+  expert_coef: 0.8
+  exp_name: "ppo_distill_high_distill"
+
+low_distill:
+  distill_coef: 0.05
+  expert_coef: 0.2
+  exp_name: "ppo_distill_low_distill"
+
+batch_cycle:
+  cycle_mode: "batch"
+  exp_name: "ppo_distill_batch_cycle"
+
+episode_cycle:
+  cycle_mode: "episode"
+  exp_name: "ppo_distill_episode_cycle"
 
 # Network architecture variations
 large_network:
@@ -283,43 +322,43 @@ large_network:
     output_dim: 1024
     mlp_units: 512
     cnn_depth: 64
-  exp_name: "ppo_rnn_large_network"
+  exp_name: "ppo_distill_large_network"
 
 small_network:
   encoder:
     output_dim: 256
     mlp_units: 128
     cnn_depth: 32
-  exp_name: "ppo_rnn_small_network"
+  exp_name: "ppo_distill_small_network"
 
 # RNN architecture variations
 large_rnn:
   rnn:
     hidden_size: 256
     num_layers: 2
-  exp_name: "ppo_rnn_large_rnn"
+  exp_name: "ppo_distill_large_rnn"
 
 small_rnn:
   rnn:
     hidden_size: 64
     num_layers: 1
-  exp_name: "ppo_rnn_small_rnn"
+  exp_name: "ppo_distill_small_rnn"
 
 # Training variations
 high_entropy:
   ent_coef: 0.1
-  exp_name: "ppo_rnn_high_entropy"
+  exp_name: "ppo_distill_high_entropy"
 
 low_entropy:
   ent_coef: 0.001
-  exp_name: "ppo_rnn_low_entropy"
+  exp_name: "ppo_distill_low_entropy"
 
 fast_learning:
   learning_rate: 1e-3
   num_steps: 64
-  exp_name: "ppo_rnn_fast_learning"
+  exp_name: "ppo_distill_fast_learning"
 
 slow_learning:
   learning_rate: 1e-4
   num_steps: 4096
-  exp_name: "ppo_rnn_slow_learning" 
+  exp_name: "ppo_distill_slow_learning" 
