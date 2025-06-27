@@ -11,7 +11,7 @@ runs/
 wandb/
 
 # Policies
-policies/
+# policies/
 
 # Distribution / packaging
 .Python
