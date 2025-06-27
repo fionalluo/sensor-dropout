@@ -7,10 +7,59 @@ from ..shared.nets import ImageEncoderResnet, LightweightImageEncoder
 from torch.distributions import Categorical, Normal
 
 class PPORnnAgent(BaseAgent):
-    def __init__(self, envs, config):
+    def __init__(self, envs, config, training_env=None):
         super().__init__(envs, config)
         
-        # Use full keys (all observations) for baselines
+        # Determine which keys to use for training
+        if hasattr(config, 'eval_keys'):
+            if training_env is not None:
+                print(f"DEBUG: hasattr(config.eval_keys, '{training_env}') = {hasattr(config.eval_keys, training_env)}")
+                # Try dictionary access as well
+                if hasattr(config.eval_keys, '__getitem__'):
+                    print(f"DEBUG: training_env in config.eval_keys = {training_env in config.eval_keys}")
+        
+        # Priority order for key selection:
+        # 1. If training_env is specified, use eval_keys[training_env]
+        # 2. If config.keys has been modified (subset_policies mode), use config.keys
+        # 3. Only use full_keys as a last resort
+        
+        training_keys = None
+        
+        # Priority 1: Check if training_env is specified
+        if training_env is not None and hasattr(config, 'eval_keys'):
+            # Try attribute access first
+            if hasattr(config.eval_keys, training_env):
+                env_keys = getattr(config.eval_keys, training_env)
+                training_keys = type('Keys', (), {
+                    'mlp_keys': env_keys.mlp_keys,
+                    'cnn_keys': env_keys.cnn_keys
+                })()
+                print(f"Training on {training_env} with keys: {training_keys}")
+            # Try dictionary access
+            elif hasattr(config.eval_keys, '__getitem__') and training_env in config.eval_keys:
+                env_keys = config.eval_keys[training_env]
+                training_keys = type('Keys', (), {
+                    'mlp_keys': env_keys.mlp_keys,
+                    'cnn_keys': env_keys.cnn_keys
+                })()
+                print(f"Training on {training_env} with keys: {training_keys}")
+        
+        # Priority 2: Check if config.keys has been modified (subset_policies mode)
+        if training_keys is None and hasattr(config, 'keys'):
+            # Check if keys has the expected attributes
+            if hasattr(config.keys, 'mlp_keys') and hasattr(config.keys, 'cnn_keys'):
+                training_keys = config.keys
+                print(f"Using config.keys (subset_policies mode)")
+        
+        # Priority 3: Fall back to full_keys (default behavior)
+        if training_keys is None:
+            training_keys = config.full_keys
+            print(f"Training on full_keys: {training_keys}")
+        
+        print(f"Training with MLP pattern: {getattr(training_keys, 'mlp_keys', 'N/A')}")
+        print(f"Training with CNN pattern: {getattr(training_keys, 'cnn_keys', 'N/A')}")
+        
+        # Use specified keys for training
         self.mlp_keys = []
         self.cnn_keys = []
         self.lightweight_cnn_keys = []  # Keys for small images
@@ -20,7 +69,7 @@ class PPORnnAgent(BaseAgent):
             if k in ['reward', 'is_first', 'is_last', 'is_terminal']:
                 continue
             if len(envs.obs_space[k].shape) == 3 and envs.obs_space[k].shape[-1] == 3:  # Image observations
-                if re.match(config.full_keys.cnn_keys, k):
+                if re.match(training_keys.cnn_keys, k):
                     self.cnn_keys.append(k)
                     # Check if image is very small (≤ 7x7 in first two dimensions)
                     if envs.obs_space[k].shape[0] <= 7 and envs.obs_space[k].shape[1] <= 7:
@@ -28,8 +77,11 @@ class PPORnnAgent(BaseAgent):
                     else:
                         self.heavyweight_cnn_keys.append(k)
             else:  # Non-image observations
-                if re.match(config.full_keys.mlp_keys, k):
+                if re.match(training_keys.mlp_keys, k):
                     self.mlp_keys.append(k)
+        
+        print(f"Using MLP keys: {self.mlp_keys}")
+        print(f"Using CNN keys: {self.cnn_keys}")
         
         # Calculate total input size for MLP
         self.total_mlp_size = 0

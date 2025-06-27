@@ -110,9 +110,9 @@ def substitute_unprivileged_for_agent(agent_keys, filtered_obs_dict, obs_dict):
             # Key is directly available
             final_obs[key] = filtered_obs_dict[key]
         else:
-            # Key is not available, check for unprivileged version
-            unprivileged_key = key + '_unprivileged'
-            if unprivileged_key in filtered_obs_dict:
+            # Key is not available, look for unprivileged version with prefix matching
+            unprivileged_key = find_unprivileged_key(key, filtered_obs_dict)
+            if unprivileged_key:
                 # Use unprivileged version as substitute
                 final_obs[key] = filtered_obs_dict[unprivileged_key]
             else:
@@ -120,6 +120,26 @@ def substitute_unprivileged_for_agent(agent_keys, filtered_obs_dict, obs_dict):
                 final_obs[key] = None
     
     return final_obs
+
+
+def find_unprivileged_key(privileged_key, available_keys):
+    """Find the unprivileged key that matches a privileged key using prefix matching.
+    
+    Args:
+        privileged_key: The privileged key to find a substitute for
+        available_keys: Dictionary of available keys
+        
+    Returns:
+        str or None: The matching unprivileged key, or None if not found
+    """
+    # Look for key that starts with 'privileged_key_unprivileged'
+    prefix = f"{privileged_key}_unprivileged"
+    
+    for key in available_keys.keys():
+        if key.startswith(prefix):
+            return key
+    
+    return None
 
 
 def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_envs_func=None, 
@@ -241,17 +261,15 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         obs_dict = eval_envs.step(acts)
         next_obs = {}
         
-        # Filter and substitute observations
+        # Filter and substitute observations using prefix-based approach
         filtered_obs_dict = filter_observations_by_keys(obs_dict, mlp_keys_pattern, cnn_keys_pattern)
+        final_obs_dict = substitute_unprivileged_for_agent(all_keys, filtered_obs_dict, obs_dict)
         
         if debug:
             print(f"After filtering, available keys:")
             for key in filtered_obs_dict.keys():
                 if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
                     print(f"  {key}: {filtered_obs_dict[key].shape}")
-        
-        # Apply substitution logic for agent keys
-        final_obs_dict = substitute_unprivileged_for_agent(all_keys, filtered_obs_dict, obs_dict)
         
         if debug:
             print(f"Keys that will be zeroed out (agent expects but not in filtered):")
@@ -263,7 +281,11 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
             print(f"Final observation keys that agent will receive:")
             for key in all_keys:
                 if final_obs_dict[key] is not None:
-                    print(f"  {key}: {final_obs_dict[key].shape} (from {key if key in filtered_obs_dict else key + '_unprivileged'})")
+                    unprivileged_key = find_unprivileged_key(key, filtered_obs_dict)
+                    if unprivileged_key and key not in filtered_obs_dict:
+                        print(f"  {key}: {final_obs_dict[key].shape} (substituted from {unprivileged_key})")
+                    else:
+                        print(f"  {key}: {final_obs_dict[key].shape} (direct)")
                 else:
                     print(f"  {key}: zeroed out")
         
@@ -311,17 +333,20 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
             
             obs_dict = eval_envs.step(acts)
             
+            # Filter and substitute observations using prefix-based approach
+            filtered_obs_dict = filter_observations_by_keys(obs_dict, mlp_keys_pattern, cnn_keys_pattern)
+            final_obs_dict = substitute_unprivileged_for_agent(all_keys, filtered_obs_dict, obs_dict)
+            
             # Store video frames for the first episode only (to log 1 video per evaluation)
+            # Use filtered observations to show what the agent actually sees
             if len(env_episode_returns) == 0:  # Only for the first episode
                 for key in video_frames.keys():
-                    if key in obs_dict:
+                    if key in final_obs_dict and final_obs_dict[key] is not None:
+                        # Use the filtered/substituted observation
+                        video_frames[key].append(final_obs_dict[key][0].copy())
+                    elif key in obs_dict:
+                        # Fallback to original if not in filtered
                         video_frames[key].append(obs_dict[key][0].copy())
-            
-            # Filter and substitute observations
-            filtered_obs_dict = filter_observations_by_keys(obs_dict, mlp_keys_pattern, cnn_keys_pattern)
-            
-            # Apply substitution logic for agent keys
-            final_obs_dict = substitute_unprivileged_for_agent(all_keys, filtered_obs_dict, obs_dict)
             
             # Process observations
             for key in all_keys:
@@ -363,37 +388,48 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         print(f"  {env_name}: mean_return={env_metrics[env_name]['mean_return']:.2f}, "
               f"std_return={env_metrics[env_name]['std_return']:.2f}")
         
-        # Log video for this environment if we have frames
-        if video_frames and any(frames for frames in video_frames.values()):
-            log_evaluation_videos(video_frames, global_step, use_wandb, prefix=f"subset_{env_name}_")
+        # Log metrics with full_eval prefix for subset evaluations
+        if writer is not None:
+            writer.add_scalar(f"full_eval/{env_name}/mean_return", env_metrics[env_name]['mean_return'], global_step)
+            writer.add_scalar(f"full_eval/{env_name}/std_return", env_metrics[env_name]['std_return'], global_step)
+            writer.add_scalar(f"full_eval/{env_name}/mean_length", env_metrics[env_name]['mean_length'], global_step)
+            writer.add_scalar(f"full_eval/{env_name}/std_length", env_metrics[env_name]['std_length'], global_step)
+        
+        if use_wandb:
+            import wandb
+            wandb.log({
+                f"full_eval/{env_name}/mean_return": env_metrics[env_name]['mean_return'],
+                f"full_eval/{env_name}/std_return": env_metrics[env_name]['std_return'],
+                f"full_eval/{env_name}/mean_length": env_metrics[env_name]['mean_length'],
+                f"full_eval/{env_name}/std_length": env_metrics[env_name]['std_length'],
+            }, step=global_step)
+        
+        # Log video if available - use full_eval prefix for subset videos
+        if video_frames and any(video_frames.values()) and writer is not None:
+            for key, frames in video_frames.items():
+                if frames:
+                    # Convert frames to video format
+                    video_tensor = torch.stack([torch.from_numpy(frame) for frame in frames])
+                    video_tensor = video_tensor.permute(0, 3, 1, 2).unsqueeze(0)  # [1, T, C, H, W]
+                    writer.add_video(f"full_eval/{env_name}/{key}", video_tensor, global_step, fps=4)
+        
+        eval_envs.close()
     
-    # Calculate overall metrics (averaged across all environments)
+    # Calculate overall metrics
     all_episode_returns = np.array(all_episode_returns)
     all_episode_lengths = np.array(all_episode_lengths)
     
     overall_metrics = {
-        'mean_return': np.mean(all_episode_returns),
-        'std_return': np.std(all_episode_returns),
-        'mean_length': np.mean(all_episode_lengths),
-        'std_length': np.std(all_episode_lengths)
+        'overall_mean_return': np.mean(all_episode_returns),
+        'overall_std_return': np.std(all_episode_returns),
+        'overall_mean_length': np.mean(all_episode_lengths),
+        'overall_std_length': np.std(all_episode_lengths),
+        **env_metrics
     }
     
-    # Log individual environment metrics
-    for env_name, metrics in env_metrics.items():
-        log_evaluation_metrics({
-            f"full_eval/{env_name}/mean_return": metrics['mean_return'],
-            f"full_eval/{env_name}/std_return": metrics['std_return'],
-            f"full_eval/{env_name}/mean_length": metrics['mean_length'],
-            f"full_eval/{env_name}/std_length": metrics['std_length'],
-        }, global_step, use_wandb, writer)
-    
-    # Log overall metrics
-    log_evaluation_metrics({
-        "full_eval/overall/mean_return": overall_metrics['mean_return'],
-        "full_eval/overall/std_return": overall_metrics['std_return'],
-        "full_eval/overall/mean_length": overall_metrics['mean_length'],
-        "full_eval/overall/std_length": overall_metrics['std_length'],
-    }, global_step, use_wandb, writer)
+    print(f"\nOverall evaluation metrics:")
+    print(f"  Mean return: {overall_metrics['overall_mean_return']:.2f} ± {overall_metrics['overall_std_return']:.2f}")
+    print(f"  Mean length: {overall_metrics['overall_mean_length']:.2f} ± {overall_metrics['overall_std_length']:.2f}")
     
     return overall_metrics
 
@@ -435,7 +471,7 @@ def evaluate_agent(agent, envs, device, config, log_video=False, make_envs_func=
     log_evaluation_metrics(eval_metrics_dict, global_step, use_wandb, writer)
     
     # Log video if available using shared function
-    if log_video and 'video_frames' in eval_metrics:
+    if log_video and 'video_frames' in eval_metrics and eval_metrics['video_frames']:
         log_evaluation_videos(eval_metrics['video_frames'], global_step, use_wandb, prefix="eval_")
     
     return eval_metrics

@@ -17,13 +17,14 @@ import wandb
 import os
 
 class PPORnnTrainer:
-    def __init__(self, envs, config, seed):
+    def __init__(self, envs, config, seed, training_env=None):
         self.config = config
         self.envs = envs
         self.seed = seed
+        self.training_env = training_env
         
         # Initialize agent
-        self.agent = PPORnnAgent(envs, config)
+        self.agent = PPORnnAgent(envs, config, training_env=training_env)
         self.device = self.agent.device
         self.agent = self.agent.to(self.device)
         
@@ -91,13 +92,20 @@ class PPORnnTrainer:
         )
         
         # Initialize logging
-        self.writer = SummaryWriter(f"runs/ppo_rnn_{config.task}_{seed}")
+        run_name = f"ppo_rnn_{config.task}_{seed}"
+        if training_env is not None:
+            run_name += f"_{training_env}"
+        self.writer = SummaryWriter(f"runs/{run_name}")
         
         # Initialize wandb
         if hasattr(config, 'use_wandb') and config.use_wandb:
+            run_name = f"ppo_rnn_{config.task}_{seed}"
+            if training_env is not None:
+                run_name += f"_{training_env}"
+            
             wandb.init(
                 project=getattr(config, 'wandb_project', 'sensor-dropout'),
-                name=f"ppo_rnn_{config.task}_{seed}",
+                name=run_name,
                 config=vars(config),
                 monitor_gym=False,
                 save_code=True,
@@ -428,9 +436,9 @@ class PPORnnTrainer:
                     if isinstance(value, (int, float)):
                         self.log_metrics({f"eval_subset/{subset_name}/{key}": value})
 
-def train_ppo_rnn(envs, config, seed, num_iterations=None):
+def train_ppo_rnn(envs, config, seed, num_iterations=None, training_env=None):
     """Main entry point for PPO RNN training."""
-    trainer = PPORnnTrainer(envs, config, seed)
+    trainer = PPORnnTrainer(envs, config, seed, training_env=training_env)
     
     # Override num_iterations if provided
     if num_iterations is not None:

@@ -59,6 +59,8 @@ def parse_args():
                        help='Track with wandb (overrides config)')
     parser.add_argument('--debug', action='store_true',
                        help='Enable debug mode for evaluation')
+    parser.add_argument('--training_env', type=str, default=None,
+                       help='Which eval_keys environment subset to use for training (e.g., env1, env2, etc.)')
     return parser.parse_args()
 
 def load_config(argv=None):
@@ -170,8 +172,22 @@ def wrap_env(env, config):
 def main():
     """Main entry point for PPO RNN training."""
     argv = sys.argv[1:] if len(sys.argv) > 1 else []
+    
+    # Extract training_env argument before passing to embodied.Flags
+    training_env = None
+    if '--training_env' in argv:
+        idx = argv.index('--training_env')
+        if idx + 1 < len(argv):
+            training_env = argv[idx + 1]
+            # Remove the training_env argument from argv
+            argv = argv[:idx] + argv[idx + 2:]
+    
     args = parse_args()
     config = load_config(argv)
+    
+    # Check if training_env was passed through config system
+    if hasattr(config, 'training_env') and config.training_env is not None:
+        training_env = config.training_env
     
     # Override config with command line arguments
     if args.seed is not None:
@@ -201,12 +217,14 @@ def main():
     # Run training
     print(f"Starting PPO RNN training on {config.task} with {config.num_envs} environments")
     print(f"Training for {num_iterations} iterations")
+    if training_env:
+        print(f"Training on environment subset: {training_env}")
     if hasattr(config, 'use_wandb') and config.use_wandb:
         print(f"Wandb logging enabled - project: {getattr(config, 'wandb_project', 'sensor-dropout')}")
     else:
         print("Wandb logging disabled")
     
-    trained_agent = train_ppo_rnn(envs, config, config.seed, num_iterations=num_iterations)
+    trained_agent = train_ppo_rnn(envs, config, config.seed, num_iterations=num_iterations, training_env=training_env)
     print("Training completed!")
 
 if __name__ == "__main__":

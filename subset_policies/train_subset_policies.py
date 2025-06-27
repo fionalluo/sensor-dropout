@@ -18,6 +18,7 @@ import shutil
 from pathlib import Path
 from types import SimpleNamespace
 from functools import partial as bind
+from datetime import datetime
 
 # Add the project root to the path
 project_root = Path(__file__).parent.parent
@@ -199,12 +200,14 @@ def train_subset_policy(config, subset_name, eval_keys, output_dir, device, debu
     print(f"Starting training for {subset_name}...")
     trained_agent = train_ppo_rnn(envs, subset_config, config.seed, num_iterations=num_iterations)
     
-    # Save the policy
+    # Save the policy with timestamp
     policy_dir = os.path.join(output_dir, subset_name)
     os.makedirs(policy_dir, exist_ok=True)
     
-    # Save the trained agent
-    policy_path = os.path.join(policy_dir, 'policy.pt')
+    # Generate timestamp for filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    policy_filename = f"policy_{timestamp}.pt"
+    policy_path = os.path.join(policy_dir, policy_filename)
     
     # Check if policy already exists
     if os.path.exists(policy_path):
@@ -259,15 +262,19 @@ def main():
     num_eval_configs = config.eval.num_eval_configs
     print(f"Number of eval configs: {num_eval_configs}")
     
-    # Train policies for each subset
+    # Train policies for each subset in reverse order
     trained_policies = {}
     
-    for subset_idx in range(1, num_eval_configs + 1):
+    for subset_idx in range(num_eval_configs, 0, -1):  # Start from highest, go down to 1
         subset_name = f"env{subset_idx}"
         
         # Get eval keys for this subset
         if hasattr(config, 'eval_keys') and hasattr(config.eval_keys, subset_name):
-            eval_keys = get_eval_keys(config, subset_name)
+            env_keys = getattr(config.eval_keys, subset_name)
+            eval_keys = {
+                'mlp_keys': env_keys.mlp_keys,
+                'cnn_keys': env_keys.cnn_keys
+            }
         else:
             print(f"Warning: No eval_keys.{subset_name} found, using default patterns")
             eval_keys = {'mlp_keys': '.*', 'cnn_keys': '.*'}
