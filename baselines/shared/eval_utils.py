@@ -165,8 +165,6 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         return {}
     
     num_eval_configs = config.eval.num_eval_configs
-    all_episode_returns = []
-    all_episode_lengths = []
     env_metrics = {}
     
     if debug:
@@ -368,8 +366,6 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
                     if len(env_episode_returns) < num_episodes:
                         env_episode_returns.append(env_returns[env_idx])
                         env_episode_lengths.append(env_lengths[env_idx])
-                        all_episode_returns.append(env_returns[env_idx])
-                        all_episode_lengths.append(env_lengths[env_idx])
                     
                     env_returns[env_idx] = 0
                     env_lengths[env_idx] = 0
@@ -415,23 +411,9 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         
         eval_envs.close()
     
-    # Calculate overall metrics
-    all_episode_returns = np.array(all_episode_returns)
-    all_episode_lengths = np.array(all_episode_lengths)
-    
-    overall_metrics = {
-        'overall_mean_return': np.mean(all_episode_returns),
-        'overall_std_return': np.std(all_episode_returns),
-        'overall_mean_length': np.mean(all_episode_lengths),
-        'overall_std_length': np.std(all_episode_lengths),
-        **env_metrics
-    }
-    
-    print(f"\nOverall evaluation metrics:")
-    print(f"  Mean return: {overall_metrics['overall_mean_return']:.2f} ± {overall_metrics['overall_std_return']:.2f}")
-    print(f"  Mean length: {overall_metrics['overall_mean_length']:.2f} ± {overall_metrics['overall_std_length']:.2f}")
-    
-    return overall_metrics
+    # Return only the individual environment metrics for subset evaluations
+    # No overall metrics should be calculated for subset evaluations
+    return env_metrics
 
 
 def evaluate_agent(agent, envs, device, config, log_video=False, make_envs_func=None, writer=None, use_wandb=False, global_step=0):
