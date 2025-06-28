@@ -5,15 +5,15 @@ generate_unique_seed() {
   date +%s%N | sha256sum | awk '{ print "0x" substr($1, 1, 8) }'
 }
 
-# Base output directory
-BASE_OUTPUT_DIR=./policies
+# Base output directory - now includes policy type
+BASE_OUTPUT_DIR=./policies/ppo_rnn
 
 # List of configs to run
 CONFIGS=(
-  "gymnasium_tigerdoorkey"
+  # "gymnasium_tigerdoorkey"
   # "gymnasium_tigerdoorkeylarge"
   # "gymnasium_maze"
-  # "gymnasium_blindpick"
+  "gymnasium_blindpick"
 )
 
 NUM_SEEDS=1

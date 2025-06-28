@@ -11,7 +11,7 @@ First, ensure you have expert subset policies trained:
 ./train_subset_policies.sh
 
 # Verify policies exist
-ls ~/policies/tigerdoorkey/
+ls ~/policies/ppo_rnn/tigerdoorkey/
 # Should show: env1/ env2/ env3/ env4/ metadata.yaml
 ```
 
@@ -23,7 +23,7 @@ ls ~/policies/tigerdoorkey/
 # Basic distillation training with default settings
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -34,7 +34,7 @@ python3 baselines/ppo_distill/train.py \
 # Train with high distillation coefficient (more emphasis on expert guidance)
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey high_distill \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -45,7 +45,7 @@ python3 baselines/ppo_distill/train.py \
 # Train with batch-level configuration cycling
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey batch_cycle \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -58,7 +58,7 @@ python3 baselines/ppo_distill/train.py \
 # Train with larger network architecture
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey large_network high_entropy \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -69,7 +69,7 @@ python3 baselines/ppo_distill/train.py \
 # Train with smaller network architecture
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey small_network low_entropy \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -80,7 +80,7 @@ python3 baselines/ppo_distill/train.py \
 # Train with larger RNN hidden size
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey large_rnn episode_cycle \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -93,7 +93,7 @@ python3 baselines/ppo_distill/train.py \
 # High distillation coefficient (more expert guidance)
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey high_distill \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -104,7 +104,7 @@ python3 baselines/ppo_distill/train.py \
 # Low distillation coefficient (less expert guidance)
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey low_distill \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -115,7 +115,7 @@ python3 baselines/ppo_distill/train.py \
 # Train without distillation (standard PPO)
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -128,7 +128,7 @@ python3 baselines/ppo_distill/train.py \
 # Episode-level configuration cycling
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey episode_cycle \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -139,7 +139,7 @@ python3 baselines/ppo_distill/train.py \
 # Batch-level configuration cycling
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey batch_cycle \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -152,7 +152,7 @@ python3 baselines/ppo_distill/train.py \
 # Higher learning rate for faster training
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -163,7 +163,7 @@ python3 baselines/ppo_distill/train.py \
 # Lower learning rate for more stable training
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -174,7 +174,7 @@ python3 baselines/ppo_distill/train.py \
 # Higher entropy coefficient for more exploration
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -185,7 +185,7 @@ python3 baselines/ppo_distill/train.py \
 # Lower entropy coefficient for more exploitation
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -198,7 +198,7 @@ python3 baselines/ppo_distill/train.py \
 # Large network architecture with large RNN
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey large_network large_rnn \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -209,7 +209,7 @@ python3 baselines/ppo_distill/train.py \
 # Fast learning with batch-level cycling
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey fast_learning batch_cycle \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -220,7 +220,7 @@ python3 baselines/ppo_distill/train.py \
 # Slow learning with high entropy for exploration
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey slow_learning high_entropy \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -231,7 +231,7 @@ python3 baselines/ppo_distill/train.py \
 # Small network with low distillation coefficient
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey small_network low_distill \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -244,7 +244,7 @@ python3 baselines/ppo_distill/train.py \
 # Enable debug mode for detailed logging
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track \
     --debug
@@ -256,7 +256,7 @@ python3 baselines/ppo_distill/train.py \
 # Train without wandb logging
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey no_wandb \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda
 ```
 
@@ -268,7 +268,7 @@ python3 baselines/ppo_distill/train.py \
 # Train with specific random seed
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey episode_cycle \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --seed 42 \
     --cuda \
     --track
@@ -280,7 +280,7 @@ python3 baselines/ppo_distill/train.py \
 # Combine multiple configuration options
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey high_distill episode_cycle \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -291,7 +291,7 @@ python3 baselines/ppo_distill/train.py \
 # Large architecture with high distillation
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey large_network large_rnn high_distill \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -320,7 +320,7 @@ The training logs the following metrics to wandb:
 ### Expert Policies Not Found
 
 ```
-Error: Expert policy directory not found: ~/policies/tigerdoorkey
+Error: Expert policy directory not found: ~/policies/ppo_rnn/tigerdoorkey
 ```
 
 **Solution**: Train subset policies first:
@@ -337,7 +337,7 @@ If you encounter CUDA out of memory errors:
 # Use smaller network
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey small_network \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -349,7 +349,7 @@ Enable debug mode for detailed logging:
 ```bash
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track \
     --debug
@@ -359,16 +359,17 @@ python3 baselines/ppo_distill/train.py \
 
 ```
 policies/
-└── tigerdoorkey/
-    ├── env1/
-    │   └── policy_20241201_143022.pt
-    ├── env2/
-    │   └── policy_20241201_143156.pt
-    ├── env3/
-    │   └── policy_20241201_143245.pt
-    ├── env4/
-    │   └── policy_20241201_143334.pt
-    └── metadata.yaml
+└── ppo_rnn/
+    └── tigerdoorkey/
+        ├── env1/
+        │   └── policy_20241201_143022.pt
+        ├── env2/
+        │   └── policy_20241201_143156.pt
+        ├── env3/
+        │   └── policy_20241201_143245.pt
+        ├── env4/
+        │   └── policy_20241201_143334.pt
+        └── metadata.yaml
 ```
 
-Expert policy directory: ~/policies/tigerdoorkey 
+Expert policy directory: ~/policies/ppo_rnn/tigerdoorkey 

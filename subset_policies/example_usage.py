@@ -50,7 +50,7 @@ def example_list_policies():
     print("Listing available policies...")
     
     # Update this path to your actual policy directory
-    policy_dir = "~/policies/tigerdoorkey"  # Replace with actual path
+    policy_dir = "~/policies/ppo_rnn/tigerdoorkey"  # Replace with actual path
     
     try:
         loader = SubsetPolicyLoader(policy_dir, device='cpu')
@@ -64,7 +64,7 @@ def example_load_specific_policy():
     print("Loading specific policy...")
     
     # Update this path to your actual policy directory
-    policy_dir = "~/policies/tigerdoorkey"  # Replace with actual path
+    policy_dir = "~/policies/ppo_rnn/tigerdoorkey"  # Replace with actual path
     
     try:
         loader = SubsetPolicyLoader(policy_dir, device='cpu')
@@ -88,7 +88,7 @@ def example_get_action():
     print("Getting action from policy...")
     
     # Update this path to your actual policy directory
-    example_policy_dir = "~/policies/tigerdoorkey"
+    example_policy_dir = "~/policies/ppo_rnn/tigerdoorkey"
     
     try:
         loader = SubsetPolicyLoader(example_policy_dir, device='cpu')

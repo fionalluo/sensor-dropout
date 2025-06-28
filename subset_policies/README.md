@@ -26,7 +26,7 @@ For configurations like `gymnasium_tigerdoorkey`, this system trains 4 separate 
 # Train subset policies manually
 python3 subset_policies/train_subset_policies.py \
     --configs gymnasium_tigerdoorkey \
-    --output_dir ./policies/tigerdoorkey \
+    --output_dir ./policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --debug
 ```
@@ -35,16 +35,17 @@ python3 subset_policies/train_subset_policies.py \
 
 ```
 policies/
-└── tigerdoorkey/
-    ├── env1/
-    │   └── policy_20241201_143022.pt
-    ├── env2/
-    │   └── policy_20241201_143156.pt
-    ├── env3/
-    │   └── policy_20241201_143245.pt
-    ├── env4/
-    │   └── policy_20241201_143334.pt
-    └── metadata.yaml
+└── ppo_rnn/
+    └── tigerdoorkey/
+        ├── env1/
+        │   └── policy_20241201_143022.pt
+        ├── env2/
+        │   └── policy_20241201_143156.pt
+        ├── env3/
+        │   └── policy_20241201_143245.pt
+        ├── env4/
+        │   └── policy_20241201_143334.pt
+        └── metadata.yaml
 ```
 
 ## Using Trained Policies
@@ -53,7 +54,7 @@ policies/
 
 ```bash
 python subset_policies/load_subset_policy.py \
-    --policy_dir ~/policies/tigerdoorkey \
+    --policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --list
 ```
 
@@ -61,7 +62,7 @@ python subset_policies/load_subset_policy.py \
 
 ```bash
 python subset_policies/load_subset_policy.py \
-    --policy_dir ~/policies/tigerdoorkey \
+    --policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --subset env1
 ```
 
@@ -71,7 +72,7 @@ python subset_policies/load_subset_policy.py \
 from subset_policies.load_subset_policy import SubsetPolicyLoader
 
 # Load a pre-trained subset policy
-loader = SubsetPolicyLoader("~/policies/tigerdoorkey", device='cpu')
+loader = SubsetPolicyLoader("~/policies/ppo_rnn/tigerdoorkey", device='cpu')
 agent, config, eval_keys = loader.load_policy('env1')
 ```
 

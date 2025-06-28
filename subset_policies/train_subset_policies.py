@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """
-Script to train PPO RNN policies for each subset of eval_keys.
-This creates separate policies for each environment subset (env1, env2, etc.)
-that can be easily loaded and deployed later.
+Training script for PPO RNN subset policies.
+
+This script trains separate PPO RNN policies for different observation subsets
+(e.g., env1, env2, env3, env4) and saves them to the policies directory with
+the structure: policies/ppo_rnn/{task_name}/{env_name}/policy_{timestamp}.pt
+
+Note: This script is specifically designed for PPO RNN policies that use LSTM states
+for sequential inference. For PPO (non-RNN) policies, a different training script
+would be needed.
 """
 
 import os
@@ -165,10 +171,15 @@ def wrap_env(env, config):
     return env
 
 def train_subset_policy(config, subset_name, eval_keys, output_dir, device, debug=False):
-    """Train a PPO RNN policy for a specific subset of observations."""
+    """Train a PPO RNN policy for a specific subset of observations.
+    
+    Note: This function is specifically designed for PPO RNN policies that use LSTM states
+    for sequential inference. For PPO (non-RNN) policies, a different training script
+    would be needed.
+    """
     
     print(f"\n{'='*60}")
-    print(f"Training policy for {subset_name}")
+    print(f"Training PPO RNN policy for {subset_name}")
     print(f"MLP keys pattern: {eval_keys['mlp_keys']}")
     print(f"CNN keys pattern: {eval_keys['cnn_keys']}")
     print(f"{'='*60}")
@@ -217,10 +228,11 @@ def train_subset_policy(config, subset_name, eval_keys, output_dir, device, debu
         'agent_state_dict': trained_agent.state_dict(),
         'config': subset_config,
         'eval_keys': eval_keys,
-        'subset_name': subset_name
+        'subset_name': subset_name,
+        'policy_type': 'ppo_rnn'  # Add policy type to metadata
     }, policy_path)
     
-    print(f"Policy saved to {policy_path}")
+    print(f"PPO RNN policy saved to {policy_path}")
     
     return policy_path
 
@@ -289,7 +301,8 @@ def main():
         'task': config.task,
         'num_eval_configs': num_eval_configs,
         'policies': trained_policies,
-        'config': config
+        'config': config,
+        'policy_type': 'ppo_rnn'  # Add policy type to metadata
     }
     
     metadata_path = os.path.join(output_dir, 'metadata.yaml')

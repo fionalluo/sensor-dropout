@@ -22,7 +22,7 @@ First, train expert subset policies:
 ./train_subset_policies.sh
 
 # Verify policies exist
-ls ~/policies/tigerdoorkey/
+ls ~/policies/ppo_rnn/tigerdoorkey/
 # Should show: env1/ env2/ env3/ env4/ metadata.yaml
 ```
 
@@ -32,7 +32,7 @@ ls ~/policies/tigerdoorkey/
 # Basic distillation training
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -43,21 +43,21 @@ python3 baselines/ppo_distill/train.py \
 # High distillation coefficient
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey high_distill \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 
 # Batch cycling mode
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey batch_cycle \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 
 # Large network with high entropy
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey large_network high_entropy \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -110,7 +110,7 @@ The student policy inherits from `PPORnnAgent` and adds:
 # Train with default settings
 python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey \
-    --expert_policy_dir ~/policies/tigerdoorkey \
+    --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
     --cuda \
     --track
 ```
@@ -123,20 +123,20 @@ python3 baselines/ppo_distill/train.py \
     --configs gymnasium_tigerdoorkey high_distill \
 # Train with high distillation coefficient
 python baselines/ppo_distill/train.py \
-  --configs gymnasium_tigerkeydoor high_distill \
-  --expert_policy_dir ~/policies/tigerkeydoor \
+  --configs gymnasium_tigerdoorkey high_distill \
+  --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
   --cuda
 
 # Train with batch-level cycling
 python baselines/ppo_distill/train.py \
-  --configs gymnasium_tigerkeydoor batch_cycle \
-  --expert_policy_dir ~/policies/tigerkeydoor \
+  --configs gymnasium_tigerdoorkey batch_cycle \
+  --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
   --cuda
 
 # Train with custom network architecture
 python baselines/ppo_distill/train.py \
-  --configs gymnasium_tigerkeydoor large_network high_entropy \
-  --expert_policy_dir ~/policies/tigerkeydoor \
+  --configs gymnasium_tigerdoorkey large_network high_entropy \
+  --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
   --cuda
 ```
 
@@ -211,7 +211,7 @@ Total Loss = Policy Loss +
 
 1. **Expert policy directory not found**
    ```
-   Error: Expert policy directory not found: ~/policies/tigerkeydoor
+   Error: Expert policy directory not found: ~/policies/ppo_rnn/tigerdoorkey
    ```
    **Solution**: Run `./train_subset_policies.sh` first
 
@@ -219,8 +219,8 @@ Total Loss = Policy Loss +
    **Solution**: Reduce batch size or use CPU
    ```bash
    python baselines/ppo_distill/train.py \
-     --configs gymnasium_tigerkeydoor \
-     --expert_policy_dir ~/policies/tigerkeydoor
+     --configs gymnasium_tigerdoorkey \
+     --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey
    ```
 
 3. **High distillation loss**
@@ -230,8 +230,8 @@ Total Loss = Policy Loss +
 
 ```bash
 python baselines/ppo_distill/train.py \
-  --configs gymnasium_tigerkeydoor \
-  --expert_policy_dir ~/policies/tigerkeydoor \
+  --configs gymnasium_tigerdoorkey \
+  --expert_policy_dir ~/policies/ppo_rnn/tigerdoorkey \
   --debug
 ```
 
@@ -256,7 +256,7 @@ The PPO Distill baseline integrates seamlessly with the existing evaluation fram
 
 ```
 Starting PPO Distill training...
-Expert policy directory: ~/policies/tigerkeydoor
+Expert policy directory: ~/policies/ppo_rnn/tigerdoorkey
 Cycle mode: episode
 Distillation coefficient: 0.1
 Expert coefficient: 0.5
