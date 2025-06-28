@@ -76,7 +76,7 @@ def evaluate_policy(agent, envs, device, config, log_video=False):
     lstm_state = None
     if hasattr(agent, 'get_initial_lstm_state'):
         # Get initial state and expand to correct batch size
-        initial_state = agent.get_initial_lstm_state()
+        initial_state = agent.get_initial_lstm_state(envs.num_envs)
         lstm_state = (
             initial_state[0].expand(-1, envs.num_envs, -1),
             initial_state[1].expand(-1, envs.num_envs, -1)

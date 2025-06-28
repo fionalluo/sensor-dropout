@@ -305,7 +305,7 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         lstm_state = None
         if hasattr(agent, 'get_initial_lstm_state'):
             # Get initial state and expand to correct batch size
-            initial_state = agent.get_initial_lstm_state()
+            initial_state = agent.get_initial_lstm_state(eval_envs.num_envs)
             lstm_state = (
                 initial_state[0].expand(-1, eval_envs.num_envs, -1),
                 initial_state[1].expand(-1, eval_envs.num_envs, -1)

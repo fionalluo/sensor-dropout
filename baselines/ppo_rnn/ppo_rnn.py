@@ -15,6 +15,7 @@ from ..shared.eval_utils import (
 from torch.utils.tensorboard import SummaryWriter
 import wandb
 import os
+from torch.distributions import Categorical, Normal
 
 class PPORnnTrainer:
     def __init__(self, envs, config, seed, training_env=None):
@@ -127,6 +128,19 @@ class PPORnnTrainer:
         # Evaluation tracking
         self.last_eval = 0
 
+    def reset_lstm_states(self, done_flags):
+        """Reset LSTM states for environments that are done.
+        
+        Args:
+            done_flags: Boolean tensor indicating which environments are done
+        """
+        if done_flags.any():
+            # Reset LSTM states for done environments
+            self.next_lstm_state = (
+                (1.0 - done_flags).view(1, -1, 1) * self.next_lstm_state[0],
+                (1.0 - done_flags).view(1, -1, 1) * self.next_lstm_state[1],
+            )
+
     def log_metrics(self, metrics_dict, step=None):
         """Log metrics to both TensorBoard and wandb."""
         if step is None:
@@ -176,6 +190,12 @@ class PPORnnTrainer:
                 next_obs[key] = torch.Tensor(obs_dict[key].astype(np.float32)).to(self.device)
         next_done = torch.Tensor(obs_dict['is_last'].astype(np.float32)).to(self.device)
         
+        # Save initial LSTM state for reconstruction during training
+        initial_lstm_state = (
+            self.next_lstm_state[0].clone(),
+            self.next_lstm_state[1].clone()
+        )
+        
         for step in range(self.config.num_steps):
             self.global_step += self.config.num_envs
             
@@ -199,51 +219,60 @@ class PPORnnTrainer:
             self.actions[step] = action
             self.logprobs[step] = logprob
             
-            # Execute action
+            # Execute environment step
             action_np = action.cpu().numpy()
             if hasattr(self.agent, 'is_discrete') and self.agent.is_discrete:
                 action_np = action_np.reshape(self.config.num_envs, -1)
             
+            # Ensure action dictionary has all required keys
             acts = {
-                'action': action_np,
-                'reset': next_done.cpu().numpy()
+                'action': action_np.copy(),
+                'reset': next_done.cpu().numpy().copy()
             }
             
             obs_dict = self.envs.step(acts)
             
-            # Process observations
+            # Process rewards and dones
+            self.rewards[step] = torch.tensor(obs_dict['reward'].astype(np.float32)).to(self.device)
+            next_done = torch.tensor(obs_dict['is_last'].astype(np.float32)).to(self.device)
+            
+            # Process next observations
+            next_obs = {}
             for key in self.agent.mlp_keys + self.agent.cnn_keys:
                 if key in obs_dict:
                     next_obs[key] = torch.Tensor(obs_dict[key].astype(np.float32)).to(self.device)
-            next_done = torch.Tensor(obs_dict['is_last'].astype(np.float32)).to(self.device)
-            self.rewards[step] = torch.tensor(obs_dict['reward'].astype(np.float32)).to(self.device).view(-1)
             
-            # Track episode info
-            for i, d in enumerate(obs_dict['is_last']):
+            # Reset LSTM states for environments that are done
+            # This is crucial for proper LSTM training - reset states when episodes end
+            self.reset_lstm_states(next_done)
+            
+            # Track episode completions
+            for i, d in enumerate(next_done):
                 if d:
                     self.episode_count += 1
-                    if 'episode' in obs_dict and i < len(obs_dict.get('episode', [])):
-                        episode_reward = obs_dict['episode'][i]['r']
-                        episode_length = obs_dict['episode'][i]['l']
-                        
-                        # Log episode metrics
-                        self.log_metrics({
-                            "charts/episodic_return": episode_reward,
-                            "charts/episodic_length": episode_length
-                        }, step=self.episode_count)
-                        
-                        # Print episode info
-                        print(f"Episode {self.episode_count}: reward={episode_reward:.2f}, length={episode_length}")
         
-        # Store final observations and done state for advantage computation
+        # Store final observations and done flags for bootstrapping
         self.next_obs = next_obs
         self.next_done = next_done
+        
+        # Store initial LSTM state for training
+        self.initial_lstm_state = initial_lstm_state
+        
+        # Log rollout statistics
+        avg_reward = self.rewards.mean().item()
+        avg_value = self.values.mean().item()
+        self.log_metrics({
+            "rollout/avg_reward": avg_reward,
+            "rollout/avg_value": avg_value,
+            "rollout/episode_count": self.episode_count,
+        })
 
     def compute_advantages(self):
         """Compute advantages using GAE with proper RNN handling."""
         # Bootstrap value if not done
         with torch.no_grad():
             # Use the final observations from the rollout for bootstrapping
+            # Make sure to use the final LSTM state for proper bootstrapping
             next_value = self.agent.get_value(self.next_obs, self.next_lstm_state, self.next_done).reshape(1, -1)
             advantages = torch.zeros_like(self.rewards).to(self.device)
             lastgaelam = 0
@@ -282,18 +311,59 @@ class PPORnnTrainer:
                     mb_obs[key] = b_obs[key][mb_inds]
                 
                 # Get initial LSTM state for this mini-batch
-                # Use the stored LSTM states from the beginning of the rollout
+                # Use the stored initial LSTM states from the beginning of the rollout
                 initial_lstm_state = (
-                    self.lstm_hidden[0, mbenvinds].transpose(0, 1).clone(),
-                    self.lstm_cell[0, mbenvinds].transpose(0, 1).clone()
+                    self.initial_lstm_state[0][:, mbenvinds].clone(),
+                    self.initial_lstm_state[1][:, mbenvinds].clone()
                 )
                 
-                _, newlogprob, entropy, newvalue, _ = self.agent.get_action_and_value(
-                    mb_obs,
-                    initial_lstm_state,
-                    b_actions.long()[mb_inds] if hasattr(self.agent, 'is_discrete') and self.agent.is_discrete else b_actions[mb_inds],
-                    b_actions.long()[mb_inds] if hasattr(self.agent, 'is_discrete') and self.agent.is_discrete else b_actions[mb_inds],
-                )
+                # Reconstruct LSTM states sequentially for this mini-batch
+                # This is crucial for proper LSTM training - we need to process the sequence in order
+                mb_obs_reshaped = {}
+                for key in mb_obs:
+                    mb_obs_reshaped[key] = mb_obs[key].reshape(self.config.num_steps, envsperbatch, -1)
+                
+                # Process each timestep sequentially to reconstruct LSTM states
+                current_lstm_state = initial_lstm_state
+                reconstructed_hidden = []
+                
+                for step in range(self.config.num_steps):
+                    step_obs = {}
+                    for key in mb_obs_reshaped:
+                        step_obs[key] = mb_obs_reshaped[key][step]
+                    
+                    # Get done flags for this step
+                    step_dones = self.dones[step, mbenvinds]
+                    
+                    # Get hidden states for this step
+                    with torch.no_grad():
+                        step_hidden, current_lstm_state = self.agent.get_states(
+                            step_obs, current_lstm_state, step_dones
+                        )
+                    reconstructed_hidden.append(step_hidden)
+                
+                # Now compute action and value using the reconstructed hidden states
+                # The reconstructed_hidden contains hidden states for each timestep
+                # We need to use the hidden states corresponding to the actual actions taken
+                reconstructed_hidden = torch.stack(reconstructed_hidden, dim=0)  # [num_steps, envsperbatch, hidden_size]
+                
+                # Compute action and value using the reconstructed hidden states
+                if self.agent.is_discrete:
+                    logits = self.agent.actor(reconstructed_hidden.view(-1, reconstructed_hidden.size(-1)))
+                    probs = Categorical(logits=logits)
+                    action_indices = b_actions.long()[mb_inds].argmax(dim=1)
+                    newlogprob = probs.log_prob(action_indices)
+                    entropy = probs.entropy()
+                else:
+                    action_mean = self.agent.actor_mean(reconstructed_hidden.view(-1, reconstructed_hidden.size(-1)))
+                    action_logstd = self.agent.actor_logstd.expand_as(action_mean)
+                    action_std = torch.exp(action_logstd)
+                    probs = Normal(action_mean, action_std)
+                    newlogprob = probs.log_prob(b_actions[mb_inds]).sum(1)
+                    entropy = probs.entropy().sum(1)
+                
+                newvalue = self.agent.critic(reconstructed_hidden.view(-1, reconstructed_hidden.size(-1))).flatten()
+                
                 logratio = newlogprob - b_logprobs[mb_inds]
                 ratio = logratio.exp()
                 
@@ -405,7 +475,17 @@ class PPORnnTrainer:
                 print(f"  Episodes completed: {self.episode_count}")
                 print(f"  Average return (last rollout): {b_returns.mean().item():.2f}")
                 print(f"  Average advantage: {b_advantages.mean().item():.2f}")
+                print(f"  Learning rate: {self.optimizer.param_groups[0]['lr']:.2e}")
+                print(f"  SPS: {int(self.global_step / (time.time() - self.start_time))}")
                 print("-" * 50)
+            
+            # Log training metrics
+            self.log_metrics({
+                "charts/learning_rate": self.optimizer.param_groups[0]["lr"],
+                "charts/avg_return": b_returns.mean().item(),
+                "charts/avg_advantage": b_advantages.mean().item(),
+                "charts/SPS": int(self.global_step / (time.time() - self.start_time)),
+            })
         
         self.envs.close()
         self.writer.close()

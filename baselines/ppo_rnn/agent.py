@@ -348,22 +348,39 @@ class PPORnnAgent(BaseAgent):
         
         # LSTM logic with proper batch handling
         batch_size = lstm_state[0].shape[1]
-        hidden = hidden.reshape((-1, batch_size, self.lstm.input_size))
-        done = done.reshape((-1, batch_size))
+        
+        # Handle single timestep vs sequence
+        if hidden.dim() == 2:
+            # Single timestep - reshape for LSTM
+            hidden = hidden.unsqueeze(0)  # Add sequence dimension
+            done = done.unsqueeze(0) if done.dim() == 1 else done
+            single_step = True
+        else:
+            # Multiple timesteps - reshape for LSTM
+            hidden = hidden.reshape((-1, batch_size, self.lstm.input_size))
+            done = done.reshape((-1, batch_size))
+            single_step = False
+        
         new_hidden = []
         
         # Process each timestep
         for h, d in zip(hidden, done):
+            # Apply done mask to LSTM states
+            # This ensures LSTM states are reset when episodes end
+            masked_h = (1.0 - d).view(1, -1, 1) * lstm_state[0]
+            masked_c = (1.0 - d).view(1, -1, 1) * lstm_state[1]
+            
             h, lstm_state = self.lstm(
                 h.unsqueeze(0),
-                (
-                    (1.0 - d).view(1, -1, 1) * lstm_state[0],
-                    (1.0 - d).view(1, -1, 1) * lstm_state[1],
-                ),
+                (masked_h, masked_c),
             )
             new_hidden += [h]
         
-        new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
+        if single_step:
+            new_hidden = torch.cat(new_hidden, dim=0).squeeze(0)
+        else:
+            new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
+        
         return new_hidden, lstm_state
 
     def get_value(self, x, lstm_state=None, done=None):
@@ -433,4 +450,21 @@ class PPORnnAgent(BaseAgent):
             probs = Normal(action_mean, action_std)
             if action is None:
                 action = probs.sample()
-            return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(hidden), lstm_state 
+            return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(hidden), lstm_state
+
+    def get_initial_lstm_state(self, batch_size=None):
+        """Get initial LSTM state (zeros) for a given batch size.
+        
+        Args:
+            batch_size: Number of environments/batch size. If None, returns a default size of 1.
+            
+        Returns:
+            tuple: (hidden_state, cell_state) initialized to zeros
+        """
+        if batch_size is None:
+            batch_size = 1  # Default for evaluation
+        
+        return (
+            torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size, device=self.device),
+            torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size, device=self.device)
+        ) 

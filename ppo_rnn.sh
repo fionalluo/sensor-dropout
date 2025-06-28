@@ -12,8 +12,8 @@ BASE_LOGDIR=~/logdir/baselines/ppo_rnn
 CONFIGS=(
   # "gymnasium_tigerdoorkey"
   # "gymnasium_tigerdoorkeylarge"
-  # "gymnasium_maze"
-  "gymnasium_blindpick"
+  "gymnasium_maze"
+  # "gymnasium_blindpick"
 )
 
 NUM_SEEDS=1
