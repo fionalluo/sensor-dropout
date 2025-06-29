@@ -119,11 +119,15 @@ class Config(dict):
       for key in keys:
         old = result[key]
         try:
-          if isinstance(old, int) and isinstance(new, float):
+          if old is None:
+            result[key] = new
+          elif isinstance(old, int) and isinstance(new, float):
             if float(int(new)) != new:
               message = f"Cannot convert fractional float {new} to int."
               raise ValueError(message)
-          result[key] = type(old)(new)
+            result[key] = type(old)(new)
+          else:
+            result[key] = type(old)(new)
         except (ValueError, TypeError):
           raise TypeError(
               f"Cannot convert '{new}' to type '{type(old).__name__}' " +

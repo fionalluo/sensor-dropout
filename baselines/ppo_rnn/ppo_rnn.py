@@ -29,6 +29,20 @@ class PPORnnTrainer:
         self.device = self.agent.device
         self.agent = self.agent.to(self.device)
         
+        # Debug prints for agent keys
+        print(f"\n{'='*50}")
+        print(f"PPO-RNN AGENT INITIALIZATION DEBUG INFO")
+        print(f"{'='*50}")
+        print(f"Agent MLP keys: {self.agent.mlp_keys}")
+        print(f"Agent CNN keys: {self.agent.cnn_keys}")
+        print(f"Agent lightweight CNN keys: {self.agent.lightweight_cnn_keys}")
+        print(f"Agent heavyweight CNN keys: {self.agent.heavyweight_cnn_keys}")
+        print(f"Total MLP size: {self.agent.total_mlp_size}")
+        print(f"MLP key sizes: {self.agent.mlp_key_sizes}")
+        print(f"CNN output dimension: {self.agent.cnn_output_dim}")
+        print(f"Available environment observation keys: {list(envs.obs_space.keys())}")
+        print(f"{'='*50}\n")
+        
         # Initialize optimizer with better defaults
         self.optimizer = optim.Adam(
             self.agent.parameters(),

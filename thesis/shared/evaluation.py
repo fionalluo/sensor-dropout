@@ -104,8 +104,11 @@ def evaluate_policy(agent, envs, device, config, log_video=False):
                         # PPO RNN agent: (action, log_prob, entropy, value, new_lstm_state)
                         action, _, _, _, lstm_state = result
                     elif len(result) == 6:
-                        # PPO Distill agent: (action, log_prob, entropy, value, new_lstm_state, expert_actions)
+                        # PPO Distill agent (old): (action, log_prob, entropy, value, new_lstm_state, expert_actions)
                         action, _, _, _, lstm_state, _ = result
+                    elif len(result) == 7:
+                        # PPO Distill agent (new): (action, log_prob, entropy, value, new_lstm_state, expert_actions, student_logits)
+                        action, _, _, _, lstm_state, _, _ = result
                     else:
                         # Fallback: just take the first value as action
                         action = result[0]

@@ -184,14 +184,19 @@ class PPODistillTrainer:
             # Get action and value with LSTM state, plus expert actions
             with torch.no_grad():
                 result = self.agent.get_action_and_value(
-                    next_obs, self.next_lstm_state, next_done, None  # action=None for inference
+                    next_obs,
+                    self.next_lstm_state,
+                    next_done,
+                    None  # action=None for inference
                 )
-                # Handle the extra expert_actions return value
-                if len(result) == 6:
-                    action, logprob, entropy, value, self.next_lstm_state, expert_actions = result
+                
+                # Handle the new return format with student_logits
+                if len(result) == 7:
+                    action, logprob, entropy, value, self.next_lstm_state, expert_actions, student_logits = result
                 else:
-                    action, logprob, entropy, value, self.next_lstm_state = result
-                    expert_actions = {}
+                    # Fallback for older version
+                    action, logprob, entropy, value, self.next_lstm_state, expert_actions = result
+                    student_logits = None
                 self.values[step] = value.flatten()
             
             self.actions[step] = action
@@ -282,15 +287,14 @@ class PPODistillTrainer:
         return advantages, returns
 
     def update_policy(self, b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values):
-        """Update the policy using PPO with distillation loss."""
+        """Update the policy using pure distillation loss only."""
         print("🚀 PPODistillTrainer.update_policy called!")
         
-        # Optimizing the policy and value network
+        # Optimizing the policy through distillation only
         assert self.config.num_envs % self.config.num_minibatches == 0
         envsperbatch = self.config.num_envs // self.config.num_minibatches
         envinds = np.arange(self.config.num_envs)
         flatinds = np.arange(self.config.num_envs * self.config.num_steps).reshape(self.config.num_steps, self.config.num_envs)
-        clipfracs = []
         
         for epoch in range(self.config.update_epochs):
             np.random.shuffle(envinds)
@@ -305,7 +309,6 @@ class PPODistillTrainer:
                     mb_obs[key] = b_obs[key][mb_inds]
                 
                 # Get initial LSTM state for this mini-batch
-                # Use the stored LSTM states from the beginning of the rollout
                 if self.student_policy_type == "ppo_rnn":
                     initial_lstm_state = (
                         self.lstm_hidden[0, mbenvinds].transpose(0, 1).clone(),
@@ -314,81 +317,48 @@ class PPODistillTrainer:
                 else:
                     initial_lstm_state = None
                 
+                # Get student actions and expert actions for distillation
                 result = self.agent.get_action_and_value(
                     mb_obs,
                     initial_lstm_state,
                     b_actions.long()[mb_inds] if hasattr(self.agent, 'is_discrete') and self.agent.is_discrete else b_actions[mb_inds],
                     b_actions.long()[mb_inds] if hasattr(self.agent, 'is_discrete') and self.agent.is_discrete else b_actions[mb_inds],
                 )
-                # Handle the extra expert_actions return value
-                if len(result) == 6:
+                
+                # Handle the extra expert_actions and student_logits return values
+                if len(result) == 7:
+                    _, newlogprob, entropy, newvalue, _, expert_actions, student_logits = result
+                else:
+                    # Fallback for older version
                     _, newlogprob, entropy, newvalue, _, expert_actions = result
+                    student_logits = None
+                
+                # Compute distillation loss
+                if student_logits is not None and expert_actions:
+                    distill_loss = self.agent.compute_distillation_loss(student_logits, expert_actions)
+                    print(f"🎯 Distillation loss computed: {distill_loss.item():.4f}")
                 else:
-                    _, newlogprob, entropy, newvalue, _ = result
-                    expert_actions = {}
+                    print("❌ CRITICAL ERROR: Cannot compute distillation loss!")
+                    print(f"❌ student_logits is None: {student_logits is None}")
+                    print(f"❌ expert_actions is empty: {not expert_actions}")
+                    print(f"❌ expert_actions keys: {list(expert_actions.keys()) if expert_actions else 'None'}")
+                    print(f"❌ Current config: {self.agent.current_config_name}")
+                    raise RuntimeError("Cannot compute distillation loss - this is a critical error")
                 
-                logratio = newlogprob - b_logprobs[mb_inds]
-                ratio = logratio.exp()
-                
-                with torch.no_grad():
-                    # Calculate approx_kl
-                    old_approx_kl = (-logratio).mean()
-                    approx_kl = ((ratio - 1) - logratio).mean()
-                    clipfracs += [((ratio - 1.0).abs() > self.config.clip_coef).float().mean().item()]
-                
-                mb_advantages = b_advantages[mb_inds]
-                if self.config.norm_adv:
-                    mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
-                
-                # Policy loss
-                pg_loss1 = -mb_advantages * ratio
-                pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - self.config.clip_coef, 1 + self.config.clip_coef)
-                pg_loss = torch.max(pg_loss1, pg_loss2).mean()
-                
-                # Value loss
-                newvalue = newvalue.view(-1)
-                if self.config.clip_vloss:
-                    v_loss_unclipped = (newvalue - b_returns[mb_inds]) ** 2
-                    v_clipped = b_values[mb_inds] + torch.clamp(
-                        newvalue - b_values[mb_inds],
-                        -self.config.clip_coef,
-                        self.config.clip_coef,
-                    )
-                    v_loss_clipped = (v_clipped - b_returns[mb_inds]) ** 2
-                    v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
-                    v_loss = 0.5 * v_loss_max.mean()
-                else:
-                    v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
-                
-                # Distillation loss (simplified - we'll add this later)
-                distill_loss = torch.tensor(0.0, device=self.device)
-                
-                entropy_loss = entropy.mean()
-                loss = pg_loss - self.config.ent_coef * entropy_loss + v_loss * self.config.vf_coef + self.distill_coef * distill_loss
+                # Pure distillation loss - no reward-based components
+                # We only want the student to mimic the expert's actions
+                loss = self.distill_coef * distill_loss
                 
                 self.optimizer.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.agent.base_agent.parameters(), self.config.max_grad_norm)
                 self.optimizer.step()
-            
-            if hasattr(self.config, 'target_kl') and self.config.target_kl is not None and approx_kl > self.config.target_kl:
-                break
         
-        # Log metrics
-        y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
-        var_y = np.var(y_true)
-        explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
-        
+        # Log metrics for distillation training
         self.log_metrics({
             "charts/learning_rate": self.optimizer.param_groups[0]["lr"],
-            "losses/value_loss": v_loss.item(),
-            "losses/policy_loss": pg_loss.item(),
-            "losses/entropy": entropy_loss.item(),
             "losses/distill_loss": distill_loss.item(),
-            "losses/old_approx_kl": old_approx_kl.item(),
-            "losses/approx_kl": approx_kl.item(),
-            "losses/clipfrac": np.mean(clipfracs),
-            "losses/explained_variance": explained_var,
+            "losses/total_loss": loss.item(),
         })
 
     def log_metrics(self, metrics):
@@ -439,9 +409,9 @@ class PPODistillTrainer:
             self.config.num_iterations = self.config.total_timesteps // (self.config.num_envs * self.config.num_steps)
         
         # Run initial evaluation using shared utility
-        from baselines.ppo_rnn.train import make_envs
+        from baselines.ppo_distill.train import make_envs_ppo_distill
         eval_envs, _ = run_initial_evaluation(
-            self.agent, self.config, self.device, make_envs, 
+            self.agent, self.config, self.device, make_envs_ppo_distill, 
             writer=self.writer, use_wandb=self.use_wandb
         )
         
@@ -461,8 +431,8 @@ class PPODistillTrainer:
             self.collect_rollout()
             print(f"🔄 Finished collect_rollout for iteration {iteration}")
             
-            # Compute advantages
-            advantages, returns = self.compute_advantages()
+            # For pure distillation, we don't need advantages or returns
+            # We only need the observations and actions for distillation training
             
             # Flatten the batch
             b_obs = {}
@@ -470,17 +440,24 @@ class PPODistillTrainer:
                 b_obs[key] = self.obs[key].reshape((-1,) + self.obs[key].shape[2:])
             b_logprobs = self.logprobs.reshape(-1)
             b_actions = self.actions.reshape((-1,) + self.envs.act_space['action'].shape)
-            b_advantages = advantages.reshape(-1)
-            b_returns = returns.reshape(-1)
+            
+            # Create dummy tensors for compatibility (not used in distillation)
+            b_advantages = torch.zeros_like(b_logprobs)
+            b_returns = torch.zeros_like(b_logprobs)
             b_values = self.values.reshape(-1)
             
             # Update policy using our custom update_policy with distillation
             self.update_policy(b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values)
             
+            # Print distillation progress
+            if iteration % getattr(self.config, 'log_interval', 10) == 0:
+                print(f"🎯 Distillation: mimicking {self.agent.current_config_name}")
+                print(f"📊 Expert configurations loaded: {list(self.agent.expert_manager.expert_policies.keys())}")
+            
             # Periodic evaluation using shared utility
             self.last_eval, eval_envs = run_periodic_evaluation(
                 self.agent, self.config, self.device, self.global_step, self.last_eval, eval_envs,
-                make_envs_func=make_envs, writer=self.writer, use_wandb=self.use_wandb
+                make_envs_func=make_envs_ppo_distill, writer=self.writer, use_wandb=self.use_wandb
             )
             
             # Print progress with cycling info
@@ -488,8 +465,6 @@ class PPODistillTrainer:
                 print(f"Iteration {iteration}/{self.config.num_iterations}, Global step: {self.global_step}")
                 print(f"  Episodes completed: {self.episodes_completed}")
                 print(f"  Current config: {self.agent.current_config_name}")
-                print(f"  Average return (last rollout): {b_returns.mean().item():.2f}")
-                print(f"  Average advantage: {b_advantages.mean().item():.2f}")
                 print(f"  Learning rate: {self.optimizer.param_groups[0]['lr']:.2e}")
                 print(f"  SPS: {int(self.global_step / (time.time() - self.start_time))}")
                 print("-" * 50)
@@ -497,12 +472,7 @@ class PPODistillTrainer:
             # Log training metrics with cycling info
             self.log_metrics({
                 "charts/learning_rate": self.optimizer.param_groups[0]["lr"],
-                "charts/avg_return": b_returns.mean().item(),
-                "charts/avg_advantage": b_advantages.mean().item(),
                 "charts/SPS": int(self.global_step / (time.time() - self.start_time)),
-                "cycling/episodes_completed": self.episodes_completed,
-                "cycling/current_config": self.agent.current_config_name,
-                "cycling/config_cycle_count": self.agent.config_scheduler.episode_count,
             })
         
         # Print cycling summary at the end

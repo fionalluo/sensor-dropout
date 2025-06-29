@@ -35,7 +35,7 @@ defaults:
     num_layers: 1
 
   # Distillation settings
-  distill_coef: 0.1  # Coefficient for distillation loss
+  distill_coef: 1.0  # Coefficient for distillation loss (pure distillation)
   expert_coef: 0.5   # Coefficient for expert guidance
   cycle_mode: "episode"  # How to cycle configurations: "episode" or "batch"
 
@@ -157,7 +157,7 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
       cnn_keys: '^$'
 
   # Distillation settings for tiger door key
-  distill_coef: 0.1
+  distill_coef: 1.0  # Pure distillation
   expert_coef: 0.5
   cycle_mode: "episode"
 

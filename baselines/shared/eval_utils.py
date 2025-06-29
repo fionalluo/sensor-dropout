@@ -225,7 +225,6 @@ def evaluate_policy(agent, envs, device, config, log_video=False):
         # Get action from policy
         with torch.no_grad():
             if hasattr(agent, 'get_action_and_value'):
-                # For PPO-style agents
                 if hasattr(agent, 'get_initial_lstm_state') and lstm_state is not None:
                     # PPO RNN agent: needs lstm_state and done
                     result = agent.get_action_and_value(next_obs, lstm_state, next_done)
@@ -233,8 +232,11 @@ def evaluate_policy(agent, envs, device, config, log_video=False):
                         # PPO RNN agent: (action, log_prob, entropy, value, new_lstm_state)
                         action, _, _, _, lstm_state = result
                     elif len(result) == 6:
-                        # PPO Distill agent: (action, log_prob, entropy, value, new_lstm_state, expert_actions)
+                        # PPO Distill agent (old): (action, log_prob, entropy, value, new_lstm_state, expert_actions)
                         action, _, _, _, lstm_state, _ = result
+                    elif len(result) == 7:
+                        # PPO Distill agent (new): (action, log_prob, entropy, value, new_lstm_state, expert_actions, student_logits)
+                        action, _, _, _, lstm_state, _, _ = result
                     else:
                         # Fallback: just take the first value as action
                         action = result[0]
@@ -582,8 +584,11 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
                             # PPO RNN agent: (action, log_prob, entropy, value, new_lstm_state)
                             action, _, _, _, lstm_state = result
                         elif len(result) == 6:
-                            # PPO Distill agent: (action, log_prob, entropy, value, new_lstm_state, expert_actions)
+                            # PPO Distill agent (old): (action, log_prob, entropy, value, new_lstm_state, expert_actions)
                             action, _, _, _, lstm_state, _ = result
+                        elif len(result) == 7:
+                            # PPO Distill agent (new): (action, log_prob, entropy, value, new_lstm_state, expert_actions, student_logits)
+                            action, _, _, _, lstm_state, _, _ = result
                         else:
                             # Fallback: just take the first value as action
                             action = result[0]
@@ -701,6 +706,19 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         overall_mean = np.mean(all_episode_returns)
         overall_std = np.std(all_episode_returns)
         print(f"  OVERALL: mean_return={overall_mean:.2f}, std_return={overall_std:.2f}")
+        
+        # Log overall metrics to wandb and tensorboard
+        if writer is not None:
+            writer.add_scalar("full_eval/overall/mean_return", overall_mean, global_step)
+            writer.add_scalar("full_eval/overall/std_return", overall_std, global_step)
+        
+        if use_wandb:
+            import wandb
+            wandb.log({
+                "full_eval/overall/mean_return": overall_mean,
+                "full_eval/overall/std_return": overall_std,
+                "full_eval_return/overall": overall_mean,  # Separate section for overall return
+            }, step=global_step)
     
     # Return only the individual environment metrics for subset evaluations
     # No overall metrics should be calculated for subset evaluations

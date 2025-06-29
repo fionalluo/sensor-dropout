@@ -192,10 +192,10 @@ def train_subset_policy(config, subset_name, eval_keys, output_dir, device, poli
         if not attr.startswith('_'):
             setattr(subset_config, attr, getattr(config, attr))
     
-    # Update keys for this subset - keep full_keys as original, only change keys
+    # Update keys for this subset - set full_keys to the subset keys so the agent uses the correct keys
+    subset_config.full_keys = SimpleNamespace(**eval_keys)
+    # Also set keys for compatibility
     subset_config.keys = SimpleNamespace(**eval_keys)
-    # Keep the original full_keys for encoder building
-    # subset_config.full_keys remains unchanged from the original config
     
     # Update exp_name to include subset name for distinct wandb logging
     if hasattr(subset_config, 'exp_name'):

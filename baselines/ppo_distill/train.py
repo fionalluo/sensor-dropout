@@ -16,6 +16,7 @@ import importlib
 from pathlib import Path
 from types import SimpleNamespace
 from functools import partial as bind
+import copy
 
 # Add the project root to the path
 project_root = Path(__file__).parent.parent.parent
@@ -107,12 +108,17 @@ def load_config(argv=None):
     configs = ruamel.yaml.YAML(typ='safe').load(
         (embodied.Path(__file__).parent / 'config.yaml').read())
     
+    # First, parse the config names and any other flags
     parsed, other = embodied.Flags(configs=['defaults']).parse_known(argv)
     config_dict = embodied.Config(configs['defaults'])
 
+    # Apply the named configs
     for name in parsed.configs:
         config_dict = config_dict.update(configs[name])
-    config_dict = embodied.Flags(config_dict).parse(other)
+    
+    # Only parse remaining flags if there are any
+    if other:
+        config_dict = embodied.Flags(config_dict).parse(other)
     
     # Convert to SimpleNamespace
     config = dict_to_namespace(config_dict)
@@ -133,19 +139,69 @@ def load_config(argv=None):
 
     return config
 
-def make_envs(config, num_envs):
-    """Create vectorized environments."""
-    suite, task = config.task.split('_', 1)
+def make_envs_ppo_distill(config, num_envs):
+    """Create vectorized environments for PPO Distill with ALL observation keys."""
+    print("🔧 Creating PPO Distill environments with ALL observation keys...")
+    
+    # Collect ALL observation keys from ALL config.env keys
+    all_mlp_keys = set()
+    all_cnn_keys = set()
+    
+    # Get keys from all env configurations
+    if hasattr(config, 'eval_keys'):
+        for env_name in ['env1', 'env2', 'env3', 'env4']:
+            if hasattr(config.eval_keys, env_name):
+                env_config = getattr(config.eval_keys, env_name)
+                if hasattr(env_config, 'mlp_keys'):
+                    # Parse the regex pattern to get actual keys
+                    import re
+                    pattern = env_config.mlp_keys
+                    # Remove word boundaries and split by | to get individual keys
+                    pattern_clean = pattern.replace('\\b', '').replace('(', '').replace(')', '')
+                    keys = pattern_clean.split('|')
+                    for key in keys:
+                        all_mlp_keys.add(key)
+                
+                if hasattr(env_config, 'cnn_keys'):
+                    pattern = env_config.cnn_keys
+                    if pattern != '^$':  # Not empty
+                        # Parse CNN keys similarly
+                        pattern_clean = pattern.replace('\\b', '').replace('(', '').replace(')', '')
+                        keys = pattern_clean.split('|')
+                        for key in keys:
+                            all_cnn_keys.add(key)
+    
+    print(f"🔧 All MLP keys needed: {sorted(all_mlp_keys)}")
+    print(f"🔧 All CNN keys needed: {sorted(all_cnn_keys)}")
+    
+    # Create a modified config that includes all keys
+    modified_config = copy.deepcopy(config)
+    
+    # Set the full_keys to include all keys from all envs
+    if not hasattr(modified_config, 'full_keys'):
+        modified_config.full_keys = SimpleNamespace()
+    
+    # Create regex patterns that match all the keys we need
+    all_mlp_pattern = '|'.join([f'\\b{key}\\b' for key in all_mlp_keys])
+    all_cnn_pattern = '|'.join([f'\\b{key}\\b' for key in all_cnn_keys]) if all_cnn_keys else '^$'
+    
+    modified_config.full_keys.mlp_keys = all_mlp_pattern
+    modified_config.full_keys.cnn_keys = all_cnn_pattern
+    
+    # Create environments with the modified config
+    suite, task = modified_config.task.split('_', 1)
     ctors = []
     for index in range(num_envs):
-        ctor = lambda: make_env(config)
-        if hasattr(config, 'envs') and hasattr(config.envs, 'parallel') and config.envs.parallel != 'none':
-            ctor = bind(embodied.Parallel, ctor, config.envs.parallel)
-        if hasattr(config, 'envs') and hasattr(config.envs, 'restart') and config.envs.restart:
+        ctor = lambda: make_env(modified_config)
+        if hasattr(modified_config, 'envs') and hasattr(modified_config.envs, 'parallel') and modified_config.envs.parallel != 'none':
+            ctor = bind(embodied.Parallel, ctor, modified_config.envs.parallel)
+        if hasattr(modified_config, 'envs') and hasattr(modified_config.envs, 'restart') and modified_config.envs.restart:
             ctor = bind(wrappers.RestartOnException, ctor)
         ctors.append(ctor)
     envs = [ctor() for ctor in ctors]
-    return embodied.BatchEnv(envs, parallel=(hasattr(config, 'envs') and hasattr(config.envs, 'parallel') and config.envs.parallel != 'none'))
+    
+    print(f"🔧 Environment created with {len(envs[0].obs_space.keys())} observation keys")
+    return embodied.BatchEnv(envs, parallel=(hasattr(modified_config, 'envs') and hasattr(modified_config.envs, 'parallel') and modified_config.envs.parallel != 'none'))
 
 def make_env(config, **overrides):
     """Create a single environment."""
@@ -258,7 +314,7 @@ def main():
     print(f"Expert policy directory: {args.expert_policy_dir}")
     
     # Create environments
-    envs = make_envs(config, num_envs=config.num_envs)
+    envs = make_envs_ppo_distill(config, num_envs=config.num_envs)
     
     # Calculate number of iterations
     num_iterations = config.total_timesteps // (config.num_envs * config.num_steps)

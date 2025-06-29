@@ -15,7 +15,7 @@ sys.path.insert(0, str(project_root))
 
 from baselines.ppo_distill.agent import PPODistillAgent
 from baselines.ppo_distill.ppo_distill import train_ppo_distill
-from baselines.ppo_distill.train import make_envs, load_config
+from baselines.ppo_distill.train import make_envs_ppo_distill, load_config
 
 def test_ppo_distill_student_types():
     """Test that PPO Distill can work with both PPO and PPO-RNN student agents."""
@@ -27,7 +27,7 @@ def test_ppo_distill_student_types():
     config.total_timesteps = 1000
     
     # Create environments
-    envs = make_envs(config, config.num_envs)
+    envs = make_envs_ppo_distill(config, config.num_envs)
     
     # Test expert policy directory
     expert_policy_dir = "./policies/ppo/tigerdoorkey"
@@ -47,6 +47,10 @@ def test_ppo_distill_student_types():
             device='cpu', student_policy_type="ppo_rnn"
         )
         print("✓ PPO-RNN student agent created successfully")
+        
+        print("Expert policies and their mlp_keys:")
+        for name, expert in agent_ppo_rnn.expert_manager.expert_policies.items():
+            print(f"  {name}: {getattr(expert, 'mlp_keys', None)}")
         
         # Test getting action and value
         obs = {}
@@ -74,6 +78,10 @@ def test_ppo_distill_student_types():
             device='cpu', student_policy_type="ppo"
         )
         print("✓ PPO student agent created successfully")
+        
+        print("Expert policies and their mlp_keys:")
+        for name, expert in agent_ppo.expert_manager.expert_policies.items():
+            print(f"  {name}: {getattr(expert, 'mlp_keys', None)}")
         
         # Test getting action and value
         obs = {}

@@ -40,6 +40,8 @@ def test_ppo_loading():
         print(f"✓ Successfully loaded {subset_name}")
         print(f"  MLP keys: {eval_keys['mlp_keys']}")
         print(f"  CNN keys: {eval_keys['cnn_keys']}")
+        print(f"  Agent MLP keys: {getattr(agent, 'mlp_keys', 'Not found')}")
+        print(f"  Agent CNN keys: {getattr(agent, 'cnn_keys', 'Not found')}")
         print(f"  Task: {getattr(config, 'task', 'Unknown')}")
     
     print(f"\n{'='*50}")
