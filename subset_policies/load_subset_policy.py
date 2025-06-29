@@ -25,10 +25,15 @@ from baselines.ppo.agent import PPOAgent
 from baselines.ppo_rnn.ppo_rnn import PPORnnAgent
 from baselines.shared.eval_utils import filter_observations_by_keys
 from baselines.shared.policy_utils import (
-    load_policy_with_metadata, 
+    load_policy_checkpoint,
     find_policy_files, 
     load_metadata_from_dir,
     convert_obs_to_tensor
+)
+
+# Import the exact same functions from train_subset_policies
+from subset_policies.train_subset_policies import (
+    load_config, make_envs, make_env, wrap_env
 )
 
 class SubsetPolicyLoader:
@@ -47,11 +52,14 @@ class SubsetPolicyLoader:
         self.policies = {}
         self.metadata = None
         self.policy_type = None
+        self.task_name = None
+        self.loaded_agents = {}  # Cache for loaded agents
         
         # Load metadata
         self.metadata = load_metadata_from_dir(policy_dir)
         if self.metadata:
             self.policy_type = self.metadata.get('policy_type', 'ppo_rnn')
+            self.task_name = self.metadata.get('task', '').split('_', 1)[-1]  # Extract task name
         
         # Load all available policies
         self._load_policies()
@@ -66,21 +74,9 @@ class SubsetPolicyLoader:
         
         print(f"Loaded {len(self.policies)} {self.policy_type} policies: {list(self.policies.keys())}")
     
-    def _get_agent_class(self, policy_type=None):
-        """Get the appropriate agent class based on policy type."""
-        if policy_type is None:
-            policy_type = self.policy_type
-        
-        if policy_type == 'ppo':
-            return PPOAgent
-        elif policy_type == 'ppo_rnn':
-            return PPORnnAgent
-        else:
-            raise ValueError(f"Unknown policy type: {policy_type}")
-    
     def load_policy(self, subset_name):
         """
-        Load a specific policy.
+        Load a specific policy using the exact same logic as train_subset_policies.py.
         
         Args:
             subset_name: Name of the subset (e.g., 'env1', 'env2')
@@ -91,20 +87,60 @@ class SubsetPolicyLoader:
         if subset_name not in self.policies:
             raise ValueError(f"Policy {subset_name} not found. Available: {list(self.policies.keys())}")
         
+        # Check if already loaded
+        if subset_name in self.loaded_agents:
+            return self.loaded_agents[subset_name]
+        
         policy_path = self.policies[subset_name]
         
-        # Get the appropriate agent class
-        agent_class = self._get_agent_class()
+        # Load checkpoint to get the exact config that was used during training
+        checkpoint = load_policy_checkpoint(policy_path, self.device)
         
-        # Use shared utility to load policy
-        agent, config, metadata = load_policy_with_metadata(
-            policy_path, agent_class, self.device
-        )
+        # Use the config from the checkpoint (this is the exact config used during training)
+        config = checkpoint['config']
+        eval_keys = checkpoint['eval_keys']
         
-        # Extract eval_keys from metadata
-        eval_keys = metadata.get('eval_keys', {})
+        print(f"\nLoading {self.policy_type} policy for {subset_name}")
+        print(f"  MLP keys: {eval_keys['mlp_keys']}")
+        print(f"  CNN keys: {eval_keys['cnn_keys']}")
+        print(f"  Task: {getattr(config, 'task', 'Unknown')}")
         
-        return agent, config, eval_keys
+        # Create subset-specific config exactly like train_subset_policies does
+        subset_config = SimpleNamespace()
+        for attr in dir(config):
+            if not attr.startswith('_'):
+                setattr(subset_config, attr, getattr(config, attr))
+        
+        # Update keys for this subset - keep full_keys as original, only change keys
+        subset_config.keys = SimpleNamespace(**eval_keys)
+        # Keep the original full_keys for encoder building
+        # subset_config.full_keys remains unchanged from the original config
+        
+        # Update exp_name to include subset name for distinct logging
+        if hasattr(subset_config, 'exp_name'):
+            subset_config.exp_name = f"{subset_config.exp_name}_{subset_name}"
+        else:
+            subset_config.exp_name = f"subset_{subset_name}"
+        
+        # Create environment exactly like train_subset_policies does
+        envs = make_envs(config, num_envs=config.num_envs)
+        
+        # Create agent exactly like train_subset_policies does
+        # Use the original config (with full_keys) for agent creation, not subset_config
+        if self.policy_type == 'ppo':
+            agent = PPOAgent(envs, config)  # Use original config, not subset_config
+        else:  # ppo_rnn
+            agent = PPORnnAgent(envs, config)  # Use original config, not subset_config
+        
+        agent.to(self.device)
+        
+        # Load weights from checkpoint
+        agent.load_state_dict(checkpoint['agent_state_dict'])
+        
+        # Cache the loaded agent
+        self.loaded_agents[subset_name] = (agent, subset_config, eval_keys)
+        
+        return agent, subset_config, eval_keys
     
     def get_action(self, subset_name, obs, lstm_state=None):
         """
@@ -118,6 +154,7 @@ class SubsetPolicyLoader:
         Returns:
             tuple: (action, lstm_state) - lstm_state is None for PPO
         """
+        # Load or get cached agent
         agent, config, eval_keys = self.load_policy(subset_name)
         
         # Filter observations based on the subset's eval_keys
