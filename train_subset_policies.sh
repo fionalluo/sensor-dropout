@@ -5,15 +5,20 @@ generate_unique_seed() {
   date +%s%N | sha256sum | awk '{ print "0x" substr($1, 1, 8) }'
 }
 
+# Set policy type (ppo or ppo_rnn)
+POLICY_TYPE="ppo"
+# POLICY_TYPE="ppo_rnn"
+
 # Base output directory - now includes policy type
-BASE_OUTPUT_DIR=./policies/ppo_rnn
+BASE_OUTPUT_DIR=./policies/${POLICY_TYPE}
 
 # List of configs to run
 CONFIGS=(
-  # "gymnasium_tigerdoorkey"
+  "gymnasium_tigerdoorkey"
   # "gymnasium_tigerdoorkeylarge"
-  # "gymnasium_maze"
-  "gymnasium_blindpick"
+  "gymnasium_maze"
+  "gymnasium_maze11"
+  # "gymnasium_blindpick"
 )
 
 NUM_SEEDS=1
@@ -25,6 +30,9 @@ for ((i=0; i<$NUM_SEEDS; i++)); do
 done
 
 export MUJOCO_GL=egl;
+
+echo "Training ${POLICY_TYPE} subset policies"
+echo "Output directory: ${BASE_OUTPUT_DIR}"
 
 # Iterate through configs
 for CONFIG in "${CONFIGS[@]}"; do
@@ -40,6 +48,7 @@ for CONFIG in "${CONFIGS[@]}"; do
       --configs ${CONFIG} \
       --seed "$SEED" \
       --output_dir "$OUTPUT_DIR" \
+      --policy_type "$POLICY_TYPE" \
       --cuda \
       --debug
 
@@ -53,4 +62,4 @@ for CONFIG in "${CONFIGS[@]}"; do
   done
 done
 
-echo "All subset policy training complete." 
+echo "All ${POLICY_TYPE} subset policy training complete." 

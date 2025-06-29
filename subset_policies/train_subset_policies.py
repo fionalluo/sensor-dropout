@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
-Training script for PPO RNN subset policies.
+Training script for PPO and PPO RNN subset policies.
 
-This script trains separate PPO RNN policies for different observation subsets
+This script trains separate PPO or PPO RNN policies for different observation subsets
 (e.g., env1, env2, env3, env4) and saves them to the policies directory with
-the structure: policies/ppo_rnn/{task_name}/{env_name}/policy_{timestamp}.pt
+the structure: policies/{policy_type}/{task_name}/{env_name}/policy_{timestamp}.pt
 
-Note: This script is specifically designed for PPO RNN policies that use LSTM states
-for sequential inference. For PPO (non-RNN) policies, a different training script
-would be needed.
+Supports both PPO (non-RNN) and PPO-RNN policies.
 """
 
 import os
@@ -34,6 +32,8 @@ sys.path.insert(0, str(project_root))
 import embodied
 from embodied import wrappers
 
+# Import both PPO and PPO-RNN training functions
+from baselines.ppo.ppo import train_ppo
 from baselines.ppo_rnn.ppo_rnn import train_ppo_rnn
 from baselines.shared.eval_utils import get_eval_keys
 
@@ -57,7 +57,7 @@ def set_seed(seed):
     torch.backends.cudnn.benchmark = False
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Train PPO RNN policies for each eval subset')
+    parser = argparse.ArgumentParser(description='Train PPO or PPO RNN policies for each eval subset')
     parser.add_argument('--config', type=str, default='config.yaml', 
                        help='Path to configuration file')
     parser.add_argument('--configs', type=str, nargs='+', default=[], 
@@ -70,14 +70,21 @@ def parse_args():
                        help='Track with wandb (overrides config)')
     parser.add_argument('--output_dir', type=str, default='policies',
                        help='Output directory for policies')
+    parser.add_argument('--policy_type', type=str, choices=['ppo', 'ppo_rnn'], default='ppo_rnn',
+                       help='Type of policy to train (ppo or ppo_rnn)')
     parser.add_argument('--debug', action='store_true',
                        help='Enable debug mode')
     return parser.parse_args()
 
-def load_config(configs_names=None):
+def load_config(configs_names=None, policy_type='ppo_rnn'):
     """Load configuration from YAML file with support for named configs."""
-    configs = ruamel.yaml.YAML(typ='safe').load(
-        (embodied.Path(__file__).parent.parent / 'baselines/ppo_rnn/config.yaml').read())
+    # Choose config file based on policy type
+    if policy_type == 'ppo':
+        config_path = embodied.Path(__file__).parent.parent / 'baselines/ppo/config.yaml'
+    else:  # ppo_rnn
+        config_path = embodied.Path(__file__).parent.parent / 'baselines/ppo_rnn/config.yaml'
+    
+    configs = ruamel.yaml.YAML(typ='safe').load(config_path.read())
     
     # Start with defaults
     config_dict = embodied.Config(configs['defaults'])
@@ -170,16 +177,11 @@ def wrap_env(env, config):
 
     return env
 
-def train_subset_policy(config, subset_name, eval_keys, output_dir, device, debug=False):
-    """Train a PPO RNN policy for a specific subset of observations.
-    
-    Note: This function is specifically designed for PPO RNN policies that use LSTM states
-    for sequential inference. For PPO (non-RNN) policies, a different training script
-    would be needed.
-    """
+def train_subset_policy(config, subset_name, eval_keys, output_dir, device, policy_type='ppo_rnn', debug=False):
+    """Train a PPO or PPO RNN policy for a specific subset of observations."""
     
     print(f"\n{'='*60}")
-    print(f"Training PPO RNN policy for {subset_name}")
+    print(f"Training {policy_type.upper()} policy for {subset_name}")
     print(f"MLP keys pattern: {eval_keys['mlp_keys']}")
     print(f"CNN keys pattern: {eval_keys['cnn_keys']}")
     print(f"{'='*60}")
@@ -207,9 +209,12 @@ def train_subset_policy(config, subset_name, eval_keys, output_dir, device, debu
     # Calculate number of iterations
     num_iterations = config.total_timesteps // (config.num_envs * config.num_steps)
     
-    # Train the policy
+    # Train the policy based on type
     print(f"Starting training for {subset_name}...")
-    trained_agent = train_ppo_rnn(envs, subset_config, config.seed, num_iterations=num_iterations)
+    if policy_type == 'ppo':
+        trained_agent = train_ppo(envs, subset_config, config.seed, num_iterations=num_iterations)
+    else:  # ppo_rnn
+        trained_agent = train_ppo_rnn(envs, subset_config, config.seed, num_iterations=num_iterations)
     
     # Save the policy with timestamp
     policy_dir = os.path.join(output_dir, subset_name)
@@ -229,10 +234,10 @@ def train_subset_policy(config, subset_name, eval_keys, output_dir, device, debu
         'config': subset_config,
         'eval_keys': eval_keys,
         'subset_name': subset_name,
-        'policy_type': 'ppo_rnn'  # Add policy type to metadata
+        'policy_type': policy_type  # Add policy type to metadata
     }, policy_path)
     
-    print(f"PPO RNN policy saved to {policy_path}")
+    print(f"{policy_type.upper()} policy saved to {policy_path}")
     
     return policy_path
 
@@ -240,8 +245,8 @@ def main():
     """Main entry point for training subset policies."""
     args = parse_args()
     
-    # Load config using only the configs argument
-    config = load_config(args.configs)
+    # Load config using only the configs argument and policy type
+    config = load_config(args.configs, args.policy_type)
     
     # Override config with command line arguments
     if args.seed is not None:
@@ -262,7 +267,7 @@ def main():
     output_dir = args.output_dir
     os.makedirs(output_dir, exist_ok=True)
     
-    print(f"Training policies for task: {config.task}")
+    print(f"Training {args.policy_type.upper()} policies for task: {config.task}")
     print(f"Output directory: {output_dir}")
     
     # Get number of eval configs
@@ -292,7 +297,8 @@ def main():
         
         # Train policy for this subset
         policy_path = train_subset_policy(
-            config, subset_name, eval_keys, output_dir, device, debug=args.debug
+            config, subset_name, eval_keys, output_dir, device, 
+            policy_type=args.policy_type, debug=args.debug
         )
         trained_policies[subset_name] = policy_path
     
@@ -302,7 +308,7 @@ def main():
         'num_eval_configs': num_eval_configs,
         'policies': trained_policies,
         'config': config,
-        'policy_type': 'ppo_rnn'  # Add policy type to metadata
+        'policy_type': args.policy_type  # Add policy type to metadata
     }
     
     metadata_path = os.path.join(output_dir, 'metadata.yaml')

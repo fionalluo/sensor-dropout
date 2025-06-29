@@ -108,7 +108,7 @@ defaults:
 # Tiger Door Key
 gymnasium_tigerdoorkey: &tigerdoorkey_base
   task: gymnasium_TigerDoorKey-v0
-  total_timesteps: 500000 # 150000
+  total_timesteps: 150000 # 150000
   num_envs: 8
   num_steps: 256
   learning_rate: 1e-4
@@ -156,7 +156,7 @@ gymnasium_tigerdoorkeylarge:
 
 gymnasium_maze: &maze_base
   task: gymnasium_Maze7x7-v0
-  total_timesteps: 150000
+  total_timesteps: 400000
   num_envs: 8
   num_steps: 256
   learning_rate: 1e-4
@@ -204,6 +204,11 @@ gymnasium_maze: &maze_base
       cnn_keys: '^$'
 
   exp_name: "maze_ppo"
+
+gymnasium_maze11:
+  << : *maze_base
+  task: gymnasium_Maze11x11-v0
+  exp_name: "maze11_ppo"
 
 # Blind Pick environment
 gymnasium_blindpick: &blindpick_base

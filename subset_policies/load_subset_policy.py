@@ -2,6 +2,7 @@
 """
 Utility script to load trained subset policies and use them for inference.
 This makes it easy to deploy trained policies without retraining.
+Supports both PPO and PPO-RNN policies.
 """
 
 import os
@@ -19,6 +20,8 @@ sys.path.insert(0, str(project_root))
 
 import embodied
 from embodied import wrappers
+# Import both PPO and PPO-RNN agents
+from baselines.ppo.agent import PPOAgent
 from baselines.ppo_rnn.ppo_rnn import PPORnnAgent
 from baselines.shared.eval_utils import filter_observations_by_keys
 from baselines.shared.policy_utils import (
@@ -43,9 +46,12 @@ class SubsetPolicyLoader:
         self.device = device
         self.policies = {}
         self.metadata = None
+        self.policy_type = None
         
         # Load metadata
         self.metadata = load_metadata_from_dir(policy_dir)
+        if self.metadata:
+            self.policy_type = self.metadata.get('policy_type', 'ppo_rnn')
         
         # Load all available policies
         self._load_policies()
@@ -58,7 +64,19 @@ class SubsetPolicyLoader:
         # Find all policy files using shared utility
         self.policies = find_policy_files(self.policy_dir)
         
-        print(f"Loaded {len(self.policies)} policies: {list(self.policies.keys())}")
+        print(f"Loaded {len(self.policies)} {self.policy_type} policies: {list(self.policies.keys())}")
+    
+    def _get_agent_class(self, policy_type=None):
+        """Get the appropriate agent class based on policy type."""
+        if policy_type is None:
+            policy_type = self.policy_type
+        
+        if policy_type == 'ppo':
+            return PPOAgent
+        elif policy_type == 'ppo_rnn':
+            return PPORnnAgent
+        else:
+            raise ValueError(f"Unknown policy type: {policy_type}")
     
     def load_policy(self, subset_name):
         """
@@ -75,9 +93,12 @@ class SubsetPolicyLoader:
         
         policy_path = self.policies[subset_name]
         
+        # Get the appropriate agent class
+        agent_class = self._get_agent_class()
+        
         # Use shared utility to load policy
         agent, config, metadata = load_policy_with_metadata(
-            policy_path, PPORnnAgent, self.device
+            policy_path, agent_class, self.device
         )
         
         # Extract eval_keys from metadata
@@ -92,10 +113,10 @@ class SubsetPolicyLoader:
         Args:
             subset_name: Name of the subset policy to use
             obs: Observation dictionary
-            lstm_state: LSTM state (optional)
+            lstm_state: LSTM state (optional, only for PPO-RNN)
             
         Returns:
-            tuple: (action, lstm_state)
+            tuple: (action, lstm_state) - lstm_state is None for PPO
         """
         agent, config, eval_keys = self.load_policy(subset_name)
         
@@ -112,20 +133,26 @@ class SubsetPolicyLoader:
             if obs_tensor[key].dim() == 1:
                 obs_tensor[key] = obs_tensor[key].unsqueeze(0)
         
-        # Get action from agent
+        # Get action from agent based on policy type
         with torch.no_grad():
-            action, lstm_state = agent.get_action(obs_tensor, lstm_state)
-        
-        return action, lstm_state
+            if self.policy_type == 'ppo':
+                # PPO doesn't use LSTM states
+                action, _, _, _ = agent.get_action_and_value(obs_tensor)
+                return action, None
+            else:  # ppo_rnn
+                # PPO-RNN uses LSTM states
+                action, lstm_state = agent.get_action(obs_tensor, lstm_state)
+                return action, lstm_state
     
     def list_policies(self):
         """List all available policies."""
-        print(f"Available policies in {self.policy_dir}:")
+        print(f"Available {self.policy_type} policies in {self.policy_dir}:")
         for subset_name in sorted(self.policies.keys()):
             print(f"  {subset_name}: {self.policies[subset_name]}")
         
         if self.metadata:
             print(f"\nTask: {self.metadata.get('task', 'Unknown')}")
+            print(f"Policy type: {self.metadata.get('policy_type', 'Unknown')}")
             print(f"Number of eval configs: {self.metadata.get('num_eval_configs', 'Unknown')}")
 
 def main():
@@ -152,7 +179,7 @@ def main():
     if args.subset:
         # Load specific policy
         agent, config, eval_keys = loader.load_policy(args.subset)
-        print(f"Loaded policy {args.subset}")
+        print(f"Loaded {loader.policy_type} policy {args.subset}")
         print(f"MLP keys: {eval_keys['mlp_keys']}")
         print(f"CNN keys: {eval_keys['cnn_keys']}")
     else:

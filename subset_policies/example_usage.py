@@ -49,49 +49,84 @@ def example_list_policies():
     """Example of listing available policies."""
     print("Listing available policies...")
     
-    # Update this path to your actual policy directory
-    policy_dir = "~/policies/ppo_rnn/tigerdoorkey"  # Replace with actual path
+    # Example for PPO policies
+    print("\n--- PPO Policies ---")
+    ppo_policy_dir = "~/policies/ppo/tigerdoorkey"  # Replace with actual path
     
     try:
-        loader = SubsetPolicyLoader(policy_dir, device='cpu')
-        loader.list_policies()
+        ppo_loader = SubsetPolicyLoader(ppo_policy_dir, device='cpu')
+        ppo_loader.list_policies()
     except FileNotFoundError:
-        print(f"Policy directory not found: {policy_dir}")
-        print("Please run train_subset_policies.sh first to create policies.")
+        print(f"PPO policy directory not found: {ppo_policy_dir}")
+        print("Please run 'POLICY_TYPE=ppo ./train_subset_policies.sh' first to create PPO policies.")
+    
+    # Example for PPO-RNN policies
+    print("\n--- PPO-RNN Policies ---")
+    ppo_rnn_policy_dir = "~/policies/ppo_rnn/tigerdoorkey"  # Replace with actual path
+    
+    try:
+        ppo_rnn_loader = SubsetPolicyLoader(ppo_rnn_policy_dir, device='cpu')
+        ppo_rnn_loader.list_policies()
+    except FileNotFoundError:
+        print(f"PPO-RNN policy directory not found: {ppo_rnn_policy_dir}")
+        print("Please run './train_subset_policies.sh' first to create PPO-RNN policies.")
 
 def example_load_specific_policy():
     """Example of loading a specific policy."""
-    print("Loading specific policy...")
+    print("Loading specific policies...")
     
-    # Update this path to your actual policy directory
-    policy_dir = "~/policies/ppo_rnn/tigerdoorkey"  # Replace with actual path
+    # Example for PPO policy
+    print("\n--- Loading PPO Policy ---")
+    ppo_policy_dir = "~/policies/ppo/tigerdoorkey"  # Replace with actual path
     
     try:
-        loader = SubsetPolicyLoader(policy_dir, device='cpu')
+        ppo_loader = SubsetPolicyLoader(ppo_policy_dir, device='cpu')
         
         # Load a specific policy
-        agent, config, eval_keys = loader.load_policy('env1')
+        agent, config, eval_keys = ppo_loader.load_policy('env1')
         
-        print(f"Loaded policy env1")
+        print(f"Loaded {ppo_loader.policy_type} policy env1")
         print(f"MLP keys pattern: {eval_keys['mlp_keys']}")
         print(f"CNN keys pattern: {eval_keys['cnn_keys']}")
         print(f"Task: {config.task}")
         
     except FileNotFoundError:
-        print(f"Policy directory not found: {policy_dir}")
-        print("Please run train_subset_policies.sh first to create policies.")
+        print(f"PPO policy directory not found: {ppo_policy_dir}")
+        print("Please run 'POLICY_TYPE=ppo ./train_subset_policies.sh' first to create PPO policies.")
     except ValueError as e:
-        print(f"Error loading policy: {e}")
-
-def example_get_action():
-    """Example of getting actions from a policy."""
-    print("Getting action from policy...")
+        print(f"Error loading PPO policy: {e}")
     
-    # Update this path to your actual policy directory
-    example_policy_dir = "~/policies/ppo_rnn/tigerdoorkey"
+    # Example for PPO-RNN policy
+    print("\n--- Loading PPO-RNN Policy ---")
+    ppo_rnn_policy_dir = "~/policies/ppo_rnn/tigerdoorkey"  # Replace with actual path
     
     try:
-        loader = SubsetPolicyLoader(example_policy_dir, device='cpu')
+        ppo_rnn_loader = SubsetPolicyLoader(ppo_rnn_policy_dir, device='cpu')
+        
+        # Load a specific policy
+        agent, config, eval_keys = ppo_rnn_loader.load_policy('env1')
+        
+        print(f"Loaded {ppo_rnn_loader.policy_type} policy env1")
+        print(f"MLP keys pattern: {eval_keys['mlp_keys']}")
+        print(f"CNN keys pattern: {eval_keys['cnn_keys']}")
+        print(f"Task: {config.task}")
+        
+    except FileNotFoundError:
+        print(f"PPO-RNN policy directory not found: {ppo_rnn_policy_dir}")
+        print("Please run './train_subset_policies.sh' first to create PPO-RNN policies.")
+    except ValueError as e:
+        print(f"Error loading PPO-RNN policy: {e}")
+
+def example_get_action():
+    """Example of getting actions from policies."""
+    print("Getting actions from policies...")
+    
+    # Example for PPO policy
+    print("\n--- PPO Policy Action ---")
+    ppo_policy_dir = "~/policies/ppo/tigerdoorkey"
+    
+    try:
+        ppo_loader = SubsetPolicyLoader(ppo_policy_dir, device='cpu')
         
         # Create a dummy observation (replace with real observations)
         dummy_obs = {
@@ -100,28 +135,83 @@ def example_get_action():
             'key': [0.0, 0.0, 1.0],    # Example key observation
         }
         
-        # Get action from env1 policy
-        action, lstm_state = loader.get_action('env1', dummy_obs)
+        # Get action from env1 policy (PPO doesn't use LSTM states)
+        action, lstm_state = ppo_loader.get_action('env1', dummy_obs)
         
-        print(f"Action from env1 policy: {action}")
+        print(f"Action from PPO env1 policy: {action}")
+        print(f"LSTM state: {lstm_state} (None for PPO)")
+        
+    except FileNotFoundError:
+        print(f"PPO policy directory not found: {ppo_policy_dir}")
+        print("Please run 'POLICY_TYPE=ppo ./train_subset_policies.sh' first to create PPO policies.")
+    
+    # Example for PPO-RNN policy
+    print("\n--- PPO-RNN Policy Action ---")
+    ppo_rnn_policy_dir = "~/policies/ppo_rnn/tigerdoorkey"
+    
+    try:
+        ppo_rnn_loader = SubsetPolicyLoader(ppo_rnn_policy_dir, device='cpu')
+        
+        # Create a dummy observation (replace with real observations)
+        dummy_obs = {
+            'tiger': [1.0, 0.0, 0.0],  # Example tiger observation
+            'door': [0.0, 1.0, 0.0],   # Example door observation
+            'key': [0.0, 0.0, 1.0],    # Example key observation
+        }
+        
+        # Get action from env1 policy (PPO-RNN uses LSTM states)
+        action, lstm_state = ppo_rnn_loader.get_action('env1', dummy_obs)
+        
+        print(f"Action from PPO-RNN env1 policy: {action}")
         print(f"LSTM state shape: {lstm_state[0].shape if lstm_state else 'None'}")
         
     except FileNotFoundError:
-        print(f"Policy directory not found: {example_policy_dir}")
-        print("Please run train_subset_policies.sh first to create policies.")
+        print(f"PPO-RNN policy directory not found: {ppo_rnn_policy_dir}")
+        print("Please run './train_subset_policies.sh' first to create PPO-RNN policies.")
+
+def example_compare_policies():
+    """Example of comparing different policy types."""
+    print("Comparing PPO vs PPO-RNN policies...")
+    
+    # Example observation
+    dummy_obs = {
+        'tiger': [1.0, 0.0, 0.0],
+        'door': [0.0, 1.0, 0.0],
+        'key': [0.0, 0.0, 1.0],
+    }
+    
+    # Try to load both policy types
+    ppo_policy_dir = "~/policies/ppo/tigerdoorkey"
+    ppo_rnn_policy_dir = "~/policies/ppo_rnn/tigerdoorkey"
+    
+    try:
+        ppo_loader = SubsetPolicyLoader(ppo_policy_dir, device='cpu')
+        ppo_action, _ = ppo_loader.get_action('env1', dummy_obs)
+        print(f"PPO action: {ppo_action}")
+    except FileNotFoundError:
+        print("PPO policies not found")
+    
+    try:
+        ppo_rnn_loader = SubsetPolicyLoader(ppo_rnn_policy_dir, device='cpu')
+        ppo_rnn_action, lstm_state = ppo_rnn_loader.get_action('env1', dummy_obs)
+        print(f"PPO-RNN action: {ppo_rnn_action}")
+        print(f"PPO-RNN LSTM state: {lstm_state is not None}")
+    except FileNotFoundError:
+        print("PPO-RNN policies not found")
 
 if __name__ == "__main__":
-    print("Subset Policy Usage Examples")
-    print("=" * 40)
+    print("Subset Policy Loader Examples")
+    print("=" * 50)
     
     # Run examples
     example_list_policies()
-    print()
-    
     example_load_specific_policy()
-    print()
-    
     example_get_action()
-    print()
+    example_compare_policies()
     
-    print("Examples completed!") 
+    print("\n" + "=" * 50)
+    print("Examples completed!")
+    print("\nTo run these examples with real policies:")
+    print("1. Train PPO policies: POLICY_TYPE=ppo ./train_subset_policies.sh")
+    print("2. Train PPO-RNN policies: ./train_subset_policies.sh")
+    print("3. Update the policy_dir paths in this script to match your actual paths") 
