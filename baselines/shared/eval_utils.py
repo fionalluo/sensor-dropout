@@ -590,12 +590,12 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
                     else:
                         # Regular PPO agent
                         result = agent.get_action_and_value(next_obs)
-                        if len(result) == 4:
-                            # Regular PPO agent: (action, log_prob, entropy, value)
-                            action, _, _, _ = result
-                        else:
-                            # Fallback: just take the first value as action
-                            action = result[0]
+                    if len(result) == 4:
+                        # Regular PPO agent: (action, log_prob, entropy, value)
+                        action, _, _, _ = result
+                    else:
+                        # Fallback: just take the first value as action
+                        action = result[0]
                 else:
                     action = agent.get_action(next_obs)
             
@@ -682,6 +682,7 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
                 f"full_eval/{env_name}/std_return": env_metrics[env_name]['std_return'],
                 f"full_eval/{env_name}/mean_length": env_metrics[env_name]['mean_length'],
                 f"full_eval/{env_name}/std_length": env_metrics[env_name]['std_length'],
+                f"full_eval_return/{env_name}": env_metrics[env_name]['mean_return'],  # Separate section for returns
             }, step=global_step)
         
         # Log video if available - use full_eval prefix for subset videos
