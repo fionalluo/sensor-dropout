@@ -141,7 +141,8 @@ def load_config(argv=None):
 
 def make_envs_ppo_distill(config, num_envs):
     """Create vectorized environments for PPO Distill with ALL observation keys."""
-    print("🔧 Creating PPO Distill environments with ALL observation keys...")
+    # Remove excessive debug prints
+    # print("🔧 Creating PPO Distill environments with ALL observation keys...")
     
     # Collect ALL observation keys from ALL config.env keys
     all_mlp_keys = set()
@@ -171,8 +172,9 @@ def make_envs_ppo_distill(config, num_envs):
                         for key in keys:
                             all_cnn_keys.add(key)
     
-    print(f"🔧 All MLP keys needed: {sorted(all_mlp_keys)}")
-    print(f"🔧 All CNN keys needed: {sorted(all_cnn_keys)}")
+    # Remove excessive debug prints
+    # print(f"🔧 All MLP keys needed: {sorted(all_mlp_keys)}")
+    # print(f"🔧 All CNN keys needed: {sorted(all_cnn_keys)}")
     
     # Create a modified config that includes all keys
     modified_config = copy.deepcopy(config)
@@ -200,7 +202,8 @@ def make_envs_ppo_distill(config, num_envs):
         ctors.append(ctor)
     envs = [ctor() for ctor in ctors]
     
-    print(f"🔧 Environment created with {len(envs[0].obs_space.keys())} observation keys")
+    # Remove excessive debug print
+    # print(f"🔧 Environment created with {len(envs[0].obs_space.keys())} observation keys")
     return embodied.BatchEnv(envs, parallel=(hasattr(modified_config, 'envs') and hasattr(modified_config.envs, 'parallel') and modified_config.envs.parallel != 'none'))
 
 def make_env(config, **overrides):

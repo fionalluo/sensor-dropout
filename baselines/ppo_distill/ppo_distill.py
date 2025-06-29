@@ -119,8 +119,9 @@ class PPODistillTrainer:
         
     def collect_rollout(self):
         """Collect a rollout with configuration cycling and expert action collection."""
-        print("🚀 PPODistillTrainer.collect_rollout called!")
-        print("🚀 About to initialize observation storage...")
+        # Remove excessive debug prints
+        # print("🚀 PPODistillTrainer.collect_rollout called!")
+        # print("🚀 About to initialize observation storage...")
         
         # Initialize observation storage if not already done
         if not self.obs:
@@ -173,13 +174,15 @@ class PPODistillTrainer:
             # Get current configuration
             config_name, _ = self.agent.get_current_config()
             
-            # Debug logging for configuration cycling
+            # Debug logging for configuration cycling (only when config changes)
             if hasattr(self, '_last_config_log') and self._last_config_log != config_name:
-                print(f"🔄 Training with configuration: {config_name}")
+                # Remove excessive debug print
+                # print(f"🔄 Training with configuration: {config_name}")
                 self._last_config_log = config_name
             elif not hasattr(self, '_last_config_log'):
                 self._last_config_log = config_name
-                print(f"🔄 Starting training with configuration: {config_name}")
+                # Remove excessive debug print
+                # print(f"🔄 Starting training with configuration: {config_name}")
             
             # Get action and value with LSTM state, plus expert actions
             with torch.no_grad():
@@ -224,12 +227,16 @@ class PPODistillTrainer:
             # Cycle configuration if episode is done
             if self.cycle_mode == 'episode':
                 episode_done = next_done.any().item()
-                print(f"🔍 Checking episode done: {episode_done}")
+                # Remove excessive debug print
+                # print(f"🔍 Checking episode done: {episode_done}")
                 if episode_done:
                     self.episodes_completed += 1
-                    print(f"📺 Episode {self.episodes_completed} completed, cycling from {self.agent.current_config_name}")
+                    # Only print episode completion every 100 episodes to reduce log spam
+                    if self.episodes_completed % 100 == 0:
+                        print(f"📺 Episode {self.episodes_completed} completed, cycling from {self.agent.current_config_name}")
                     self.agent.cycle_config(episode_done=True)
-                    print(f"✅ Cycled to configuration: {self.agent.current_config_name} (episode {self.episodes_completed})")
+                    # Remove redundant print since cycle_config already prints
+                    # print(f"✅ Cycled to configuration: {self.agent.current_config_name} (episode {self.episodes_completed})")
         
         # Cycle configuration for batch mode
         if self.cycle_mode == 'batch':
@@ -238,37 +245,44 @@ class PPODistillTrainer:
             print(f"✅ Cycled to configuration: {self.agent.current_config_name}")
         
         # Store final observations and done state
-        # Process next_obs to ensure it's in the correct format for the agent
-        print(f"🔍 Processing next_obs: {list(next_obs.keys())}")
-        print(f"🔍 agent.mlp_keys: {self.agent.mlp_keys}")
-        print(f"🔍 agent.cnn_keys: {self.agent.cnn_keys}")
+        # Remove excessive debug prints
+        # print(f"🔍 Processing next_obs: {list(next_obs.keys())}")
+        # print(f"🔍 agent.mlp_keys: {self.agent.mlp_keys}")
+        # print(f"🔍 agent.cnn_keys: {self.agent.cnn_keys}")
         
         processed_next_obs = {}
         for key in self.agent.mlp_keys + self.agent.cnn_keys:
             if key in next_obs:
                 processed_next_obs[key] = next_obs[key]
-                print(f"🔍 Added key: {key}")
+                # Remove excessive debug prints
+                # print(f"🔍 Added key: {key}")
             else:
-                print(f"🔍 Missing key: {key}")
+                # Remove excessive debug prints
+                # print(f"🔍 Missing key: {key}")
+                pass
         
-        print(f"🔍 Final processed_next_obs keys: {list(processed_next_obs.keys())}")
+        # Remove excessive debug print
+        # print(f"🔍 Final processed_next_obs keys: {list(processed_next_obs.keys())}")
         self.next_obs = processed_next_obs
         self.next_done = next_done
 
     def compute_advantages(self):
         """Compute advantages and returns for the collected rollout."""
-        print(f"🔍 compute_advantages called with student_policy_type: {self.student_policy_type}")
-        print(f"🔍 agent type: {type(self.agent)}")
-        print(f"🔍 next_obs type: {type(self.next_obs)}")
-        print(f"🔍 next_obs keys: {list(self.next_obs.keys()) if isinstance(self.next_obs, dict) else 'not a dict'}")
+        # Remove excessive debug prints
+        # print(f"🔍 compute_advantages called with student_policy_type: {self.student_policy_type}")
+        # print(f"🔍 agent type: {type(self.agent)}")
+        # print(f"🔍 next_obs type: {type(self.next_obs)}")
+        # print(f"🔍 next_obs keys: {list(self.next_obs.keys()) if isinstance(self.next_obs, dict) else 'not a dict'}")
         
         with torch.no_grad():
             # Call get_value with the correct parameters for PPO-RNN
             if self.student_policy_type == "ppo_rnn":
-                print(f"🔍 Calling get_value with PPO-RNN parameters")
+                # Remove excessive debug print
+                # print(f"🔍 Calling get_value with PPO-RNN parameters")
                 next_value = self.agent.get_value(self.next_obs, self.next_lstm_state, self.next_done).reshape(1, -1)
             else:
-                print(f"🔍 Calling get_value with PPO parameters")
+                # Remove excessive debug print
+                # print(f"🔍 Calling get_value with PPO parameters")
                 next_value = self.agent.get_value(self.next_obs).reshape(1, -1)
             
             advantages = torch.zeros_like(self.rewards)
@@ -288,7 +302,8 @@ class PPODistillTrainer:
 
     def update_policy(self, b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values):
         """Update the policy using pure distillation loss only."""
-        print("🚀 PPODistillTrainer.update_policy called!")
+        # Remove excessive debug print
+        # print("🚀 PPODistillTrainer.update_policy called!")
         
         # Optimizing the policy through distillation only
         assert self.config.num_envs % self.config.num_minibatches == 0
@@ -336,7 +351,8 @@ class PPODistillTrainer:
                 # Compute distillation loss
                 if student_logits is not None and expert_actions:
                     distill_loss = self.agent.compute_distillation_loss(student_logits, expert_actions)
-                    print(f"🎯 Distillation loss computed: {distill_loss.item():.4f}")
+                    # Remove excessive debug print - only print occasionally
+                    # print(f"🎯 Distillation loss computed: {distill_loss.item():.4f}")
                 else:
                     print("❌ CRITICAL ERROR: Cannot compute distillation loss!")
                     print(f"❌ student_logits is None: {student_logits is None}")

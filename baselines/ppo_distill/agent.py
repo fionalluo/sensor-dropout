@@ -226,7 +226,8 @@ class ExpertPolicyManager:
                     # Fallback: create a small zero tensor
                     obs_tensor[key] = torch.zeros(4, 1, device=self.device)
         # Only log after obs_tensor is fully constructed
-        print(f"{subset_name}: {list(obs_tensor.keys())}")
+        # Remove the excessive debug print that was printing keys on every call
+        # print(f"{subset_name}: {list(obs_tensor.keys())}")
         
         # Debug: Show feature count for each key
         total_features_debug = 0
@@ -345,7 +346,7 @@ class ExpertPolicyManager:
     
     def get_all_expert_actions(self, obs: Dict, lstm_states: Optional[Dict] = None) -> Dict[str, torch.Tensor]:
         """
-        Get action logits from all expert policies for the same observation.
+        Get action logits from all expert policies for distillation.
         
         Args:
             obs: Observation dictionary
@@ -356,9 +357,6 @@ class ExpertPolicyManager:
         """
         expert_actions = {}
         new_lstm_states = {}
-        
-        # Log what keys are being passed to each expert
-        print("🔍 Keys being passed to each expert:")
         
         for subset_name in self.expert_policies.keys():
             lstm_state = lstm_states.get(subset_name) if lstm_states else None
@@ -403,20 +401,18 @@ class ConfigurationScheduler:
         Args:
             episode_done: Whether the current episode is done (for episode-level cycling)
         """
-        print(f"🔄 ConfigurationScheduler.cycle_config called with episode_done={episode_done}")
-        print(f"🔄 cycle_mode={self.cycle_mode}, current_idx={self.current_config_idx}")
+        # Remove excessive debug prints - only log when there's an actual change
+        old_config_name = self.config_names[self.current_config_idx]
         
         if self.cycle_mode == 'episode' and episode_done:
-            print(f"🔄 Episode done, cycling from {self.config_names[self.current_config_idx]}")
             self.current_config_idx = (self.current_config_idx + 1) % len(self.config_names)
             self.episode_count += 1
-            print(f"🔄 Now using config: {self.config_names[self.current_config_idx]}")
+            new_config_name = self.config_names[self.current_config_idx]
+            print(f"✅ Cycled to configuration: {new_config_name} (episode {self.episode_count})")
         elif self.cycle_mode == 'batch':
-            print(f"🔄 Batch mode cycling from {self.config_names[self.current_config_idx]}")
             self.current_config_idx = (self.current_config_idx + 1) % len(self.config_names)
-            print(f"🔄 Now using config: {self.config_names[self.current_config_idx]}")
-        else:
-            print(f"🔄 No cycling: episode_done={episode_done}, cycle_mode={self.cycle_mode}")
+            new_config_name = self.config_names[self.current_config_idx]
+            print(f"✅ Cycled to configuration: {new_config_name} (batch mode)")
 
 
 class PPODistillAgent:
@@ -509,25 +505,21 @@ class PPODistillAgent:
     
     def cycle_config(self, episode_done: bool = False):
         """Cycle to the next configuration."""
-        print(f"🔄 cycle_config called with episode_done={episode_done}")
-        print(f"🔄 Current cycle_mode: {self.config_scheduler.cycle_mode}")
-        print(f"🔄 Current config_idx: {self.config_scheduler.current_config_idx}")
-        print(f"🔄 Total configs: {len(self.config_scheduler.config_names)}")
-        
+        # Remove excessive debug prints
         old_config_name = self.current_config_name
         self.config_scheduler.cycle_config(episode_done)
         self.current_config_name, self.current_eval_keys = self.get_current_config()
         
-        # Print detailed logging when configuration changes
+        # Only print detailed logging when configuration actually changes
         if old_config_name != self.current_config_name:
-            print(f"\n🔄 Cycling to configuration: {self.current_config_name}")
-            print(f"📋 Expert policy to mimic: {self.current_config_name}")
-            print(f"🔍 Observation filtering patterns:")
-            print(f"   MLP keys: {self.current_eval_keys['mlp_keys']}")
-            print(f"   CNN keys: {self.current_eval_keys['cnn_keys']}")
-            print("-" * 50)
-        else:
-            print(f"🔄 No config change - still using: {self.current_config_name}")
+            # Remove excessive debug prints
+            # print(f"\n🔄 Cycling to configuration: {self.current_config_name}")
+            # print(f"📋 Expert policy to mimic: {self.current_config_name}")
+            # print(f"🔍 Observation filtering patterns:")
+            # print(f"   MLP keys: {self.current_eval_keys['mlp_keys']}")
+            # print(f"   CNN keys: {self.current_eval_keys['cnn_keys']}")
+            # print("-" * 50)
+            pass
     
     def _mask_observations(self, obs: Dict, eval_keys: Dict) -> Dict:
         """
