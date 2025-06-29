@@ -117,7 +117,7 @@ defaults:
 # Tiger Door Key
 gymnasium_tigerdoorkey: &tigerdoorkey_base
   task: gymnasium_TigerDoorKey-v0
-  total_timesteps: 400000
+  total_timesteps: 1000000
   num_envs: 8
   num_steps: 512
   learning_rate: 3e-4
@@ -133,8 +133,8 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
   max_grad_norm: 0.5
   target_kl: 0.015
   eval:
-    eval_interval: 50
-    num_eval_episodes: 10
+    eval_interval: 200
+    num_eval_episodes: 30
     eval_envs: 4
     num_eval_configs: 4
   full_keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
@@ -203,8 +203,8 @@ gymnasium_maze: &maze_base
   vf_coef: 0.5
   max_grad_norm: 0.5
   eval:
-    eval_interval: 100
-    num_eval_episodes: 10
+    eval_interval: 200
+    num_eval_episodes: 30
     eval_envs: 4
     num_eval_configs: 6  # sets of eval keys
   

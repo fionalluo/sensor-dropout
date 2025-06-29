@@ -12,6 +12,7 @@ from typing import Dict, Tuple, Optional
 import time
 from collections import deque
 import torch.optim as optim
+import wandb
 
 from baselines.ppo_distill.agent import PPODistillAgent
 from baselines.shared.eval_utils import run_initial_evaluation, run_periodic_evaluation
@@ -385,12 +386,10 @@ class PPODistillTrainer:
                 if self.writer:
                     self.writer.add_scalar(key, value, self.global_step)
                 if self.use_wandb:
-                    import wandb
                     wandb.log({key: value, "global_step": self.global_step})
             else:
                 # For non-numeric values, only log to wandb as text
                 if self.use_wandb:
-                    import wandb
                     wandb.log({key: str(value), "global_step": self.global_step})
 
     def train(self, num_iterations: int = None):
