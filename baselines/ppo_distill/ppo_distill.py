@@ -13,14 +13,13 @@ import time
 from collections import deque
 import torch.optim as optim
 
-from baselines.ppo_rnn.ppo_rnn import PPORnnTrainer
 from baselines.ppo_distill.agent import PPODistillAgent
 
 
-class PPODistillTrainer(PPORnnTrainer):
-    """PPO Distill Trainer that learns from expert subset policies."""
+class PPODistillTrainer:
+    """PPO Distill Trainer that handles distillation from expert policies."""
     
-    def __init__(self, envs, config, expert_policy_dir: str, device: str = 'cpu'):
+    def __init__(self, envs, config, expert_policy_dir: str, device: str = 'cpu', student_policy_type: str = "ppo_rnn"):
         """
         Initialize the PPO Distill trainer.
         
@@ -29,30 +28,72 @@ class PPODistillTrainer(PPORnnTrainer):
             config: Configuration
             expert_policy_dir: Directory containing expert subset policies
             device: Device to use
+            student_policy_type: Type of student agent ("ppo" or "ppo_rnn")
         """
-        # Store config and envs for parent initialization
+        # Store parameters
+        self.expert_policy_dir = expert_policy_dir
+        self.student_policy_type = student_policy_type
+        self.device = device
         self.config = config
         self.envs = envs
         
-        # Initialize parent class first (but skip agent creation)
-        super().__init__(envs, config, seed=getattr(config, 'seed', 42), training_env=None)
+        # Create the distill agent
+        self.agent = PPODistillAgent(envs, config, expert_policy_dir, device, student_policy_type)
+        self.agent.base_agent.to(device)
         
-        # Now create the distill agent and override the parent's agent
-        self.agent = PPODistillAgent(envs, config, expert_policy_dir, device)
-        self.device = self.agent.device
-        self.agent = self.agent.to(self.device)
+        # Initialize the appropriate base trainer
+        if student_policy_type == "ppo":
+            from baselines.ppo.ppo import PPOTrainer
+            seed = getattr(config, 'seed', 42)
+            self.base_trainer = PPOTrainer(envs, config, seed)
+            # Replace the base trainer's agent with our distill agent
+            self.base_trainer.agent = self.agent
+        else:
+            from baselines.ppo_rnn.ppo_rnn import PPORnnTrainer
+            self.base_trainer = PPORnnTrainer(envs, config, seed=getattr(config, 'seed', 42))
+            # Replace the base trainer's agent with our distill agent
+            self.base_trainer.agent = self.agent
+        
+        # Copy all attributes from the base trainer
+        for attr_name in dir(self.base_trainer):
+            if not attr_name.startswith('_'):
+                attr_value = getattr(self.base_trainer, attr_name)
+                if not callable(attr_value) or attr_name in ['collect_rollout', 'update_policy']:
+                    setattr(self, attr_name, attr_value)
         
         # Reinitialize optimizer with the new agent
         self.optimizer = optim.Adam(
-            self.agent.parameters(),
+            self.agent.base_agent.parameters(),
             lr=config.learning_rate,
             eps=getattr(config, 'eps', 1e-5)
         )
         
-        # Distillation-specific parameters
+        # Distillation parameters
         self.distill_coef = getattr(config, 'distill_coef', 0.1)
         self.expert_coef = getattr(config, 'expert_coef', 0.5)
+        
+        # Configuration cycling
         self.cycle_mode = getattr(config, 'cycle_mode', 'episode')
+        
+        # Initialize LSTM states for PPO-RNN
+        if student_policy_type == "ppo_rnn":
+            self.lstm_hidden = torch.zeros(
+                self.agent.lstm.num_layers, 
+                self.config.num_envs, 
+                self.agent.lstm.hidden_size, 
+                device=self.device
+            )
+            self.lstm_cell = torch.zeros(
+                self.agent.lstm.num_layers, 
+                self.config.num_envs, 
+                self.agent.lstm.hidden_size, 
+                device=self.device
+            )
+            self.next_lstm_state = (self.lstm_hidden, self.lstm_cell)
+        else:
+            self.lstm_hidden = None
+            self.lstm_cell = None
+            self.next_lstm_state = None
         
         # Configuration tracking
         self.current_config_name = None
@@ -103,9 +144,10 @@ class PPODistillTrainer(PPORnnTrainer):
                     self.obs[key][step] = next_obs[key]
             self.dones[step] = next_done
             
-            # Store LSTM states
-            self.lstm_hidden[step] = self.next_lstm_state[0].transpose(0, 1)
-            self.lstm_cell[step] = self.next_lstm_state[1].transpose(0, 1)
+            # Store LSTM states (only for PPO-RNN)
+            if self.student_policy_type == "ppo_rnn" and self.next_lstm_state is not None:
+                self.lstm_hidden[step] = self.next_lstm_state[0].transpose(0, 1)
+                self.lstm_cell[step] = self.next_lstm_state[1].transpose(0, 1)
             
             # Get current configuration
             config_name, _ = self.agent.get_current_config()
@@ -182,10 +224,13 @@ class PPODistillTrainer(PPORnnTrainer):
                 
                 # Get initial LSTM state for this mini-batch
                 # Use the stored LSTM states from the beginning of the rollout
-                initial_lstm_state = (
-                    self.lstm_hidden[0, mbenvinds].transpose(0, 1).clone(),
-                    self.lstm_cell[0, mbenvinds].transpose(0, 1).clone()
-                )
+                if self.student_policy_type == "ppo_rnn":
+                    initial_lstm_state = (
+                        self.lstm_hidden[0, mbenvinds].transpose(0, 1).clone(),
+                        self.lstm_cell[0, mbenvinds].transpose(0, 1).clone()
+                    )
+                else:
+                    initial_lstm_state = None
                 
                 result = self.agent.get_action_and_value(
                     mb_obs,
@@ -241,7 +286,7 @@ class PPODistillTrainer(PPORnnTrainer):
                 
                 self.optimizer.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_norm_(self.agent.parameters(), self.config.max_grad_norm)
+                nn.utils.clip_grad_norm_(self.agent.base_agent.parameters(), self.config.max_grad_norm)
                 self.optimizer.step()
             
             if hasattr(self.config, 'target_kl') and self.config.target_kl is not None and approx_kl > self.config.target_kl:
@@ -273,6 +318,7 @@ class PPODistillTrainer(PPORnnTrainer):
         """
         print("Starting PPO Distill training...")
         print(f"Expert policy directory: {self.agent.expert_manager.policy_dir}")
+        print(f"Student policy type: {self.student_policy_type}")
         print(f"Cycle mode: {self.cycle_mode}")
         print(f"Distillation coefficient: {self.distill_coef}")
         print(f"Expert coefficient: {self.expert_coef}")
@@ -281,11 +327,40 @@ class PPODistillTrainer(PPORnnTrainer):
         if num_iterations is not None:
             self.config.total_timesteps = num_iterations * self.config.num_envs * self.config.num_steps
         
-        # Call parent's train method which will use our overridden collect_rollout and update_policy
-        return super().train()
+        # Delegate to the appropriate base trainer
+        if self.student_policy_type == "ppo":
+            # For PPO, we need to override the collect_rollout and update_policy methods
+            # but use the base trainer's train method
+            original_collect_rollout = self.base_trainer.collect_rollout
+            original_update_policy = self.base_trainer.update_policy
+            
+            self.base_trainer.collect_rollout = self.collect_rollout
+            self.base_trainer.update_policy = self.update_policy
+            
+            try:
+                return self.base_trainer.train()
+            finally:
+                # Restore original methods
+                self.base_trainer.collect_rollout = original_collect_rollout
+                self.base_trainer.update_policy = original_update_policy
+        else:
+            # For PPO-RNN, we can use the base trainer's train method directly
+            # but we need to override the collect_rollout and update_policy methods
+            original_collect_rollout = self.base_trainer.collect_rollout
+            original_update_policy = self.base_trainer.update_policy
+            
+            self.base_trainer.collect_rollout = self.collect_rollout
+            self.base_trainer.update_policy = self.update_policy
+            
+            try:
+                return self.base_trainer.train()
+            finally:
+                # Restore original methods
+                self.base_trainer.collect_rollout = original_collect_rollout
+                self.base_trainer.update_policy = original_update_policy
 
 
-def train_ppo_distill(envs, config, seed: int, expert_policy_dir: str, num_iterations: int = 1000):
+def train_ppo_distill(envs, config, seed: int, expert_policy_dir: str, student_policy_type: str = "ppo_rnn", num_iterations: int = 1000):
     """
     Train a PPO Distill agent.
     
@@ -294,6 +369,7 @@ def train_ppo_distill(envs, config, seed: int, expert_policy_dir: str, num_itera
         config: Configuration
         seed: Random seed
         expert_policy_dir: Directory containing expert subset policies
+        student_policy_type: Type of student agent to distill into ("ppo" or "ppo_rnn")
         num_iterations: Number of training iterations
         
     Returns:
@@ -303,8 +379,8 @@ def train_ppo_distill(envs, config, seed: int, expert_policy_dir: str, num_itera
     torch.manual_seed(seed)
     np.random.seed(seed)
     
-    # Create trainer
-    trainer = PPODistillTrainer(envs, config, expert_policy_dir, device='cuda' if torch.cuda.is_available() else 'cpu')
+    # Create trainer with the specified student policy type
+    trainer = PPODistillTrainer(envs, config, expert_policy_dir, device='cuda' if torch.cuda.is_available() else 'cpu', student_policy_type=student_policy_type)
     
     # Train
     trainer.train(num_iterations)

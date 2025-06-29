@@ -70,6 +70,13 @@ def parse_args():
         help="Directory containing expert subset policies"
     )
     parser.add_argument(
+        "--student_policy_type", 
+        type=str, 
+        default="ppo_rnn",
+        choices=["ppo", "ppo_rnn"],
+        help="Type of student agent to distill into (ppo or ppo_rnn)"
+    )
+    parser.add_argument(
         "--seed", 
         type=int, 
         default=None,
@@ -217,6 +224,9 @@ def main():
         elif arg == '--expert_policy_dir' and i + 1 < len(argv):
             # Skip expert_policy_dir and its value
             i += 2
+        elif arg == '--student_policy_type' and i + 1 < len(argv):
+            # Skip student_policy_type and its value
+            i += 2
         else:
             filtered_argv.append(arg)
             i += 1
@@ -255,6 +265,7 @@ def main():
     
     print(f"Training PPO Distill agent...")
     print(f"Task: {config.task}")
+    print(f"Student policy type: {args.student_policy_type}")
     print(f"Total timesteps: {config.total_timesteps}")
     print(f"Number of iterations: {num_iterations}")
     print(f"Number of environments: {config.num_envs}")
@@ -266,6 +277,7 @@ def main():
         config=config,
         seed=config.seed,
         expert_policy_dir=args.expert_policy_dir,
+        student_policy_type=args.student_policy_type,
         num_iterations=num_iterations
     )
     

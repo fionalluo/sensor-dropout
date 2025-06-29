@@ -458,4 +458,60 @@ def load_metadata_from_dir(policy_dir: str) -> Optional[Dict[str, Any]]:
                 print(f"Failed to load metadata with custom parser: {e2}")
                 return None
     
-    return None 
+    return None
+
+
+def load_policy_like_subset_policies(policy_dir: str, policy_type: str, device: str = 'cpu'):
+    """
+    Load policies using the exact same approach as subset_policies.
+    This is the working approach that matches how policies were trained.
+    
+    Args:
+        policy_dir: Directory containing trained policies
+        policy_type: 'ppo' or 'ppo_rnn'
+        device: Device to load policies on
+        
+    Returns:
+        dict: Dictionary mapping subset names to (agent, config, eval_keys) tuples
+    """
+    # Import here to avoid circular imports
+    from subset_policies.load_subset_policy import SubsetPolicyLoader
+    
+    # Create policy loader using the working approach
+    loader = SubsetPolicyLoader(policy_dir, device=device)
+    
+    # Load all policies
+    loaded_policies = {}
+    for subset_name in loader.policies.keys():
+        agent, config, eval_keys = loader.load_policy(subset_name)
+        loaded_policies[subset_name] = (agent, config, eval_keys)
+    
+    return loaded_policies
+
+
+def load_single_policy_like_subset_policies(policy_path: str, policy_type: str, device: str = 'cpu'):
+    """
+    Load a single policy using the exact same approach as subset_policies.
+    
+    Args:
+        policy_path: Path to the policy file
+        policy_type: 'ppo' or 'ppo_rnn'
+        device: Device to load policy on
+        
+    Returns:
+        tuple: (agent, config, eval_keys)
+    """
+    # Import here to avoid circular imports
+    from subset_policies.load_subset_policy import SubsetPolicyLoader
+    
+    # Create a temporary loader for this single policy
+    policy_dir = os.path.dirname(policy_path)
+    loader = SubsetPolicyLoader(policy_dir, device=device)
+    
+    # Extract subset name from path
+    subset_name = os.path.basename(os.path.dirname(policy_path))
+    
+    # Load the policy
+    agent, config, eval_keys = loader.load_policy(subset_name)
+    
+    return agent, config, eval_keys 

@@ -9,10 +9,10 @@ import torch
 from pathlib import Path
 
 # Add the project root to the path
-project_root = Path(__file__).parent
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from subset_policies.load_subset_policy import SubsetPolicyLoader
+from baselines.shared.policy_utils import load_policy_like_subset_policies
 
 def test_ppo_loading():
     """Test loading PPO policies from the policies/ppo/tigerdoorkey directory."""
@@ -26,21 +26,17 @@ def test_ppo_loading():
     print(f"Testing PPO policy loading from: {policy_dir}")
     print(f"Using device: {device}")
     
-    # Create policy loader
-    loader = SubsetPolicyLoader(policy_dir, device=device)
+    # Load all policies using the shared utility
+    loaded_policies = load_policy_like_subset_policies(policy_dir, 'ppo', device)
     
-    # List available policies
-    print("\nAvailable policies:")
-    loader.list_policies()
+    print(f"\nLoaded {len(loaded_policies)} policies: {list(loaded_policies.keys())}")
     
-    # Test loading each policy
-    for subset_name in loader.policies.keys():
+    # Test each loaded policy
+    for subset_name, (agent, config, eval_keys) in loaded_policies.items():
         print(f"\n{'='*50}")
         print(f"Testing policy: {subset_name}")
         print(f"{'='*50}")
         
-        # Load the policy
-        agent, config, eval_keys = loader.load_policy(subset_name)
         print(f"✓ Successfully loaded {subset_name}")
         print(f"  MLP keys: {eval_keys['mlp_keys']}")
         print(f"  CNN keys: {eval_keys['cnn_keys']}")

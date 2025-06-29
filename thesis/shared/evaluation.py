@@ -75,12 +75,21 @@ def evaluate_policy(agent, envs, device, config, log_video=False):
     # Initialize LSTM state for RNN agents
     lstm_state = None
     if hasattr(agent, 'get_initial_lstm_state'):
-        # Get initial state and expand to correct batch size
-        initial_state = agent.get_initial_lstm_state(envs.num_envs)
-        lstm_state = (
-            initial_state[0].expand(-1, envs.num_envs, -1),
-            initial_state[1].expand(-1, envs.num_envs, -1)
-        )
+        try:
+            # Try calling with num_envs argument first (for PPO-RNN agents)
+            initial_state = agent.get_initial_lstm_state(envs.num_envs)
+            lstm_state = (
+                initial_state[0].expand(-1, envs.num_envs, -1),
+                initial_state[1].expand(-1, envs.num_envs, -1)
+            )
+        except TypeError:
+            # If that fails, try calling without arguments (for PPO agents that return None)
+            initial_state = agent.get_initial_lstm_state()
+            if initial_state is not None:
+                lstm_state = (
+                    initial_state[0].expand(-1, envs.num_envs, -1),
+                    initial_state[1].expand(-1, envs.num_envs, -1)
+                )
     
     # Run evaluation until we have enough episodes
     while len(episode_returns) < num_episodes:

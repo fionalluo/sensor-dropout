@@ -296,7 +296,11 @@ class PPOTrainer:
                 # Optimize
                 self.optimizer.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_norm_(self.agent.parameters(), self.config.max_grad_norm)
+                # Handle both regular PPO agents and PPODistillAgent
+                if hasattr(self.agent, 'base_agent'):
+                    nn.utils.clip_grad_norm_(self.agent.base_agent.parameters(), self.config.max_grad_norm)
+                else:
+                    nn.utils.clip_grad_norm_(self.agent.parameters(), self.config.max_grad_norm)
                 self.optimizer.step()
             
             if self.config.target_kl is not None:
@@ -323,6 +327,10 @@ class PPOTrainer:
     def train(self):
         """Main training loop."""
         self.start_time = time.time()
+        
+        # Calculate num_iterations from total_timesteps if not set
+        if not hasattr(self.config, 'num_iterations'):
+            self.config.num_iterations = self.config.total_timesteps // (self.config.num_envs * self.config.num_steps)
         
         # Run initial evaluation using shared utility
         from baselines.ppo.train import make_envs
