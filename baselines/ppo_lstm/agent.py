@@ -99,35 +99,24 @@ class PPOLSTMAgent(BaseAgent):
         else:
             self.lightweight_cnn_encoder = None
         
-        # MLP encoder for non-image observations
+        # MLP encoder for non-image observations - SIMPLIFIED
         if self.mlp_keys:
-            layers = []
-            input_dim = self.total_mlp_size
-            
-            # Add MLP layers
-            for _ in range(config.encoder.mlp_layers):
-                layers.extend([
-                    layer_init(nn.Linear(input_dim, config.encoder.mlp_units)),
-                    self.act,
-                    nn.LayerNorm(config.encoder.mlp_units) if config.encoder.norm == 'layer' else nn.Identity()
-                ])
-                input_dim = config.encoder.mlp_units
-            
-            self.mlp_encoder = nn.Sequential(*layers)
+            self.mlp_encoder = nn.Sequential(
+                layer_init(nn.Linear(self.total_mlp_size, config.encoder.mlp_units)),
+                self.act,
+                layer_init(nn.Linear(config.encoder.mlp_units, config.encoder.mlp_units)),
+                self.act,
+            )
         else:
             self.mlp_encoder = None
         
-        # Calculate total input dimension for latent projector
+        # Calculate total input dimension for encoder output
         total_input_dim = self.cnn_output_dim + (config.encoder.mlp_units if self.mlp_encoder is not None else 0)
         
-        # Project concatenated features to latent space
-        self.latent_projector = nn.Sequential(
+        # SIMPLIFIED: Direct projection to encoder output dimension
+        self.encoder_output = nn.Sequential(
             layer_init(nn.Linear(total_input_dim, config.encoder.output_dim)),
             self.act,
-            nn.LayerNorm(config.encoder.output_dim) if config.encoder.norm == 'layer' else nn.Identity(),
-            layer_init(nn.Linear(config.encoder.output_dim, config.encoder.output_dim)),
-            self.act,
-            nn.LayerNorm(config.encoder.output_dim) if config.encoder.norm == 'layer' else nn.Identity()
         )
 
         # LSTM layer
@@ -140,36 +129,33 @@ class PPOLSTMAgent(BaseAgent):
             elif "weight" in name:
                 nn.init.orthogonal_(param, 1.0)
 
-        # Override actor and critic networks to work with LSTM output dimension
+        # SIMPLIFIED: Actor and critic networks (Version 1 style - single hidden layer)
         lstm_output_dim = config.lstm.hidden_size
+        hidden_dim = lstm_output_dim // 2  # Simple halving like Version 1
         
-        # Actor and critic networks operating on LSTM output
-        self.critic = nn.Sequential(
-            layer_init(nn.Linear(lstm_output_dim, lstm_output_dim // 2)),
+        self.actor = nn.Sequential(
+            layer_init(nn.Linear(lstm_output_dim, hidden_dim)),
             self.act,
-            layer_init(nn.Linear(lstm_output_dim // 2, 1), std=1.0),
+            layer_init(nn.Linear(hidden_dim, envs.act_space['action'].shape[0]), std=0.01),
         )
-        
-        if self.is_discrete:
-            self.actor = nn.Sequential(
-                layer_init(nn.Linear(lstm_output_dim, lstm_output_dim // 2)),
-                self.act,
-                layer_init(nn.Linear(lstm_output_dim // 2, envs.act_space['action'].shape[0]), std=0.01),
-            )
-        else:
+        self.critic = nn.Sequential(
+            layer_init(nn.Linear(lstm_output_dim, hidden_dim)),
+            self.act,
+            layer_init(nn.Linear(hidden_dim, 1), std=1.0),
+        )
+        if not self.is_discrete:
             action_size = np.prod(envs.act_space['action'].shape)
             self.actor_mean = nn.Sequential(
-                layer_init(nn.Linear(lstm_output_dim, lstm_output_dim // 2)),
+                layer_init(nn.Linear(lstm_output_dim, hidden_dim)),
                 self.act,
-                layer_init(nn.Linear(lstm_output_dim // 2, action_size), std=0.01),
+                layer_init(nn.Linear(hidden_dim, action_size), std=0.01),
             )
             self.actor_logstd = nn.Parameter(torch.zeros(1, action_size))
 
-        # Projection layer for non-LSTM mode (encoder output -> LSTM output dimension)
+        # SIMPLIFIED: Direct projection for non-LSTM mode
         self.encoder_to_lstm_projection = nn.Sequential(
             layer_init(nn.Linear(config.encoder.output_dim, lstm_output_dim)),
             self.act,
-            nn.LayerNorm(lstm_output_dim) if config.encoder.norm == 'layer' else nn.Identity()
         )
 
     def encode_observations(self, x):
@@ -198,78 +184,51 @@ class PPOLSTMAgent(BaseAgent):
             # Process CNN observations
             cnn_features = []
             
-            # Process heavyweight CNN observations (large images)
-            if self.heavyweight_cnn_keys and self.heavyweight_cnn_encoder is not None:
-                heavyweight_inputs = []
+            # Process heavyweight CNN observations
+            if self.heavyweight_cnn_encoder is not None:
                 for key in self.heavyweight_cnn_keys:
-                    if key not in x:  # Skip if key doesn't exist
-                        continue
-                    batch_size = x[key].shape[0]
-                    img = x[key].permute(0, 3, 1, 2) / 255.0  # Convert to [B, C, H, W] and normalize
-                    heavyweight_inputs.append(img)
-                
-                if heavyweight_inputs:  # Only process if we have any heavyweight CNN features
-                    # Stack along channel dimension
-                    heavyweight_input = torch.cat(heavyweight_inputs, dim=1)
-                    heavyweight_features = self.heavyweight_cnn_encoder(heavyweight_input)
-                    cnn_features.append(heavyweight_features)
+                    if key in x:
+                        cnn_features.append(self.heavyweight_cnn_encoder(x[key]))
             
-            # Process lightweight CNN observations (small images)
-            if self.lightweight_cnn_keys and self.lightweight_cnn_encoder is not None:
+            # Process lightweight CNN observations
+            if self.lightweight_cnn_encoder is not None:
                 lightweight_inputs = []
                 for key in self.lightweight_cnn_keys:
-                    if key not in x:  # Skip if key doesn't exist
-                        continue
-                    batch_size = x[key].shape[0]
-                    img = x[key].permute(0, 3, 1, 2) / 255.0  # Convert to [B, C, H, W] and normalize
-                    lightweight_inputs.append(img)
+                    if key in x:
+                        lightweight_inputs.append(x[key])
                 
-                if lightweight_inputs:  # Only process if we have any lightweight CNN features
-                    # Stack along channel dimension
-                    lightweight_input = torch.cat(lightweight_inputs, dim=1)
-                    lightweight_features = self.lightweight_cnn_encoder(lightweight_input)
-                    cnn_features.append(lightweight_features)
-            
-            # Combine all CNN features
-            if cnn_features:
-                cnn_features = torch.cat(cnn_features, dim=1)
-            else:
-                cnn_features = None
+                if lightweight_inputs:
+                    # Concatenate lightweight images along channel dimension
+                    lightweight_concat = torch.cat(lightweight_inputs, dim=-1)
+                    cnn_features.append(self.lightweight_cnn_encoder(lightweight_concat))
             
             # Process MLP observations
-            mlp_features = None
-            if self.mlp_keys and self.mlp_encoder is not None:
-                mlp_features = []
-                batch_size = None
+            mlp_features = []
+            if self.mlp_encoder is not None:
                 for key in self.mlp_keys:
-                    if key not in x:  # Skip if key doesn't exist
-                        continue
-                    if batch_size is None:
-                        batch_size = x[key].shape[0]
-                    # Ensure the observation is flattened
-                    if x[key].dim() > 2:
-                        mlp_features.append(x[key].view(batch_size, -1))
-                    else:
-                        mlp_features.append(x[key])
+                    if key in x:
+                        # Flatten the observation
+                        if len(x[key].shape) > 2:
+                            batch_size = x[key].shape[0]
+                            flattened = x[key].view(batch_size, -1)
+                        else:
+                            flattened = x[key]
+                        mlp_features.append(flattened)
                 
-                if mlp_features:  # Only process if we have any MLP features
-                    mlp_features = torch.cat(mlp_features, dim=1)
-                    # Ensure the input size matches what the MLP encoder expects
-                    if mlp_features.shape[1] != self.total_mlp_size:
-                        raise ValueError(f"MLP input size mismatch. Expected {self.total_mlp_size}, got {mlp_features.shape[1]}")
-                    mlp_features = self.mlp_encoder(mlp_features)
-                        
-            # Handle the case where neither exists
-            if cnn_features is None and mlp_features is None:
-                raise ValueError("No valid observations found in input dictionary")
+                if mlp_features:
+                    # Concatenate all MLP features
+                    mlp_concat = torch.cat(mlp_features, dim=-1)
+                    mlp_features = [self.mlp_encoder(mlp_concat)]
             
-            # Concatenate features if both exist, otherwise use whichever exists
-            if cnn_features is not None and mlp_features is not None:
-                features = torch.cat([cnn_features, mlp_features], dim=1)
-            elif cnn_features is not None:
-                features = cnn_features
-            else:  # mlp_features is not None
-                features = mlp_features
+            # Concatenate all features
+            all_features = cnn_features + mlp_features
+            if all_features:
+                features = torch.cat(all_features, dim=-1)
+            else:
+                # Handle case where no features are available
+                batch_size = next(iter(x.values())).shape[0] if x else 1
+                features = torch.zeros(batch_size, 0, device=self.device)
+        
         else:
             # Handle tensor input (assumed to be MLP features)
             if self.mlp_encoder is None:
@@ -279,8 +238,8 @@ class PPOLSTMAgent(BaseAgent):
                 x = x.view(batch_size, -1)
             features = self.mlp_encoder(x)
         
-        # Project to latent space
-        latent = self.latent_projector(features)
+        # Project to encoder output dimension
+        latent = self.encoder_output(features)
         return latent 
 
     def get_states(self, x, lstm_state, done):
@@ -369,4 +328,21 @@ class PPOLSTMAgent(BaseAgent):
             probs = Normal(action_mean, action_std)
             if action is None:
                 action = probs.sample()
-            return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(hidden), lstm_state 
+            return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(hidden), lstm_state
+
+    def get_initial_lstm_state(self, batch_size=None):
+        """Get initial LSTM state (zeros) for a given batch size.
+        
+        Args:
+            batch_size: Number of environments/batch size. If None, returns a default size of 1.
+            
+        Returns:
+            tuple: (hidden_state, cell_state) initialized to zeros
+        """
+        if batch_size is None:
+            batch_size = 1  # Default for evaluation
+        
+        return (
+            torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size, device=self.device),
+            torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size, device=self.device)
+        ) 

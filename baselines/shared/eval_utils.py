@@ -170,6 +170,9 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
     if debug:
         print(f"Running evaluation across {num_eval_configs} observation subsets...")
     
+    all_episode_returns = []
+    all_episode_lengths = []
+    
     for subset_idx in range(1, num_eval_configs + 1):
         env_name = f"env{subset_idx}"
         
@@ -395,6 +398,10 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         env_episode_returns = np.array(env_episode_returns)
         env_episode_lengths = np.array(env_episode_lengths)
         
+        # Collect for overall stats
+        all_episode_returns.extend(env_episode_returns.tolist())
+        all_episode_lengths.extend(env_episode_lengths.tolist())
+        
         env_metrics[env_name] = {
             'mean_return': np.mean(env_episode_returns),
             'std_return': np.std(env_episode_returns),
@@ -431,6 +438,12 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
                     writer.add_video(f"full_eval/{env_name}/{key}", video_tensor, global_step, fps=4)
         
         eval_envs.close()
+    
+    # Print overall mean and std return across all evaluation environments
+    if all_episode_returns:
+        overall_mean = np.mean(all_episode_returns)
+        overall_std = np.std(all_episode_returns)
+        print(f"  OVERALL: mean_return={overall_mean:.2f}, std_return={overall_std:.2f}")
     
     # Return only the individual environment metrics for subset evaluations
     # No overall metrics should be calculated for subset evaluations

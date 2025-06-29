@@ -71,14 +71,14 @@ defaults:
   use_wandb: true
   wandb_project: sensor-dropout
 
-  # PPO Encoder Architecture
+  # PPO Encoder Architecture - SIMPLIFIED
   encoder:
     act: "silu"  # Activation function
-    norm: "layer"  # Normalization type
-    output_dim: 512  # Final output dimension
-    mlp_layers: 2  # Number of MLP layers
-    mlp_units: 256  # Number of units per MLP layer
-    cnn_depth: 48  # Base depth for CNN
+    norm: "none"  # No normalization for simplicity
+    output_dim: 256  # Reduced from 512 for simplicity
+    mlp_layers: 2  # Keep 2 layers but simplified
+    mlp_units: 128  # Reduced from 256 for simplicity
+    cnn_depth: 32  # Reduced from 48 for simplicity
     cnn_blocks: 0  # Number of residual blocks
     resize: "bilinear"  # Resize strategy
     minres: 4  # Minimum resolution

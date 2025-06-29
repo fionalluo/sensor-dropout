@@ -208,7 +208,7 @@ gymnasium_maze: &maze_base
 # Blind Pick environment
 gymnasium_blindpick: &blindpick_base
   task: gymnasium_FOFixedGripper2DBlind7cmPick-v0
-  total_timesteps: 200000
+  total_timesteps: 5000000
   num_envs: 4
   num_steps: 128
   log_keys_video: [camera_front]

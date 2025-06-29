@@ -181,7 +181,9 @@ def main(argv=None):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = config.torch_deterministic
+    torch.backends.cudnn.benchmark = False
 
     # Create environment
     envs = make_envs(config, num_envs=config.num_envs)
