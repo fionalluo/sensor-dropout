@@ -113,7 +113,7 @@ class ExpertPolicyManager:
             self._expert_obs_debug_counter = 0
         self._expert_obs_debug_counter += 1
         if self._expert_obs_debug_counter % 10 == 0:
-            print(f"[Expert Obs Debug] subset_name: {subset_name}")
+            # print(f"[Expert Obs Debug] subset_name: {subset_name}")
             for k, v in filtered_obs.items():
                 if isinstance(v, torch.Tensor):
                     shape = tuple(v.shape)
@@ -124,7 +124,7 @@ class ExpertPolicyManager:
                 else:
                     shape = type(v)
                     sample = v
-                print(f"  key: {k}, shape: {shape}, sample: {sample}")
+                # print(f"  key: {k}, shape: {shape}, sample: {sample}")
 
         # Convert to tensor and add batch dimension (existing logic)
         obs_tensor = {}
@@ -585,8 +585,8 @@ class PPODistillAgent:
             raise RuntimeError(f"Expert logits for {config_name} is None")
 
         # Debug: Print mean/std of logits
-        print(f"[Distill Debug] Student logits mean: {student_logits.mean().item():.4f}, std: {student_logits.std().item():.4f}")
-        print(f"[Distill Debug] Expert logits mean: {expert_logits.mean().item():.4f}, std: {expert_logits.std().item():.4f}")
+        # print(f"[Distill Debug] Student logits mean: {student_logits.mean().item():.4f}, std: {student_logits.std().item():.4f}")
+        # print(f"[Distill Debug] Expert logits mean: {expert_logits.mean().item():.4f}, std: {expert_logits.std().item():.4f}")
 
         student_log_probs = F.log_softmax(student_logits, dim=-1)
         expert_probs = F.softmax(expert_logits, dim=-1)
@@ -594,7 +594,7 @@ class PPODistillAgent:
             student_log_probs, expert_probs,
             reduction='batchmean'
         )
-        print(f"[Distill Debug] Distillation loss: {distill_loss.item():.6f}")
+        # print(f"[Distill Debug] Distillation loss: {distill_loss.item():.6f}")
         return distill_loss
     
     def get_value(self, obs, lstm_state=None, done=None):

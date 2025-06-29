@@ -317,12 +317,6 @@ class PPODistillTrainer:
                 mb_envinds = envinds[start:end]
                 mb_inds = flatinds[:, mb_envinds].ravel()
 
-                # Get current parameter norm before update
-                param_norm_before = 0.0
-                for p in self.agent.parameters():
-                    param_norm_before += p.data.norm().item()
-                print(f"[Distill Debug] Student param norm before step: {param_norm_before:.6f}")
-
                 self.optimizer.zero_grad()
                 # Call get_action_and_value with correct arguments for agent type
                 if self.student_policy_type == "ppo_rnn":
@@ -334,20 +328,7 @@ class PPODistillTrainer:
                 distill_loss = self.agent.compute_distillation_loss(student_logits, expert_actions)
                 distill_loss.backward()
 
-                # Print gradient norm after backward
-                grad_norm = 0.0
-                for p in self.agent.parameters():
-                    if p.grad is not None:
-                        grad_norm += p.grad.norm().item()
-                print(f"[Distill Debug] Student grad norm after backward: {grad_norm:.6f}")
-
                 self.optimizer.step()
-
-                # Get parameter norm after update
-                param_norm_after = 0.0
-                for p in self.agent.parameters():
-                    param_norm_after += p.data.norm().item()
-                print(f"[Distill Debug] Student param norm after step: {param_norm_after:.6f}")
 
         # Log metrics for distillation training
         self.log_metrics({
@@ -418,11 +399,11 @@ class PPODistillTrainer:
                 self.optimizer.param_groups[0]["lr"] = lrnow
             
             # Collect experience using our custom collect_rollout with cycling
-            print(f"🔄 About to call collect_rollout for iteration {iteration}")
-            print(f"🔄 collect_rollout method: {self.collect_rollout}")
-            print(f"🔄 collect_rollout method location: {self.collect_rollout.__module__}")
+            # print(f"🔄 About to call collect_rollout for iteration {iteration}")
+            # print(f"🔄 collect_rollout method: {self.collect_rollout}")
+            # print(f"🔄 collect_rollout method location: {self.collect_rollout.__module__}")
             self.collect_rollout()
-            print(f"🔄 Finished collect_rollout for iteration {iteration}")
+            # print(f"🔄 Finished collect_rollout for iteration {iteration}")
             
             # For pure distillation, we don't need advantages or returns
             # We only need the observations and actions for distillation training
@@ -462,23 +443,18 @@ class PPODistillTrainer:
                     self.config,
                     log_video=False,
                     make_envs_func=make_envs_ppo_distill,
-                    writer=self.writer,
-                    use_wandb=self.use_wandb,
+                    writer=None,  # Do not log teacher metrics to tensorboard
+                    use_wandb=False,  # Prevent evaluate_agent from logging to wandb under 'eval/'
                     global_step=self.global_step
                 )
+                # Manually log all teacher metrics under eval_teacher/
                 if self.use_wandb:
                     import wandb
-                    # Log all teacher metrics under eval_teacher/
                     for metric_key in ["mean_return", "std_return", "mean_length", "std_length"]:
                         if metric_key in expert_eval_metrics:
                             wandb.log({
                                 f"eval_teacher/{metric_key}_{expert_config_name}": expert_eval_metrics[metric_key]
                             }, step=self.global_step)
-                        elif f"eval/{metric_key}" in expert_eval_metrics:
-                            wandb.log({
-                                f"eval_teacher/{metric_key}_{expert_config_name}": expert_eval_metrics[f"eval/{metric_key}"]
-                            }, step=self.global_step)
-                        # Do not log any teacher metrics under 'eval/'
             
             # Print progress with cycling info
             if iteration % getattr(self.config, 'log_interval', 10) == 0:
