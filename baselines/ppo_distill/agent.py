@@ -12,6 +12,7 @@ from typing import Dict, Tuple, Optional, List
 from types import SimpleNamespace
 import re
 import os
+import time
 
 from baselines.ppo_rnn.agent import PPORnnAgent
 from baselines.shared.eval_utils import filter_observations_by_keys, substitute_unprivileged_for_agent
@@ -167,11 +168,20 @@ class ConfigurationScheduler:
         Args:
             episode_done: Whether the current episode is done (for episode-level cycling)
         """
+        print(f"🔄 ConfigurationScheduler.cycle_config called with episode_done={episode_done}")
+        print(f"🔄 cycle_mode={self.cycle_mode}, current_idx={self.current_config_idx}")
+        
         if self.cycle_mode == 'episode' and episode_done:
+            print(f"🔄 Episode done, cycling from {self.config_names[self.current_config_idx]}")
             self.current_config_idx = (self.current_config_idx + 1) % len(self.config_names)
             self.episode_count += 1
+            print(f"🔄 Now using config: {self.config_names[self.current_config_idx]}")
         elif self.cycle_mode == 'batch':
+            print(f"🔄 Batch mode cycling from {self.config_names[self.current_config_idx]}")
             self.current_config_idx = (self.current_config_idx + 1) % len(self.config_names)
+            print(f"🔄 Now using config: {self.config_names[self.current_config_idx]}")
+        else:
+            print(f"🔄 No cycling: episode_done={episode_done}, cycle_mode={self.cycle_mode}")
 
 
 class PPODistillAgent:
@@ -232,6 +242,10 @@ class PPODistillAgent:
             cycle_mode=getattr(config, 'cycle_mode', 'episode')
         )
         
+        print(f"🔧 Expert configurations loaded: {list(self.expert_manager.expert_eval_keys.keys())}")
+        print(f"🔧 Cycle mode: {getattr(config, 'cycle_mode', 'episode')}")
+        print(f"🔧 Configuration scheduler initialized with {len(self.expert_manager.expert_eval_keys)} configs")
+        
         # Distillation parameters
         self.distill_coef = getattr(config, 'distill_coef', 0.1)
         self.expert_coef = getattr(config, 'expert_coef', 0.5)
@@ -245,12 +259,34 @@ class PPODistillAgent:
     
     def get_current_config(self) -> Tuple[str, Dict]:
         """Get the current configuration."""
-        return self.config_scheduler.get_current_config()
+        config_name, eval_keys = self.config_scheduler.get_current_config()
+        
+        # Debug logging to see if this is being called (immediate for debugging)
+        print(f"🔍 get_current_config called: {config_name}")
+        
+        return config_name, eval_keys
     
     def cycle_config(self, episode_done: bool = False):
         """Cycle to the next configuration."""
+        print(f"🔄 cycle_config called with episode_done={episode_done}")
+        print(f"🔄 Current cycle_mode: {self.config_scheduler.cycle_mode}")
+        print(f"🔄 Current config_idx: {self.config_scheduler.current_config_idx}")
+        print(f"🔄 Total configs: {len(self.config_scheduler.config_names)}")
+        
+        old_config_name = self.current_config_name
         self.config_scheduler.cycle_config(episode_done)
         self.current_config_name, self.current_eval_keys = self.get_current_config()
+        
+        # Print detailed logging when configuration changes
+        if old_config_name != self.current_config_name:
+            print(f"\n🔄 Cycling to configuration: {self.current_config_name}")
+            print(f"📋 Expert policy to mimic: {self.current_config_name}")
+            print(f"🔍 Observation filtering patterns:")
+            print(f"   MLP keys: {self.current_eval_keys['mlp_keys']}")
+            print(f"   CNN keys: {self.current_eval_keys['cnn_keys']}")
+            print("-" * 50)
+        else:
+            print(f"🔄 No config change - still using: {self.current_config_name}")
     
     def _mask_observations(self, obs: Dict, eval_keys: Dict) -> Dict:
         """
@@ -266,6 +302,15 @@ class PPODistillAgent:
         Returns:
             Dict: Masked observations with same structure as input
         """
+        # Debug logging to see if this method is being called (less frequent)
+        if not hasattr(self, '_last_mask_log_time'):
+            self._last_mask_log_time = 0
+        
+        current_time = time.time()
+        if current_time - self._last_mask_log_time > 10.0:  # Log every 10 seconds
+            print(f"🎭 _mask_observations called with config: {self.current_config_name}")
+            self._last_mask_log_time = current_time
+        
         # Step 1: Filter observations by patterns (like filter_observations_by_keys)
         mlp_pattern = eval_keys['mlp_keys']
         cnn_pattern = eval_keys['cnn_keys']
@@ -306,19 +351,37 @@ class PPODistillAgent:
         all_keys = self.mlp_keys + self.cnn_keys
         final_obs = {}
         
+        # Detailed logging for key processing (less frequent)
+        key_logs = []
+        
         for key in all_keys:
             if key in filtered_obs:
                 # Key is directly available
                 final_obs[key] = filtered_obs[key]
+                key_logs.append(f"  {key}: {key} (direct)")
             else:
                 # Key is not available, look for unprivileged version with prefix matching
                 unprivileged_key = self._find_unprivileged_key(key, filtered_obs)
                 if unprivileged_key:
                     # Use unprivileged version as substitute
                     final_obs[key] = filtered_obs[unprivileged_key]
+                    key_logs.append(f"  {key}: {unprivileged_key} (unprivileged substitute)")
                 else:
                     # Neither privileged nor unprivileged available, will be zeroed later
                     final_obs[key] = None
+                    key_logs.append(f"  {key}: zeroed (not available)")
+        
+        # Print detailed key processing log (less frequent to avoid spam)
+        if not hasattr(self, '_last_key_log_time'):
+            self._last_key_log_time = 0
+        
+        current_time = time.time()
+        if current_time - self._last_key_log_time > 15.0:  # Log every 15 seconds
+            print(f"🔑 Key processing for {self.current_config_name}:")
+            for log in key_logs:
+                print(log)
+            print("-" * 30)
+            self._last_key_log_time = current_time
         
         # Step 3: Convert to tensors and handle None values (zero out)
         masked_obs = {}

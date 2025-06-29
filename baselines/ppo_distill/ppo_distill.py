@@ -30,50 +30,41 @@ class PPODistillTrainer:
             device: Device to use
             student_policy_type: Type of student agent ("ppo" or "ppo_rnn")
         """
-        # Store parameters
-        self.expert_policy_dir = expert_policy_dir
-        self.student_policy_type = student_policy_type
-        self.device = device
-        self.config = config
         self.envs = envs
+        self.config = config
+        self.device = device
+        self.student_policy_type = student_policy_type
         
-        # Create the distill agent
-        self.agent = PPODistillAgent(envs, config, expert_policy_dir, device, student_policy_type)
-        self.agent.base_agent.to(device)
-        
-        # Initialize the appropriate base trainer
+        # Create the appropriate base trainer based on student_policy_type
         if student_policy_type == "ppo":
             from baselines.ppo.ppo import PPOTrainer
-            seed = getattr(config, 'seed', 42)
-            self.base_trainer = PPOTrainer(envs, config, seed)
-            # Replace the base trainer's agent with our distill agent
-            self.base_trainer.agent = self.agent
-        else:
+            self.base_trainer = PPOTrainer(envs, config, seed=getattr(config, 'seed', 42))
+        elif student_policy_type == "ppo_rnn":
             from baselines.ppo_rnn.ppo_rnn import PPORnnTrainer
             self.base_trainer = PPORnnTrainer(envs, config, seed=getattr(config, 'seed', 42))
-            # Replace the base trainer's agent with our distill agent
-            self.base_trainer.agent = self.agent
+        else:
+            raise ValueError(f"Unknown student policy type: {student_policy_type}")
+        
+        # Create PPO Distill agent
+        self.agent = PPODistillAgent(envs, config, expert_policy_dir, device, student_policy_type)
         
         # Copy all attributes from the base trainer
         for attr_name in dir(self.base_trainer):
             if not attr_name.startswith('_'):
                 attr_value = getattr(self.base_trainer, attr_name)
-                if not callable(attr_value) or attr_name in ['collect_rollout', 'update_policy']:
+                if not callable(attr_value) or attr_name in ['collect_rollout', 'update_policy', 'train']:
                     setattr(self, attr_name, attr_value)
-        
-        # Reinitialize optimizer with the new agent
-        self.optimizer = optim.Adam(
-            self.agent.base_agent.parameters(),
-            lr=config.learning_rate,
-            eps=getattr(config, 'eps', 1e-5)
-        )
         
         # Distillation parameters
         self.distill_coef = getattr(config, 'distill_coef', 0.1)
         self.expert_coef = getattr(config, 'expert_coef', 0.5)
         
-        # Configuration cycling
+        # Cycling parameters
         self.cycle_mode = getattr(config, 'cycle_mode', 'episode')
+        
+        # Episode tracking for cycling
+        self.episodes_completed = 0
+        self.last_episode_count = 0
         
         # Initialize LSTM states for PPO-RNN
         if student_policy_type == "ppo_rnn":
@@ -101,6 +92,8 @@ class PPODistillTrainer:
         
     def collect_rollout(self):
         """Collect a rollout with configuration cycling and expert action collection."""
+        print("🚀 PPODistillTrainer.collect_rollout called!")
+        
         # Initialize observation storage if not already done
         if not self.obs:
             # Initialize observation storage for all keys
@@ -152,6 +145,14 @@ class PPODistillTrainer:
             # Get current configuration
             config_name, _ = self.agent.get_current_config()
             
+            # Debug logging for configuration cycling
+            if hasattr(self, '_last_config_log') and self._last_config_log != config_name:
+                print(f"🔄 Training with configuration: {config_name}")
+                self._last_config_log = config_name
+            elif not hasattr(self, '_last_config_log'):
+                self._last_config_log = config_name
+                print(f"🔄 Starting training with configuration: {config_name}")
+            
             # Get action and value with LSTM state, plus expert actions
             with torch.no_grad():
                 result = self.agent.get_action_and_value(
@@ -190,16 +191,41 @@ class PPODistillTrainer:
             # Cycle configuration if episode is done
             if self.cycle_mode == 'episode':
                 episode_done = next_done.any().item()
+                print(f"🔍 Checking episode done: {episode_done}")
                 if episode_done:
+                    self.episodes_completed += 1
+                    print(f"📺 Episode {self.episodes_completed} completed, cycling from {self.agent.current_config_name}")
                     self.agent.cycle_config(episode_done=True)
+                    print(f"✅ Cycled to configuration: {self.agent.current_config_name} (episode {self.episodes_completed})")
         
         # Cycle configuration for batch mode
         if self.cycle_mode == 'batch':
+            print(f"🔄 Batch mode cycling from {self.agent.current_config_name}")
             self.agent.cycle_config()
+            print(f"✅ Cycled to configuration: {self.agent.current_config_name}")
         
         # Store final observations and done state
         self.next_obs = next_obs
         self.next_done = next_done
+
+    def compute_advantages(self):
+        """Compute advantages and returns for the collected rollout."""
+        with torch.no_grad():
+            next_value = self.agent.get_value(self.next_obs).reshape(1, -1)
+            advantages = torch.zeros_like(self.rewards)
+            lastgaelam = 0
+            for t in reversed(range(self.config.num_steps)):
+                if t == self.config.num_steps - 1:
+                    nextnonterminal = 1.0 - self.next_done
+                    nextvalues = next_value
+                else:
+                    nextnonterminal = 1.0 - self.dones[t + 1]
+                    nextvalues = self.values[t + 1]
+                delta = self.rewards[t] + self.config.gamma * nextvalues * nextnonterminal - self.values[t]
+                advantages[t] = lastgaelam = delta + self.config.gamma * self.config.gae_lambda * nextnonterminal * lastgaelam
+            returns = advantages + self.values
+        
+        return advantages, returns
 
     def update_policy(self, b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values):
         """Update the policy using PPO with distillation loss."""
@@ -309,12 +335,12 @@ class PPODistillTrainer:
             "losses/explained_variance": explained_var,
         })
 
-    def train(self, num_iterations: int = 1000):
+    def train(self, num_iterations: int = None):
         """
         Train the PPO Distill agent.
         
         Args:
-            num_iterations: Number of training iterations
+            num_iterations: Number of training iterations (optional, overrides config)
         """
         print("Starting PPO Distill training...")
         print(f"Expert policy directory: {self.agent.expert_manager.policy_dir}")
@@ -322,42 +348,103 @@ class PPODistillTrainer:
         print(f"Cycle mode: {self.cycle_mode}")
         print(f"Distillation coefficient: {self.distill_coef}")
         print(f"Expert coefficient: {self.expert_coef}")
+        print(f"Number of expert configurations: {len(self.agent.expert_manager.expert_policies)}")
+        print(f"Expert configurations: {list(self.agent.expert_manager.expert_policies.keys())}")
+        print("-" * 60)
         
         # Override num_iterations if provided
         if num_iterations is not None:
+            self.config.num_iterations = num_iterations
+            # Also update total_timesteps to match
             self.config.total_timesteps = num_iterations * self.config.num_envs * self.config.num_steps
         
-        # Delegate to the appropriate base trainer
-        if self.student_policy_type == "ppo":
-            # For PPO, we need to override the collect_rollout and update_policy methods
-            # but use the base trainer's train method
-            original_collect_rollout = self.base_trainer.collect_rollout
-            original_update_policy = self.base_trainer.update_policy
+        # Initialize training
+        self.start_time = time.time()
+        
+        # Calculate num_iterations from total_timesteps if not set
+        if not hasattr(self.config, 'num_iterations'):
+            self.config.num_iterations = self.config.total_timesteps // (self.config.num_envs * self.config.num_steps)
+        
+        # Run initial evaluation using shared utility
+        from baselines.ppo_rnn.train import make_envs
+        eval_envs, _ = run_initial_evaluation(
+            self.agent, self.config, self.device, make_envs, 
+            writer=self.writer, use_wandb=self.use_wandb
+        )
+        
+        for iteration in range(self.config.num_iterations):
+            # Annealing the learning rate if instructed
+            if self.config.anneal_lr:
+                frac = 1.0 - (iteration - 1.0) / self.config.num_iterations
+                lrnow = frac * self.config.learning_rate
+                self.optimizer.param_groups[0]["lr"] = lrnow
             
-            self.base_trainer.collect_rollout = self.collect_rollout
-            self.base_trainer.update_policy = self.update_policy
+            # Collect experience using our custom collect_rollout with cycling
+            self.collect_rollout()
             
-            try:
-                return self.base_trainer.train()
-            finally:
-                # Restore original methods
-                self.base_trainer.collect_rollout = original_collect_rollout
-                self.base_trainer.update_policy = original_update_policy
-        else:
-            # For PPO-RNN, we can use the base trainer's train method directly
-            # but we need to override the collect_rollout and update_policy methods
-            original_collect_rollout = self.base_trainer.collect_rollout
-            original_update_policy = self.base_trainer.update_policy
+            # Compute advantages
+            advantages, returns = self.compute_advantages()
             
-            self.base_trainer.collect_rollout = self.collect_rollout
-            self.base_trainer.update_policy = self.update_policy
+            # Flatten the batch
+            b_obs = {}
+            for key in self.obs:
+                b_obs[key] = self.obs[key].reshape((-1,) + self.obs[key].shape[2:])
+            b_logprobs = self.logprobs.reshape(-1)
+            b_actions = self.actions.reshape((-1,) + self.envs.act_space['action'].shape)
+            b_advantages = advantages.reshape(-1)
+            b_returns = returns.reshape(-1)
+            b_values = self.values.reshape(-1)
             
-            try:
-                return self.base_trainer.train()
-            finally:
-                # Restore original methods
-                self.base_trainer.collect_rollout = original_collect_rollout
-                self.base_trainer.update_policy = original_update_policy
+            # Update policy using our custom update_policy with distillation
+            self.update_policy(b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values)
+            
+            # Periodic evaluation using shared utility
+            self.last_eval, eval_envs = run_periodic_evaluation(
+                self.agent, self.config, self.device, self.global_step, self.last_eval, eval_envs,
+                make_envs_func=make_envs, writer=self.writer, use_wandb=self.use_wandb
+            )
+            
+            # Print progress with cycling info
+            if iteration % getattr(self.config, 'log_interval', 10) == 0:
+                print(f"Iteration {iteration}/{self.config.num_iterations}, Global step: {self.global_step}")
+                print(f"  Episodes completed: {self.episodes_completed}")
+                print(f"  Current config: {self.agent.current_config_name}")
+                print(f"  Average return (last rollout): {b_returns.mean().item():.2f}")
+                print(f"  Average advantage: {b_advantages.mean().item():.2f}")
+                print(f"  Learning rate: {self.optimizer.param_groups[0]['lr']:.2e}")
+                print(f"  SPS: {int(self.global_step / (time.time() - self.start_time))}")
+                print("-" * 50)
+            
+            # Log training metrics with cycling info
+            self.log_metrics({
+                "charts/learning_rate": self.optimizer.param_groups[0]["lr"],
+                "charts/avg_return": b_returns.mean().item(),
+                "charts/avg_advantage": b_advantages.mean().item(),
+                "charts/SPS": int(self.global_step / (time.time() - self.start_time)),
+                "cycling/episodes_completed": self.episodes_completed,
+                "cycling/current_config": self.agent.current_config_name,
+                "cycling/config_cycle_count": self.agent.config_scheduler.episode_count,
+            })
+        
+        # Print cycling summary at the end
+        print("\n" + "="*60)
+        print("🎯 PPO DISTILL TRAINING SUMMARY")
+        print("="*60)
+        print(f"Total episodes completed: {self.episodes_completed}")
+        print(f"Configuration cycles: {self.agent.config_scheduler.episode_count}")
+        print(f"Expert configurations used: {list(self.agent.expert_manager.expert_policies.keys())}")
+        print(f"Final configuration: {self.agent.current_config_name}")
+        print(f"Student policy type: {self.student_policy_type}")
+        print(f"Cycle mode: {self.cycle_mode}")
+        print("="*60)
+        
+        # Clean up
+        self.envs.close()
+        self.writer.close()
+        if self.use_wandb:
+            wandb.finish()
+        
+        return self.agent
 
 
 def train_ppo_distill(envs, config, seed: int, expert_policy_dir: str, student_policy_type: str = "ppo_rnn", num_iterations: int = 1000):
@@ -383,6 +470,6 @@ def train_ppo_distill(envs, config, seed: int, expert_policy_dir: str, student_p
     trainer = PPODistillTrainer(envs, config, expert_policy_dir, device='cuda' if torch.cuda.is_available() else 'cpu', student_policy_type=student_policy_type)
     
     # Train
-    trainer.train(num_iterations)
+    trainer.train()
     
     return trainer.agent 
