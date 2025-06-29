@@ -133,10 +133,10 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
   max_grad_norm: 0.5
   target_kl: 0.015
   eval:
-    eval_interval: 200
+    eval_interval: 50
     num_eval_episodes: 30
     eval_envs: 4
-    num_eval_configs: 4
+    num_eval_configs: 1
   full_keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
   keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
   eval_keys:

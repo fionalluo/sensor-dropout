@@ -732,43 +732,32 @@ class PPODistillAgent:
     def compute_distillation_loss(self, student_logits: torch.Tensor, expert_actions: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
         Compute distillation loss between student and expert action distributions.
-        
-        Args:
-            student_logits: Action logits from the student policy
-            expert_actions: Action logits from expert policies
-            
-        Returns:
-            torch.Tensor: Distillation loss
+        Adds debug prints for diagnostics.
         """
         config_name, _ = self.get_current_config()
-        
         if not expert_actions:
             print("❌ CRITICAL ERROR: No expert actions provided for distillation loss!")
             raise RuntimeError("No expert actions provided for distillation loss")
-        
         if config_name not in expert_actions:
             print(f"❌ CRITICAL ERROR: Current config '{config_name}' not found in expert actions!")
             print(f"❌ Available expert actions: {list(expert_actions.keys())}")
             raise RuntimeError(f"Current config '{config_name}' not found in expert actions")
-        
         expert_logits = expert_actions[config_name]
-        
-        # Validate expert logits
         if expert_logits is None:
             print(f"❌ CRITICAL ERROR: Expert logits for {config_name} is None!")
             raise RuntimeError(f"Expert logits for {config_name} is None")
-        
-        # Convert logits to probabilities for both student and expert
-        student_probs = F.softmax(student_logits, dim=-1)
+
+        # Debug: Print mean/std of logits
+        print(f"[Distill Debug] Student logits mean: {student_logits.mean().item():.4f}, std: {student_logits.std().item():.4f}")
+        print(f"[Distill Debug] Expert logits mean: {expert_logits.mean().item():.4f}, std: {expert_logits.std().item():.4f}")
+
+        student_log_probs = F.log_softmax(student_logits, dim=-1)
         expert_probs = F.softmax(expert_logits, dim=-1)
-        
-        # KL divergence loss: KL(student || expert)
-        # This encourages the student to match the expert's action distribution
         distill_loss = F.kl_div(
-            student_probs.log(), expert_probs, 
+            student_log_probs, expert_probs,
             reduction='batchmean'
         )
-        
+        print(f"[Distill Debug] Distillation loss: {distill_loss.item():.6f}")
         return distill_loss
     
     def get_value(self, obs, lstm_state=None, done=None):

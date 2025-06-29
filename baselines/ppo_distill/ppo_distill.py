@@ -112,7 +112,9 @@ class PPODistillTrainer:
         self.start_time = time.time()
         
         # Initialize optimizer (copy from base trainer)
-        self.optimizer = self.base_trainer.optimizer
+        # self.optimizer = self.base_trainer.optimizer
+        # FIX: Use the actual student model parameters for the optimizer
+        self.optimizer = torch.optim.Adam(self.agent.base_agent.parameters(), lr=self.config.learning_rate)
         
         # Initialize logging (copy from base trainer)
         self.writer = self.base_trainer.writer
@@ -302,80 +304,56 @@ class PPODistillTrainer:
         return advantages, returns
 
     def update_policy(self, b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values):
-        """Update the policy using pure distillation loss only."""
-        # Remove excessive debug print
-        # print("🚀 PPODistillTrainer.update_policy called!")
-        
-        # Optimizing the policy through distillation only
+        """Update the policy using pure distillation loss only, with debug prints for gradients and parameter updates."""
         assert self.config.num_envs % self.config.num_minibatches == 0
         envsperbatch = self.config.num_envs // self.config.num_minibatches
         envinds = np.arange(self.config.num_envs)
         flatinds = np.arange(self.config.num_envs * self.config.num_steps).reshape(self.config.num_steps, self.config.num_envs)
-        
+
         for epoch in range(self.config.update_epochs):
             np.random.shuffle(envinds)
             for start in range(0, self.config.num_envs, envsperbatch):
                 end = start + envsperbatch
-                mbenvinds = envinds[start:end]
-                mb_inds = flatinds[:, mbenvinds].ravel()
-                
-                # Prepare mini-batch observations
-                mb_obs = {}
-                for key in b_obs:
-                    mb_obs[key] = b_obs[key][mb_inds]
-                
-                # Get initial LSTM state for this mini-batch
-                if self.student_policy_type == "ppo_rnn":
-                    initial_lstm_state = (
-                        self.lstm_hidden[0, mbenvinds].transpose(0, 1).clone(),
-                        self.lstm_cell[0, mbenvinds].transpose(0, 1).clone()
-                    )
-                else:
-                    initial_lstm_state = None
-                
-                # Get student actions and expert actions for distillation
-                result = self.agent.get_action_and_value(
-                    mb_obs,
-                    initial_lstm_state,
-                    b_actions.long()[mb_inds] if hasattr(self.agent, 'is_discrete') and self.agent.is_discrete else b_actions[mb_inds],
-                    b_actions.long()[mb_inds] if hasattr(self.agent, 'is_discrete') and self.agent.is_discrete else b_actions[mb_inds],
-                )
-                
-                # Handle the extra expert_actions and student_logits return values
-                if len(result) == 7:
-                    _, newlogprob, entropy, newvalue, _, expert_actions, student_logits = result
-                else:
-                    # Fallback for older version
-                    _, newlogprob, entropy, newvalue, _, expert_actions = result
-                    student_logits = None
-                
-                # Compute distillation loss
-                if student_logits is not None and expert_actions:
-                    distill_loss = self.agent.compute_distillation_loss(student_logits, expert_actions)
-                    # Remove excessive debug print - only print occasionally
-                    # print(f"🎯 Distillation loss computed: {distill_loss.item():.4f}")
-                else:
-                    print("❌ CRITICAL ERROR: Cannot compute distillation loss!")
-                    print(f"❌ student_logits is None: {student_logits is None}")
-                    print(f"❌ expert_actions is empty: {not expert_actions}")
-                    print(f"❌ expert_actions keys: {list(expert_actions.keys()) if expert_actions else 'None'}")
-                    print(f"❌ Current config: {self.agent.current_config_name}")
-                    raise RuntimeError("Cannot compute distillation loss - this is a critical error")
-                
-                # Pure distillation loss - no reward-based components
-                # We only want the student to mimic the expert's actions
-                loss = self.distill_coef * distill_loss
-                
+                mb_envinds = envinds[start:end]
+                mb_inds = flatinds[:, mb_envinds].ravel()
+
+                # Get current parameter norm before update
+                param_norm_before = 0.0
+                for p in self.agent.parameters():
+                    param_norm_before += p.data.norm().item()
+                print(f"[Distill Debug] Student param norm before step: {param_norm_before:.6f}")
+
                 self.optimizer.zero_grad()
-                loss.backward()
-                nn.utils.clip_grad_norm_(self.agent.base_agent.parameters(), self.config.max_grad_norm)
+                # Call get_action_and_value with correct arguments for agent type
+                if self.student_policy_type == "ppo_rnn":
+                    # PPO-RNN expects lstm_state, done, action
+                    _, _, _, _, _, expert_actions, student_logits = self.agent.get_action_and_value(b_obs, lstm_state=None, done=None, action=None)
+                else:
+                    # PPO expects only obs and action
+                    _, _, _, _, _, expert_actions, student_logits = self.agent.get_action_and_value(b_obs, action=None)
+                distill_loss = self.agent.compute_distillation_loss(student_logits, expert_actions)
+                distill_loss.backward()
+
+                # Print gradient norm after backward
+                grad_norm = 0.0
+                for p in self.agent.parameters():
+                    if p.grad is not None:
+                        grad_norm += p.grad.norm().item()
+                print(f"[Distill Debug] Student grad norm after backward: {grad_norm:.6f}")
+
                 self.optimizer.step()
-        
+
+                # Get parameter norm after update
+                param_norm_after = 0.0
+                for p in self.agent.parameters():
+                    param_norm_after += p.data.norm().item()
+                print(f"[Distill Debug] Student param norm after step: {param_norm_after:.6f}")
+
         # Log metrics for distillation training
         self.log_metrics({
             "charts/learning_rate": self.optimizer.param_groups[0]["lr"],
             "losses/distill_loss": distill_loss.item(),
-            "losses/total_loss": loss.item(),
+            "losses/total_loss": distill_loss.item(),
         })
 
     def log_metrics(self, metrics):
