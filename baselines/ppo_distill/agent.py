@@ -103,8 +103,28 @@ class ExpertPolicyManager:
         
         # Get expert action logits for distillation
         with torch.no_grad():
-            # Get hidden states from LSTM
-            hidden, new_lstm_state = expert_agent.get_states(obs_tensor, lstm_state, torch.zeros(1, device=self.device))
+            # Handle different expert agent types
+            if hasattr(expert_agent, 'get_states'):
+                # LSTM-based agent (PPO-RNN)
+                # Ensure done tensor is properly shaped for the expert agent
+                if lstm_state is None:
+                    # Create default LSTM states for evaluation
+                    batch_size = obs_tensor[list(obs_tensor.keys())[0]].shape[0]
+                    lstm_state = (
+                        torch.zeros(expert_agent.lstm.num_layers, batch_size, expert_agent.lstm.hidden_size, device=self.device),
+                        torch.zeros(expert_agent.lstm.num_layers, batch_size, expert_agent.lstm.hidden_size, device=self.device)
+                    )
+                
+                # Create done tensor with proper shape
+                batch_size = obs_tensor[list(obs_tensor.keys())[0]].shape[0]
+                done_tensor = torch.zeros(batch_size, device=self.device)
+                
+                hidden, new_lstm_state = expert_agent.get_states(obs_tensor, lstm_state, done_tensor)
+            else:
+                # Non-LSTM agent (PPO)
+                # For PPO agents, we need to encode observations directly
+                hidden = expert_agent.encode_observations(obs_tensor)
+                new_lstm_state = None
             
             # Get action logits from the actor network
             expert_logits = expert_agent.actor(hidden)
@@ -218,7 +238,7 @@ class PPODistillAgent:
         for attr_name in dir(self.base_agent):
             if not attr_name.startswith('_'):
                 attr_value = getattr(self.base_agent, attr_name)
-                if not callable(attr_value) or attr_name in ['get_action_and_value', 'get_value', 'get_states', 'get_action_logits']:
+                if not callable(attr_value) or attr_name not in ['get_action_and_value', 'get_value', 'get_states', 'get_action_logits']:
                     setattr(self, attr_name, attr_value)
         
         # Initialize expert policy manager
@@ -261,8 +281,14 @@ class PPODistillAgent:
         """Get the current configuration."""
         config_name, eval_keys = self.config_scheduler.get_current_config()
         
-        # Debug logging to see if this is being called (immediate for debugging)
-        print(f"🔍 get_current_config called: {config_name}")
+        # Debug logging to see if this is being called (less frequent for debugging)
+        if not hasattr(self, '_last_config_log_time'):
+            self._last_config_log_time = 0
+        
+        current_time = time.time()
+        if current_time - self._last_config_log_time > 30.0:  # Log every 30 seconds
+            print(f"🔍 get_current_config called: {config_name}")
+            self._last_config_log_time = current_time
         
         return config_name, eval_keys
     
@@ -307,7 +333,7 @@ class PPODistillAgent:
             self._last_mask_log_time = 0
         
         current_time = time.time()
-        if current_time - self._last_mask_log_time > 10.0:  # Log every 10 seconds
+        if current_time - self._last_mask_log_time > 60.0:  # Log every 60 seconds
             print(f"🎭 _mask_observations called with config: {self.current_config_name}")
             self._last_mask_log_time = current_time
         
@@ -462,6 +488,13 @@ class PPODistillAgent:
         # Experts receive filtered observations (as they were trained)
         expert_actions = {}
         if self.expert_manager.expert_policies:
+            # Throttle expert action warnings to avoid spam
+            if not hasattr(self, '_last_expert_warning_time'):
+                self._last_expert_warning_time = 0
+            
+            current_time = time.time()
+            should_warn = current_time - self._last_expert_warning_time > 10.0  # Warn every 10 seconds
+            
             for subset_name in self.expert_manager.expert_policies.keys():
                 try:
                     expert_logits, _ = self.expert_manager.get_expert_action(
@@ -469,7 +502,9 @@ class PPODistillAgent:
                     )
                     expert_actions[subset_name] = expert_logits
                 except Exception as e:
-                    print(f"Warning: Failed to get expert action for {subset_name}: {e}")
+                    if should_warn:
+                        print(f"Warning: Failed to get expert action for {subset_name}: {e}")
+                        self._last_expert_warning_time = current_time
                     # Continue with other experts
         
         return action, logprob, entropy, value, new_lstm_state, expert_actions
