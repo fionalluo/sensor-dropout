@@ -15,7 +15,7 @@ import torch.optim as optim
 import wandb
 
 from baselines.ppo_distill.agent import PPODistillAgent
-from baselines.shared.eval_utils import run_initial_evaluation, run_periodic_evaluation
+from baselines.shared.eval_utils import run_initial_evaluation, run_periodic_evaluation, evaluate_agent
 
 
 class PPODistillTrainer:
@@ -452,6 +452,33 @@ class PPODistillTrainer:
                 self.agent, self.config, self.device, self.global_step, self.last_eval, eval_envs,
                 make_envs_func=make_envs_ppo_distill, writer=self.writer, use_wandb=self.use_wandb
             )
+
+            # --- Evaluate all expert (teacher) policies ---
+            for expert_config_name, expert_agent in self.agent.expert_manager.expert_policies.items():
+                expert_eval_metrics = evaluate_agent(
+                    expert_agent,
+                    eval_envs,
+                    self.device,
+                    self.config,
+                    log_video=False,
+                    make_envs_func=make_envs_ppo_distill,
+                    writer=self.writer,
+                    use_wandb=self.use_wandb,
+                    global_step=self.global_step
+                )
+                if self.use_wandb:
+                    import wandb
+                    # Log all teacher metrics under eval_teacher/
+                    for metric_key in ["mean_return", "std_return", "mean_length", "std_length"]:
+                        if metric_key in expert_eval_metrics:
+                            wandb.log({
+                                f"eval_teacher/{metric_key}_{expert_config_name}": expert_eval_metrics[metric_key]
+                            }, step=self.global_step)
+                        elif f"eval/{metric_key}" in expert_eval_metrics:
+                            wandb.log({
+                                f"eval_teacher/{metric_key}_{expert_config_name}": expert_eval_metrics[f"eval/{metric_key}"]
+                            }, step=self.global_step)
+                        # Do not log any teacher metrics under 'eval/'
             
             # Print progress with cycling info
             if iteration % getattr(self.config, 'log_interval', 10) == 0:

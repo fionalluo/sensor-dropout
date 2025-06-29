@@ -73,26 +73,16 @@ class ExpertPolicyManager:
     def get_expert_action(self, subset_name: str, obs: Dict, lstm_state: Optional[Tuple] = None) -> Tuple[torch.Tensor, Optional[Tuple]]:
         """
         Get action logits from a specific expert policy for distillation.
-        
-        Args:
-            subset_name: Name of the subset (env1, env2, env3, env4)
-            obs: Observation dictionary
-            lstm_state: LSTM state (optional)
-            
-        Returns:
-            tuple: (expert_logits, new_lstm_state)
+        Only select the keys from the raw obs dict that match the expert's eval_keys patterns. Raise an error if any expected key is missing.
         """
-        import re  # Move import to top of function
-        
+        import re
         if subset_name not in self.expert_policies:
             raise ValueError(f"Expert policy {subset_name} not found")
-        
         expert_agent = self.expert_policies[subset_name]
         eval_keys = self.expert_eval_keys[subset_name]
-        
-        # Filter observations based on the expert's eval_keys
+
+        # Only select the keys that match the expert's eval_keys patterns
         filtered_obs = {}
-        
         # Helper function to check if a key matches a pattern
         def matches_pattern(key, pattern):
             if pattern == '.*':
@@ -100,249 +90,84 @@ class ExpertPolicyManager:
             elif pattern == '^$':
                 return False
             else:
-                # Use re.match instead of re.search for better pattern matching
                 return re.match(pattern, key) is not None
-        
-        # For evaluation: implement proper substitution logic
-        # For every full_key: if it's in eval_keys, use it; if not, search for key_unprivileged; if not found, substitute 0s
-        
-        # First, get all the keys that match the eval_keys pattern
-        pattern_matched_keys = set()
+
+        # Get all keys that match the eval_keys pattern
         for key, value in obs.items():
             if key in ['reward', 'is_first', 'is_last', 'is_terminal']:
                 continue
-            if matches_pattern(key, eval_keys['mlp_keys']):
-                pattern_matched_keys.add(key)
-            if matches_pattern(key, eval_keys['cnn_keys']):
-                pattern_matched_keys.add(key)
-        
-        # Now implement the substitution logic
-        # For each key that the expert expects (based on eval_keys pattern), find the best substitute
-        for key in pattern_matched_keys:
-            if key in obs:
-                # Key is directly available
-                filtered_obs[key] = obs[key]
-            else:
-                # Key not available, this shouldn't happen since we're iterating over matched keys
-                print(f"❌ WARNING: Key {key} matched pattern but not in obs")
-        
-        # For keys that the expert expects but aren't in pattern_matched_keys, 
-        # we need to find unprivileged substitutes
-        # This is the key insight: the expert expects unprivileged keys but we might have privileged keys
-        
-        # Get all possible keys the expert might expect based on the pattern
-        pattern = eval_keys['mlp_keys']
-        
+            if matches_pattern(key, eval_keys['mlp_keys']) or matches_pattern(key, eval_keys['cnn_keys']):
+                filtered_obs[key] = value
+
         # Dynamically parse the pattern to extract expected keys
-        # Remove word boundaries and split by | to get individual key patterns
+        pattern = eval_keys['mlp_keys']
         pattern_clean = pattern.replace('\\b', '').replace('(', '').replace(')', '')
         expected_keys = pattern_clean.split('|')
-        
-        # For each expected key, find the best substitute
+        # Check that all expected keys are present
         for expected_key in expected_keys:
-            if expected_key not in filtered_obs:
-                if expected_key in obs:
-                    # Direct match
-                    filtered_obs[expected_key] = obs[expected_key]
+            if expected_key and expected_key not in filtered_obs:
+                raise KeyError(f"Expected expert key '{expected_key}' not found in filtered_obs. Available keys: {list(filtered_obs.keys())}")
+
+        # Print filtered_obs structure every 10 calls (debug)
+        if not hasattr(self, '_expert_obs_debug_counter'):
+            self._expert_obs_debug_counter = 0
+        self._expert_obs_debug_counter += 1
+        if self._expert_obs_debug_counter % 10 == 0:
+            print(f"[Expert Obs Debug] subset_name: {subset_name}")
+            for k, v in filtered_obs.items():
+                if isinstance(v, torch.Tensor):
+                    shape = tuple(v.shape)
+                    sample = v[0].cpu().numpy() if v.dim() > 0 else v.cpu().numpy()
+                elif isinstance(v, np.ndarray):
+                    shape = v.shape
+                    sample = v[0] if v.ndim > 0 else v
                 else:
-                    # Look for privileged version
-                    privileged_key = expected_key.replace('_unprivileged', '')
-                    if privileged_key in obs:
-                        filtered_obs[expected_key] = obs[privileged_key]
-                    else:
-                        # Neither available, will substitute with zeros later
-                        print(f"❌ WARNING: Neither {expected_key} nor {privileged_key} available")
-        
-        # Verify we have the expected number of features
-        total_features = 0
-        for key, value in filtered_obs.items():
-            if isinstance(value, torch.Tensor):
-                if value.dim() >= 2:
-                    total_features += value.shape[1]
-                else:
-                    total_features += 1
-            elif isinstance(value, np.ndarray):
-                if value.ndim >= 2:
-                    total_features += value.shape[1]
-                else:
-                    total_features += 1
-            else:
-                total_features += 1
-        
-        # Check if we have enough features for the expert
-        if hasattr(expert_agent, 'total_mlp_size'):
-            expected_features = expert_agent.total_mlp_size
-            if total_features != expected_features:
-                print(f"❌ WARNING: Feature mismatch! Expected {expected_features}, got {total_features}")
-                
-                # If we don't have enough features, we need to add zero tensors for missing keys
-                if total_features < expected_features:
-                    print(f"🔧 Adding zero tensors for missing features...")
-                    # This is a simplified approach - in practice, we'd need to know the exact shapes
-                    # For now, we'll just ensure we have all expected keys
-                    for expected_key in expected_keys:
-                        if expected_key not in filtered_obs:
-                            # Create a zero tensor with appropriate shape
-                            # This is a placeholder - we'd need to know the exact shape from the expert
-                            print(f"🔧 Adding zero tensor for missing key: {expected_key}")
-                            # We'll handle this in the tensor conversion step
-        
-        # Debug: Check what keys the expert agent expects
-        # print(f"🔍 Expert eval_keys pattern: {eval_keys}")
-        # print(f"🔍 Keys we're passing: {list(filtered_obs.keys())}")
-        
-        # Convert to tensor and add batch dimension
+                    shape = type(v)
+                    sample = v
+                print(f"  key: {k}, shape: {shape}, sample: {sample}")
+
+        # Convert to tensor and add batch dimension (existing logic)
         obs_tensor = {}
-        for key in expected_keys:  # Use expected_keys instead of filtered_obs.keys()
+        for key in expected_keys:
             if key in filtered_obs:
                 value = filtered_obs[key]
                 try:
                     if isinstance(value, np.ndarray):
-                        obs_tensor[key] = torch.from_numpy(value).unsqueeze(0).to(self.device)
+                        obs_tensor[key] = torch.tensor(value, device=self.device)
                     elif isinstance(value, torch.Tensor):
-                        # Value is already a tensor, just ensure it's on the right device
-                        # If it already has batch dimension, use as is
-                        if value.dim() >= 2:
-                            obs_tensor[key] = value.to(self.device)
-                        else:
-                            # Add batch dimension if needed
-                            obs_tensor[key] = value.unsqueeze(0).to(self.device)
+                        obs_tensor[key] = value.to(self.device)
                     else:
-                        # Scalar value, convert to tensor with batch dimension
-                        obs_tensor[key] = torch.tensor([value], dtype=torch.float32).to(self.device)
+                        obs_tensor[key] = torch.tensor(value, device=self.device)
                 except Exception as e:
-                    print(f"❌ ERROR converting {key}: {e}")
-                    print(f"❌ Value type: {type(value)}")
-                    print(f"❌ Value shape: {getattr(value, 'shape', 'no shape')}")
-                    raise RuntimeError(f"Failed to convert observation key {key}: {e}")
+                    print(f"❌ ERROR converting key {key} to tensor: {e}")
+                    raise
+
+        # Forward through expert agent
+        if hasattr(expert_agent, 'get_action_logits'):
+            expert_logits = expert_agent.get_action_logits(obs_tensor)
+            return expert_logits, None
+        elif hasattr(expert_agent, 'actor') and hasattr(expert_agent, 'encode_observations'):
+            # Standard PPO agent
+            hidden = expert_agent.encode_observations(obs_tensor)
+            expert_logits = expert_agent.actor(hidden)
+            return expert_logits, None
+        elif hasattr(expert_agent, 'get_action_and_value'):
+            # PPO-RNN or similar
+            result = expert_agent.get_action_and_value(obs_tensor, lstm_state)
+            # result: (action, logprob, entropy, value, new_lstm_state) or (action, logprob, entropy, value, new_lstm_state, logits)
+            if len(result) == 6:
+                # (action, logprob, entropy, value, new_lstm_state, logits)
+                return result[-1], result[4]
             else:
-                # Key is missing, create zero tensor with appropriate shape
-                # We need to infer the shape from the expert's expected input size
-                if hasattr(expert_agent, 'mlp_key_sizes') and key in expert_agent.mlp_key_sizes:
-                    # Use the expert's expected size for this key
-                    expected_size = expert_agent.mlp_key_sizes[key]
-                    obs_tensor[key] = torch.zeros(4, expected_size, device=self.device)
-                else:
-                    # Fallback: create a small zero tensor
-                    obs_tensor[key] = torch.zeros(4, 1, device=self.device)
-        # Only log after obs_tensor is fully constructed
-        # Remove the excessive debug print that was printing keys on every call
-        # print(f"{subset_name}: {list(obs_tensor.keys())}")
-        
-        # Debug: Show feature count for each key
-        total_features_debug = 0
-        for key, tensor in obs_tensor.items():
-            if tensor.dim() >= 2:
-                features = tensor.shape[1]
-            else:
-                features = 1
-            total_features_debug += features
-        # print(f"🔍 Total features: {total_features_debug}")
-        
-        # Get expert action logits for distillation
-        with torch.no_grad():
-            try:
-                # Handle different expert agent types
+                # Fallback: try to reconstruct logits
                 if hasattr(expert_agent, 'get_states'):
-                    # LSTM-based agent (PPO-RNN)
-                    # Ensure done tensor is properly shaped for the expert agent
-                    if lstm_state is None:
-                        # Create default LSTM states for evaluation
-                        batch_size = obs_tensor[list(obs_tensor.keys())[0]].shape[0]
-                        lstm_state = (
-                            torch.zeros(expert_agent.lstm.num_layers, batch_size, expert_agent.lstm.hidden_size, device=self.device),
-                            torch.zeros(expert_agent.lstm.num_layers, batch_size, expert_agent.lstm.hidden_size, device=self.device)
-                        )
-                    
-                    # Create done tensor with proper shape
-                    batch_size = obs_tensor[list(obs_tensor.keys())[0]].shape[0]
-                    done_tensor = torch.zeros(batch_size, device=self.device)
-                    
-                    hidden, new_lstm_state = expert_agent.get_states(obs_tensor, lstm_state, done_tensor)
+                    hidden, _ = expert_agent.get_states(obs_tensor, lstm_state)
+                    expert_logits = expert_agent.actor(hidden)
+                    return expert_logits, result[4]
                 else:
-                    # Non-LSTM agent (PPO)
-                    # The expert agent's mlp_keys are wrong - it shows privileged keys
-                    # but the expert was trained with unprivileged keys
-                    # So we bypass encode_observations and directly call the neural networks
-                    
-                    # Process MLP observations directly
-                    mlp_features = []
-                    batch_size = None
-                    for key in obs_tensor.keys():
-                        if key not in ['image']:  # Skip CNN keys for now
-                            if batch_size is None:
-                                batch_size = obs_tensor[key].shape[0]
-                            # Ensure the observation is flattened
-                            if obs_tensor[key].dim() > 2:
-                                mlp_features.append(obs_tensor[key].view(batch_size, -1))
-                            else:
-                                mlp_features.append(obs_tensor[key])
-                    
-                    if mlp_features:
-                        mlp_features = torch.cat(mlp_features, dim=1)
-                        
-                        # Call the expert's MLP encoder directly
-                        if hasattr(expert_agent, 'mlp_encoder') and expert_agent.mlp_encoder is not None:
-                            mlp_encoded = expert_agent.mlp_encoder(mlp_features)
-                            
-                            # Call the expert's latent projector directly
-                            if hasattr(expert_agent, 'latent_projector'):
-                                hidden = expert_agent.latent_projector(mlp_encoded)
-                            else:
-                                hidden = mlp_encoded
-                        else:
-                            # Fallback to encode_observations if direct approach fails
-                            hidden = expert_agent.encode_observations(obs_tensor)
-                    else:
-                        # Fallback to encode_observations if no MLP features
-                        hidden = expert_agent.encode_observations(obs_tensor)
-                    
-                    new_lstm_state = None
-                
-                # Get action logits from the actor network
-                expert_logits = expert_agent.actor(hidden)
-                
-                # print(f"✅ Successfully got expert logits for {subset_name}: {expert_logits.shape}")
-                return expert_logits, new_lstm_state
-                
-            except Exception as e:
-                print(f"❌ ERROR in expert action computation for {subset_name}: {e}")
-                print(f"❌ Expert agent type: {type(expert_agent)}")
-                print(f"❌ Has get_states: {hasattr(expert_agent, 'get_states')}")
-                print(f"❌ Obs tensor keys: {list(obs_tensor.keys())}")
-                for key, tensor in obs_tensor.items():
-                    print(f"❌ {key}: {tensor.shape}, {tensor.dtype}")
-                
-                # Additional debugging: let's see what the expert agent's encode_observations method does
-                if hasattr(expert_agent, 'encode_observations'):
-                    print(f"❌ Expert agent encode_observations method exists")
-                    print(f"❌ Expert agent mlp_keys: {getattr(expert_agent, 'mlp_keys', 'N/A')}")
-                    print(f"❌ Expert agent cnn_keys: {getattr(expert_agent, 'cnn_keys', 'N/A')}")
-                    
-                    # Try to understand what keys the expert agent will actually use
-                    expert_mlp_keys = getattr(expert_agent, 'mlp_keys', [])
-                    expert_cnn_keys = getattr(expert_agent, 'cnn_keys', [])
-                    
-                    keys_expert_will_use = []
-                    for key in obs_tensor.keys():
-                        if key in expert_mlp_keys or key in expert_cnn_keys:
-                            keys_expert_will_use.append(key)
-                    
-                    print(f"❌ Keys expert will actually use: {keys_expert_will_use}")
-                    
-                    # Calculate features expert will actually get
-                    actual_features = 0
-                    for key in keys_expert_will_use:
-                        if key in obs_tensor:
-                            tensor = obs_tensor[key]
-                            if tensor.dim() >= 2:
-                                actual_features += tensor.shape[1]
-                            else:
-                                actual_features += 1
-                    
-                    print(f"❌ Features expert will actually get: {actual_features}")
-                
-                raise RuntimeError(f"Failed to compute expert action for {subset_name}: {e}")
+                    raise RuntimeError(f"Expert agent for {subset_name} get_action_and_value did not return logits and cannot reconstruct.")
+        else:
+            raise RuntimeError(f"Expert agent for {subset_name} does not have a recognized method to get logits.")
     
     def get_all_expert_actions(self, obs: Dict, lstm_states: Optional[Dict] = None) -> Dict[str, torch.Tensor]:
         """
@@ -661,31 +486,20 @@ class PPODistillAgent:
     def get_action_and_value(self, obs, lstm_state=None, done=None, action=None):
         """
         Get action and value from the student policy, along with expert actions for distillation.
-        
-        Args:
-            obs: Full observations (should contain all keys)
-            lstm_state: LSTM state (only for PPO-RNN)
-            done: Done flags
-            action: Actions (for evaluation)
-            
-        Returns:
-            tuple: (action, logprob, entropy, value, new_lstm_state, expert_actions, student_logits)
+        Every 100 steps, print the action chosen by the student and the expert for the first environment in the batch.
         """
         # Get current configuration
         config_name, eval_keys = self.get_current_config()
         
         # Mask observations based on current configuration
-        # Student receives full_keys but with masked values
         masked_obs = self._mask_observations(obs, eval_keys)
         
         # Get student action and value using masked observations
         if self.student_policy_type == "ppo_rnn":
-            # PPO-RNN expects lstm_state and done
             action, logprob, entropy, value, new_lstm_state = self.base_agent.get_action_and_value(
                 masked_obs, lstm_state, done, action
             )
         else:
-            # PPO doesn't use lstm_state
             action, logprob, entropy, value = self.base_agent.get_action_and_value(
                 masked_obs, action
             )
@@ -696,11 +510,9 @@ class PPODistillAgent:
             hidden, _ = self.base_agent.get_states(masked_obs, lstm_state, done)
         else:
             hidden = self.base_agent.encode_observations(masked_obs)
-        
         student_logits = self.base_agent.actor(hidden)
         
         # Get expert actions for distillation
-        # Experts receive filtered observations (as they were trained)
         expert_actions = {}
         if self.expert_manager.expert_policies:
             try:
@@ -721,11 +533,36 @@ class PPODistillAgent:
         if not expert_actions:
             print("❌ CRITICAL ERROR: No expert actions obtained!")
             raise RuntimeError("No expert actions obtained - distillation cannot proceed")
-        
         if config_name not in expert_actions:
             print(f"❌ CRITICAL ERROR: Current config '{config_name}' not found in expert actions!")
             print(f"❌ Available expert actions: {list(expert_actions.keys())}")
             raise RuntimeError(f"Current config '{config_name}' not found in expert actions")
+
+        # Print student and expert actions and logits for the first environment in the batch every 100 steps
+        if not hasattr(self, '_action_debug_counter'):
+            self._action_debug_counter = 0
+        self._action_debug_counter += 1
+        if self._action_debug_counter % 100 == 0:
+            # Student action (first env)
+            if hasattr(action[0], 'numel') and action[0].numel() == 1:
+                student_action = action[0].item()
+            elif hasattr(action[0], 'tolist'):
+                student_action = action[0].tolist()
+            else:
+                student_action = action[0]
+            # Expert logits and action (first env, current config)
+            expert_logits = expert_actions[config_name]
+            if hasattr(expert_logits[0], 'argmax'):
+                expert_action = expert_logits[0].argmax().item() if expert_logits[0].numel() > 1 else expert_logits[0].item()
+            elif hasattr(expert_logits[0], 'tolist'):
+                expert_action = expert_logits[0].tolist()
+            else:
+                expert_action = expert_logits[0]
+            # Print logits for both student and expert
+            student_logits_first = student_logits[0].tolist() if hasattr(student_logits[0], 'tolist') else student_logits[0]
+            expert_logits_first = expert_logits[0].tolist() if hasattr(expert_logits[0], 'tolist') else expert_logits[0]
+            print(f"[Action Debug] Student action: {student_action}, Expert action: {expert_action}")
+            print(f"[Logits Debug] Student logits: {student_logits_first}, Expert logits: {expert_logits_first}")
         
         return action, logprob, entropy, value, new_lstm_state, expert_actions, student_logits
     
