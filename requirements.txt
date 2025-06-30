@@ -1,39 +1,251 @@
-# Core dependencies with exact versions from scaffolder environment
+absl-py==2.1.0
+anyio==4.9.0
+asttokens==2.4.1
+astunparse==1.6.3
+attrs==25.3.0
+audioread==3.0.1
+backcall @ file:///home/conda/feedstock_root/build_artifacts/backcall_1592338393461/work
+backports.tarfile==1.2.0
+black==25.1.0
+bokeh==3.4.3
+build==1.2.2.post1
+CacheControl==0.14.2
+cachetools==5.3.3
+certifi==2024.6.2
+cffi==1.17.1
+charset-normalizer==3.3.2
+chex==0.1.86
+cleo==2.1.0
+click==8.1.7
+cloudpickle==1.6.0
+comm @ file:///home/conda/feedstock_root/build_artifacts/comm_1733502965406/work
+contourpy==1.3.0
+crafter==1.8.3
+crashtest==0.4.1
+cryptography==44.0.2
+cycler==0.12.1
+debugpy @ file:///croot/debugpy_1736267418885/work
+decorator==4.4.2
+distlib==0.3.9
+dm-env==1.6
+dm-env-wrappers==0.0.13
+dm-tree==0.1.8
+dm_control==1.0.23
+docker-pycreds==0.4.0
+docstring_parser==0.16
+-e git+https://github.com/edwhu/dreamerv3.git@8dce0ddbae69f622908b84888ba2d02df4c987ed#egg=dreamerv3
+dulwich==0.22.8
+dynamixel-sdk==3.7.31
+entrypoints @ file:///home/conda/feedstock_root/build_artifacts/entrypoints_1733327148154/work
+etils==1.5.2
+eval_type_backport==0.2.2
+exceptiongroup==1.2.1
+execnet==2.1.1
+executing==2.0.1
+Farama-Notifications==0.0.4
+fastjsonschema==2.21.1
+filelock==3.15.4
+findpython==0.6.3
+flatbuffers==24.3.25
+fonttools==4.55.3
+-e git+https://github.com/fionalluo/trailenv.git@b688b5de87369cf5b0d6c643ad266c1d7410909b#egg=frontier_maze_hueds
+fsspec==2024.6.0
+gast==0.4.0
+gitdb==4.0.11
+GitPython==3.1.43
+glfw==2.7.0
+google-auth==2.30.0
+google-auth-oauthlib==1.0.0
+google-pasta==0.2.0
+grpcio==1.64.1
+gym==0.26.2
+-e git+ssh://git@github.com/edwhu/gym-lowcostrobot.git@1a23915585bbb09dcba7163428a2d5e05f54bfba#egg=gym_lowcostrobot
+gym-notices==0.0.8
+gymnasium==0.29.1
+-e git+ssh://git@github.com/fionalluo/Gymnasium-Robotics.git@c1a267d3dfc6a1b4070f030f00a8985252e461fa#egg=gymnasium_robotics
+h11==0.16.0
+h5py==3.11.0
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.7
+imageio==2.34.1
+imageio-ffmpeg==0.5.1
+importlib_metadata==7.1.0
+importlib_resources==6.4.0
+iniconfig==2.1.0
+installer==0.7.0
+intervaltree==3.1.0
+ipdb==0.13.13
+ipydatawidgets==4.3.5
+ipykernel @ file:///home/conda/feedstock_root/build_artifacts/ipykernel_1719845459717/work
+ipython @ file:///home/conda/feedstock_root/build_artifacts/ipython_1680185408135/work
+ipywidgets==8.1.6
+jaraco.classes==3.4.0
+jaraco.context==6.0.1
+jaraco.functools==4.1.0
+jax==0.4.29
+jax-cuda12-pjrt==0.4.29
+jax-cuda12-plugin==0.4.29
+jaxlib==0.4.29
+jedi==0.19.1
+jeepney==0.9.0
+Jinja2==3.1.4
+joblib==1.5.0
+jupyter-client @ file:///home/conda/feedstock_root/build_artifacts/jupyter_client_1654730843242/work
+jupyter_core @ file:///home/conda/feedstock_root/build_artifacts/jupyter_core_1727163409502/work
+jupyterlab_widgets==3.0.14
+keras==2.13.1
+keyring==25.6.0
+kiwisolver==1.4.7
+labmaze==1.0.6
+lazy_loader==0.4
+libclang==18.1.1
+librosa==0.11.0
+llvmlite==0.43.0
+lxml==5.3.0
+Markdown==3.6
+markdown-it-py==3.0.0
+MarkupSafe==2.1.5
+matplotlib==3.9.4
+matplotlib-inline @ file:///home/conda/feedstock_root/build_artifacts/matplotlib-inline_1733416936468/work
+mdurl==0.1.2
+mido==1.3.3
+minigrid==2.3.1
+ml-dtypes==0.4.0
+more-itertools==10.7.0
+moviepy==1.0.3
+mpmath==1.3.0
+msgpack==1.1.0
+mujoco==3.2.3
+mujoco-utils==0.0.6
+mypy==1.15.0
+mypy_extensions==1.1.0
+nest_asyncio @ file:///home/conda/feedstock_root/build_artifacts/nest-asyncio_1733325553580/work
+networkx==3.2.1
+note-seq==0.0.5
+numba==0.60.0
+numpy==1.23.5
+nvidia-cublas-cu12==12.1.3.1
+nvidia-cuda-cupti-cu12==12.1.105
+nvidia-cuda-nvcc-cu12==12.5.40
+nvidia-cuda-nvrtc-cu12==12.1.105
+nvidia-cuda-runtime-cu12==12.1.105
+nvidia-cudnn-cu12==9.1.0.70
+nvidia-cufft-cu12==11.0.2.54
+nvidia-curand-cu12==10.3.2.106
+nvidia-cusolver-cu12==11.4.5.107
+nvidia-cusparse-cu12==12.1.0.106
+nvidia-ml-py3==7.352.0
+nvidia-nccl-cu12==2.20.5
+nvidia-nvjitlink-cu12==12.5.40
+nvidia-nvtx-cu12==12.1.105
+oauthlib==3.2.2
+opencv-python==4.10.0.84
+opensimplex==0.4.5.1
+opt-einsum==3.3.0
+optax==0.2.2
+packaging==24.1
+pandas==2.2.3
+parso @ file:///home/conda/feedstock_root/build_artifacts/parso_1733271261340/work
+pathspec==0.12.1
+pbs-installer==2025.4.9
+pettingzoo==1.24.3
+pexpect @ file:///home/conda/feedstock_root/build_artifacts/pexpect_1733301927746/work
+pickleshare @ file:///home/conda/feedstock_root/build_artifacts/pickleshare_1733327343728/work
+pillow==10.3.0
+pkginfo==1.12.1.2
+platformdirs==4.2.2
+pluggy==1.5.0
+poetry==2.1.2
+poetry-core==2.1.2
+pooch==1.8.2
+pretty_midi==0.2.10
+proglog==0.1.10
+prompt_toolkit==3.0.47
+protobuf==4.25.3
+psutil @ file:///croot/psutil_1736367091698/work
+ptyprocess @ file:///home/conda/feedstock_root/build_artifacts/ptyprocess_1733302279685/work/dist/ptyprocess-0.7.0-py2.py3-none-any.whl#sha256=92c32ff62b5fd8cf325bec5ab90d7be3d2a8ca8c8a3813ff487a8d2002630d1f
+pure-eval==0.2.2
+pyasn1==0.6.0
+pyasn1_modules==0.4.0
+PyAudio==0.2.14
+pycollada==0.9
+pycparser==2.22
+pydub==0.25.1
+pyfluidsynth==1.3.4
+pygame==2.6.0
+Pygments==2.18.0
+PyOpenGL==3.1.7
+pyparsing==3.1.4
+pyproject_hooks==1.2.0
+pyserial==3.5
+pytest==8.3.5
+pytest-xdist==3.6.1
+python-dateutil @ file:///home/conda/feedstock_root/build_artifacts/python-dateutil_1733215673016/work
+pythreejs==2.4.2
+pytz==2025.2
+PyYAML==6.0.1
+pyzmq @ file:///croot/pyzmq_1734687138743/work
+RapidFuzz==3.13.0
+requests==2.32.3
+requests-oauthlib==2.0.0
+requests-toolbelt==1.0.0
+rich==13.7.1
+-e git+https://github.com/edwhu/robel_scaffolder.git@61df024b66f335ecc4f82ab576f7e3c5070455ab#egg=robel
+-e git+https://github.com/google-research/robopianist.git@0d9736c64eba5faafdf214ed7d38d648ffbd5c7f#egg=robopianist
+rsa==4.9
+ruamel.yaml==0.18.6
+ruamel.yaml.clib==0.2.8
+ruff==0.11.9
+scikit-learn==1.4.2
+scipy==1.13.1
+SecretStorage==3.3.3
+sentry-sdk==2.5.1
+setproctitle==1.3.3
+shellingham==1.5.4
+shtab==1.7.2
+six==1.16.0
+smmap==5.0.1
+sniffio==1.3.1
+sortedcontainers==2.4.0
+soundfile==0.13.1
+soxr==0.5.0.post1
+stack_data @ file:///home/conda/feedstock_root/build_artifacts/stack_data_1733569443808/work
+sympy==1.13.1
+tensorboard==2.13.0
+tensorboard-data-server==0.7.2
+tensorflow-cpu==2.13.1
+tensorflow-estimator==2.13.0
+tensorflow-io-gcs-filesystem==0.37.0
+tensorflow-probability==0.24.0
+termcolor==2.4.0
+threadpoolctl==3.6.0
+tomli==2.0.1
+tomlkit==0.13.2
+toolz==0.12.1
 torch==2.4.0
 torchaudio==2.4.0
 torchvision==0.19.0
-numpy==1.23.5
-gymnasium==0.29.1
-gym==0.26.2
-tensorboard==2.13.0
-wandb==0.17.1
-
-# Reinforcement learning
-stable-baselines3==2.0.0
-
-# Utilities
-rich==13.7.1
-tenacity>=8.2.2
-tyro==0.9.19
-pyyaml==6.0.1
-moviepy==1.0.3
-pygame==2.6.0
-huggingface-hub>=0.11.1
-
-# Robotics and physics
-mujoco==3.2.3
-dm_control==1.0.23
-h5py==3.11.0
-opencv-python==4.10.0.84
-imageio==2.34.1
-
-# Other useful packages
-matplotlib==3.9.4
-pandas==2.2.3
-scipy==1.13.1
-scikit-learn==1.4.2
+tornado==6.4.2
 tqdm==4.66.4
-pillow==10.3.0
-requests==2.32.3
+traitlets @ file:///home/conda/feedstock_root/build_artifacts/traitlets_1733367359838/work
+traittypes==0.2.1
+transforms3d==0.4.2
+trimesh==4.6.8
+triton==3.0.0
+trove-classifiers==2025.4.11.15
+typeguard==4.4.2
+typing_extensions==4.13.2
+tyro==0.9.19
+tzdata==2025.2
 urllib3==2.2.1
-certifi==2024.6.2
+virtualenv==20.30.0
+wandb==0.17.1
+wcwidth @ file:///home/conda/feedstock_root/build_artifacts/wcwidth_1733231326287/work
+websockets==15.0
+Werkzeug==3.0.3
+widgetsnbextension==4.0.14
+wrapt==1.16.0
+xyzservices==2025.4.0
+zipp==3.19.2
+zstandard==0.23.0
