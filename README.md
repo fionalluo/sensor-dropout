@@ -6,6 +6,14 @@ A project for studying sensor dropout and observation space subsets in reinforce
 
 This project requires setting up a conda environment and installing the necessary dependencies, along with two main components: the grid environments and the Gymnasium Robotics environments.
 
+### Repository Setup
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/fionalluo/sensor-dropout
+   cd sensor-dropout
+   ```
+
 ### Conda Environment Setup
 
 1. Create a new conda environment with Python 3.9:
