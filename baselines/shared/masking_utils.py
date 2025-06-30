@@ -40,11 +40,11 @@ def mask_observations_for_student(obs, student_keys, teacher_keys, device=None, 
                 if debug:
                     print(f"[MASKING DEBUG] Key '{key}': using '{unprivileged_key}', shape {v.shape if hasattr(v, 'shape') else 'scalar'}")
             else:
-                # Try to infer shape from any available obs
-                ref_key = next((k for k in teacher_keys if isinstance(obs[k], torch.Tensor)), None)
-                if ref_key is not None:
-                    shape = obs[ref_key].shape
+                # Zero out the key - use the shape of the key from the original obs
+                if key in obs:
+                    shape = obs[key].shape
                 else:
+                    # If the key doesn't exist in obs at all, use a default shape
                     shape = (1,)
                 v = torch.zeros(shape, device=device, dtype=torch.float32)
                 if debug:

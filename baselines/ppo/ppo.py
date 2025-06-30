@@ -93,8 +93,11 @@ class PPOTrainer:
         
         # Initialize wandb
         if hasattr(config, 'use_wandb') and config.use_wandb:
+            if not hasattr(config, 'wandb_project') or config.wandb_project is None:
+                raise ValueError("wandb_project must be set in config when use_wandb is True")
+            
             wandb.init(
-                project=getattr(config, 'wandb_project', 'sensor-dropout'),
+                project=config.wandb_project,
                 name=f"ppo_{config.task}_{seed}",
                 config=vars(config),
                 monitor_gym=False,

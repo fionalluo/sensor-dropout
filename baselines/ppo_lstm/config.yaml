@@ -4,7 +4,7 @@ defaults:
   torch_deterministic: true
   cuda: true
   track: true
-  wandb_project_name: "sensor-dropout"
+  wandb_project: "sensor-dropout-2"
   wandb_entity: null
   capture_video: false
 
@@ -69,7 +69,6 @@ defaults:
   # Logging
   log_interval: 10
   use_wandb: true
-  wandb_project: sensor-dropout
 
   # PPO Encoder Architecture - SIMPLIFIED
   encoder:

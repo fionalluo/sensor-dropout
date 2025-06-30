@@ -4,7 +4,7 @@ defaults:
   torch_deterministic: true
   cuda: true
   track: true
-  wandb_project_name: "sensor-dropout"
+  wandb_project: "sensor-dropout-2"
   wandb_entity: null
   capture_video: false
 
@@ -74,7 +74,6 @@ defaults:
   # Logging
   log_interval: 10
   use_wandb: true
-  wandb_project: sensor-dropout
 
   # PPO Encoder Architecture
   encoder:
@@ -117,7 +116,7 @@ defaults:
 # Tiger Door Key
 gymnasium_tigerdoorkey: &tigerdoorkey_base
   task: gymnasium_TigerDoorKey-v0
-  total_timesteps: 1000000
+  total_timesteps: 400000
   num_envs: 8
   num_steps: 512
   learning_rate: 3e-4
@@ -133,8 +132,8 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
   max_grad_norm: 0.5
   target_kl: 0.015
   eval:
-    eval_interval: 50
-    num_eval_episodes: 30
+    eval_interval: 100
+    num_eval_episodes: 50
     eval_envs: 4
     num_eval_configs: 4
   full_keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
@@ -188,7 +187,7 @@ gymnasium_tigerdoorkeylarge:
 
 gymnasium_maze: &maze_base
   task: gymnasium_Maze7x7-v0
-  total_timesteps: 150000
+  total_timesteps: 400000
   num_envs: 8
   num_steps: 256
   learning_rate: 1e-4
@@ -204,36 +203,36 @@ gymnasium_maze: &maze_base
   max_grad_norm: 0.5
   eval:
     eval_interval: 200
-    num_eval_episodes: 30
+    num_eval_episodes: 50
     eval_envs: 4
     num_eval_configs: 6  # sets of eval keys
   
-  full_keys: {mlp_keys: '\b(goal_position|position|neighbors_3x3)\b', cnn_keys: '\b(neighbors_5x5)\b'}  # omit the distance key
-  keys: {mlp_keys: '\b(goal_position|position|neighbors_3x3)\b', cnn_keys: '\b(neighbors_5x5)\b'}
-  eval_keys:
-    env1:  # Full privileged observations
-      mlp_keys: '\b(goal_position|position|neighbors_3x3)\b'
-      cnn_keys: '\b(neighbors_5x5)\b'
+  full_keys: {mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b', cnn_keys: '^$'}  # omit the distance key
+  keys: {mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b', cnn_keys: '^$'}
+  eval_keys:  # Note that neighbors_5x5 only includes neighbors not in the 3x3 neighbors (they are disjoint)
+    env1:  # Goal position, neighbors 5x5
+      mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b'
+      cnn_keys: '^$'
     
-    env2:  # Only using neighbors_3x3
+    env2:  # Goal position, neighbors_3x3
+      mlp_keys: '\b(goal_position|position|neighbors_3x3)\b'
+      cnn_keys: '^$'
+    
+    env3:  # No goal position, neighbors_3x3
       mlp_keys: '\b(goal_position_unprivileged|position|neighbors_3x3)\b'
-      cnn_keys: '\b(neighbors_5x5_unprivileged)\b'
+      cnn_keys: '^$'
 
-    env3:  # Only using neighbors_5x5
+    env4:  # No goal position, neighbors 5x5
+      mlp_keys: '\b(goal_position_unprivileged|position|neighbors_3x3|neighbors_5x5)\b'
+      cnn_keys: '^$'
+    
+    env5: # No goal position, neighbors_3x3 unprivileged
       mlp_keys: '\b(goal_position_unprivileged|position|neighbors_3x3_unprivileged)\b'
-      cnn_keys: '\b(neighbors_5x5)\b'
-
-    env4:  # Use neighbors 3x3 and goal position
-      mlp_keys: '\b(goal_position|position|neighbors_3x3)\b'
-      cnn_keys: '\b(neighbors_5x5_unprivileged)\b'
+      cnn_keys: '^$'
     
-    env5: # Use neighbors 5x5 and goal position
-      mlp_keys: '\b(goal_position|position|neighbors_3x3_unprivileged)\b'
-      cnn_keys: '\b(neighbors_5x5)\b'
-    
-    env6: # Only using both sets of neighbors, no goal position
-      mlp_keys: '\b(goal_position_unprivileged|position|neighbors_3x3)\b'
-      cnn_keys: '\b(neighbors_5x5)\b'
+    env6: # No goal position, neighbors_5x5 unprivileged
+      mlp_keys: '\b(goal_position_unprivileged|position|neighbors_3x3_unprivileged|neighbors_5x5_unprivileged)\b'
+      cnn_keys: '^$'
 
   # Distillation settings for maze
   distill_coef: 0.1
@@ -286,16 +285,6 @@ gymnasium_blindpick: &blindpick_base
   cycle_mode: "episode"
 
   exp_name: "blindpick_ppo_distill"
-
-# Logging configurations
-no_wandb:
-  use_wandb: false
-  exp_name: "ppo_distill_no_wandb"
-
-wandb_debug:
-  use_wandb: true
-  wandb_project: "sensor-dropout-debug"
-  exp_name: "ppo_distill_debug"
 
 # Distillation-specific configurations
 high_distill:

@@ -4,7 +4,7 @@ defaults:
   torch_deterministic: true
   cuda: true
   track: true
-  wandb_project_name: "sensor-dropout"
+  wandb_project: "sensor-dropout-2"
   wandb_entity: null
   capture_video: false
 
@@ -64,7 +64,6 @@ defaults:
   # Logging
   log_interval: 10
   use_wandb: true
-  wandb_project: sensor-dropout
 
   # PPO Encoder Architecture
   encoder:
@@ -108,7 +107,7 @@ defaults:
 # Tiger Door Key
 gymnasium_tigerdoorkey: &tigerdoorkey_base
   task: gymnasium_TigerDoorKey-v0
-  total_timesteps: 150000 # 150000
+  total_timesteps: 400000 # 150000
   num_envs: 8
   num_steps: 256
   learning_rate: 1e-4
@@ -124,7 +123,7 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
   max_grad_norm: 0.5
   eval:
     eval_interval: 100
-    num_eval_episodes: 10
+    num_eval_episodes: 50
     eval_envs: 4
     num_eval_configs: 4
   full_keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
@@ -171,8 +170,8 @@ gymnasium_maze: &maze_base
   vf_coef: 0.5
   max_grad_norm: 0.5
   eval:
-    eval_interval: 100
-    num_eval_episodes: 10
+    eval_interval: 200
+    num_eval_episodes: 50
     eval_envs: 4
     num_eval_configs: 6  # sets of eval keys
   
@@ -208,6 +207,7 @@ gymnasium_maze: &maze_base
 gymnasium_maze11:
   << : *maze_base
   task: gymnasium_Maze11x11-v0
+  total_timesteps: 1500000
   exp_name: "maze11_ppo"
 
 # Blind Pick environment
@@ -249,16 +249,6 @@ gymnasium_blindpick: &blindpick_base
       cnn_keys: 'camera_side'
 
   exp_name: "blindpick_ppo"
-
-# Logging configurations
-no_wandb:
-  use_wandb: false
-  exp_name: "ppo_no_wandb"
-
-wandb_debug:
-  use_wandb: true
-  wandb_project: "sensor-dropout-debug"
-  exp_name: "ppo_debug"
 
 # Network architecture variations
 large_network:

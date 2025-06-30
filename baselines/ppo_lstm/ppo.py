@@ -30,6 +30,9 @@ class PPOLSTMTrainer:
         self.writer = SummaryWriter(f"runs/ppo_lstm_{config.task}_{seed}")
         self.use_wandb = config.use_wandb
         if self.use_wandb:
+            if not hasattr(config, 'wandb_project') or config.wandb_project is None:
+                raise ValueError("wandb_project must be set in config when use_wandb is True")
+            
             wandb.init(
                 project=config.wandb_project,
                 name=f"ppo_lstm_{config.task}_{seed}",
