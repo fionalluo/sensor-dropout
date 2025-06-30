@@ -8,29 +8,29 @@ This document provides examples of how to use the PPO RNN baseline for training 
 
 ```bash
 # Train on full observations (default)
-python baselines/ppo_rnn/train.py --configs gymnasium_tigerkeydoor
+python baselines/ppo_rnn/train.py --configs gymnasium_tigerdoorkey
 
 # Train on full observations with specific seed
-python baselines/ppo_rnn/train.py --configs gymnasium_tigerkeydoor --seed 42
+python baselines/ppo_rnn/train.py --configs gymnasium_tigerdoorkey --seed 42
 
 # Train without wandb logging
-python baselines/ppo_rnn/train.py --configs gymnasium_tigerkeydoor no_wandb
+python baselines/ppo_rnn/train.py --configs gymnasium_tigerdoorkey no_wandb
 ```
 
 ### Training on Specific Observation Subsets
 
 ```bash
 # Train on env1 (full privileged observations)
-python baselines/ppo_rnn/train.py --configs gymnasium_tigerkeydoor --training_env env1
+python baselines/ppo_rnn/train.py --configs gymnasium_tigerdoorkey --training_env env1
 
 # Train on env2 (must press button to reveal tiger/treasure)
-python baselines/ppo_rnn/train.py --configs gymnasium_tigerkeydoor --training_env env2
+python baselines/ppo_rnn/train.py --configs gymnasium_tigerdoorkey --training_env env2
 
 # Train on env3 (must get key to reveal unlocked doors)
-python baselines/ppo_rnn/train.py --configs gymnasium_tigerkeydoor --training_env env3
+python baselines/ppo_rnn/train.py --configs gymnasium_tigerdoorkey --training_env env3
 
 # Train on env4 (must press button and get key)
-python baselines/ppo_rnn/train.py --configs gymnasium_tigerkeydoor --training_env env4
+python baselines/ppo_rnn/train.py --configs gymnasium_tigerdoorkey --training_env env4
 ```
 
 ## Maze Environment
@@ -89,14 +89,14 @@ python baselines/ppo_rnn/train.py --configs gymnasium_blindpick --training_env e
   - CNN: `^$` (empty)
 
 - **env2**: Must press button to reveal tiger/treasure
-  - MLP: `neighbors_unprivileged_key`, `door_unprivileged`, `doors_unlocked`, `position`, `has_key`
+  - MLP: `neighbors_unprivileged_nokey`, `door_unprivileged`, `doors_unlocked`, `position`, `has_key`
   - CNN: `^$` (empty)
-  - **Substitution**: `neighbors` → `neighbors_unprivileged_key`, `door` → `door_unprivileged`
+  - **Substitution**: `neighbors` → `neighbors_unprivileged_nokey`, `door` → `door_unprivileged`
 
 - **env3**: Must get key to reveal unlocked doors
-  - MLP: `neighbors_unprivileged_button`, `door`, `doors_unlocked_unprivileged`, `position`, `has_key`
+  - MLP: `neighbors_unprivileged_nobutton`, `door`, `doors_unlocked_unprivileged`, `position`, `has_key`
   - CNN: `^$` (empty)
-  - **Substitution**: `neighbors` → `neighbors_unprivileged_button`, `doors_unlocked` → `doors_unlocked_unprivileged`
+  - **Substitution**: `neighbors` → `neighbors_unprivileged_nobutton`, `doors_unlocked` → `doors_unlocked_unprivileged`
 
 - **env4**: Must press button and get key
   - MLP: `neighbors_unprivileged`, `door_unprivileged`, `doors_unlocked_unprivileged`, `position`, `has_key`
@@ -108,13 +108,13 @@ python baselines/ppo_rnn/train.py --configs gymnasium_blindpick --training_env e
 The evaluation system uses a **prefix-based substitution** approach:
 
 1. **For each privileged key** that the agent expects (e.g., `neighbors`)
-2. **Look for unprivileged keys** that start with `{key}_unprivileged` (e.g., `neighbors_unprivileged_key`)
+2. **Look for unprivileged keys** that start with `{key}_unprivileged` (e.g., `neighbors_unprivileged_nokey`)
 3. **Substitute** the unprivileged key for the privileged key
 4. **If no match found**, zero out the observation
 
 **Examples:**
-- `neighbors` → `neighbors_unprivileged_key` (if available)
-- `neighbors` → `neighbors_unprivileged_button` (if available)
+- `neighbors` → `neighbors_unprivileged_nokey` (if available)
+- `neighbors` → `neighbors_unprivileged_nobutton` (if available)
 - `neighbors` → `neighbors_unprivileged` (if available)
 - `door` → `door_unprivileged` (if available)
 
@@ -205,5 +205,5 @@ The system supports various configuration options:
 
 Example:
 ```bash
-python baselines/ppo_rnn/train.py --configs gymnasium_tigerkeydoor large_network high_entropy --training_env env2
+python baselines/ppo_rnn/train.py --configs gymnasium_tigerdoorkey large_network high_entropy --training_env env2
 ``` 

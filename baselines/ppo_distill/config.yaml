@@ -145,11 +145,11 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
       cnn_keys: '^$'
 
     env2: # must press button to reveal tiger/treasure up-down relative position. starts with key
-      mlp_keys: '\b(neighbors_unprivileged_key|door_unprivileged|doors_unlocked|position|has_key)\b'
+      mlp_keys: '\b(neighbors_unprivileged_nokey|door_unprivileged|doors_unlocked|position|has_key)\b'
       cnn_keys: '^$'
 
     env3:  # must get key to reveal unlocked doors. starts with button
-      mlp_keys: '\b(neighbors_unprivileged_button|door|doors_unlocked_unprivileged|position|has_key)\b'
+      mlp_keys: '\b(neighbors_unprivileged_nobutton|door|doors_unlocked_unprivileged|position|has_key)\b'
       cnn_keys: '^$'
 
     env4:  # must press button and get key to reveal unlocked doors and tiger/treasure relative position. starts with nothing

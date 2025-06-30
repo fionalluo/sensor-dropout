@@ -338,7 +338,7 @@ class PPOTrainer:
             "charts/SPS": int(self.global_step / (time.time() - self.start_time))
         })
 
-    def train(self):
+    def train(self, skip_subset_eval=False):
         """Main training loop."""
         self.start_time = time.time()
         
@@ -350,7 +350,7 @@ class PPOTrainer:
         from baselines.ppo.train import make_envs
         eval_envs, _ = run_initial_evaluation(
             self.agent, self.config, self.device, make_envs, 
-            writer=self.writer, use_wandb=self.use_wandb
+            writer=self.writer, use_wandb=self.use_wandb, debug=False, skip_subset_eval=skip_subset_eval
         )
         
         for iteration in range(self.config.num_iterations):
@@ -363,7 +363,7 @@ class PPOTrainer:
             # Periodic evaluation using shared utility
             self.last_eval, eval_envs = run_periodic_evaluation(
                 self.agent, self.config, self.device, self.global_step, self.last_eval, eval_envs,
-                make_envs_func=make_envs, writer=self.writer, use_wandb=self.use_wandb
+                make_envs_func=make_envs, writer=self.writer, use_wandb=self.use_wandb, debug=False, skip_subset_eval=skip_subset_eval
             )
             
             # Log iteration info
@@ -382,12 +382,20 @@ class PPOTrainer:
         
         return self.agent
 
-def train_ppo(envs, config, seed, num_iterations=None):
-    """Main function to train PPO agent."""
+def train_ppo(envs, config, seed, num_iterations=None, skip_subset_eval=False):
+    """Main function to train PPO agent.
+    
+    Args:
+        envs: Vectorized environment
+        config: Configuration object
+        seed: Random seed
+        num_iterations: Number of training iterations (optional)
+        skip_subset_eval: Whether to skip subset evaluation (for subset policy training)
+    """
     trainer = PPOTrainer(envs, config, seed)
     
     # Override num_iterations if provided
     if num_iterations is not None:
         trainer.config.num_iterations = num_iterations
     
-    return trainer.train() 
+    return trainer.train(skip_subset_eval=skip_subset_eval) 

@@ -438,7 +438,7 @@ class PPORnnTrainer:
             "losses/explained_variance": explained_var,
         })
 
-    def train(self):
+    def train(self, skip_subset_eval=False):
         """Main training loop for PPO RNN."""
         self.start_time = time.time()
         
@@ -446,7 +446,7 @@ class PPORnnTrainer:
         from baselines.ppo_rnn.train import make_envs
         eval_envs, _ = run_initial_evaluation(
             self.agent, self.config, self.device, make_envs, 
-            writer=self.writer, use_wandb=self.use_wandb
+            writer=self.writer, use_wandb=self.use_wandb, skip_subset_eval=skip_subset_eval
         )
         
         num_iterations = self.config.total_timesteps // (self.config.num_envs * self.config.num_steps)
@@ -480,7 +480,7 @@ class PPORnnTrainer:
             # Periodic evaluation using shared utility
             self.last_eval, eval_envs = run_periodic_evaluation(
                 self.agent, self.config, self.device, self.global_step, self.last_eval, eval_envs,
-                make_envs_func=make_envs, writer=self.writer, use_wandb=self.use_wandb
+                make_envs_func=make_envs, writer=self.writer, use_wandb=self.use_wandb, skip_subset_eval=skip_subset_eval
             )
             
             # Print progress
@@ -539,15 +539,24 @@ class PPORnnTrainer:
                     if isinstance(value, (int, float)):
                         self.log_metrics({f"eval_subset/{subset_name}/{key}": value})
 
-def train_ppo_rnn(envs, config, seed, num_iterations=None, training_env=None):
-    """Main entry point for PPO RNN training."""
+def train_ppo_rnn(envs, config, seed, num_iterations=None, training_env=None, skip_subset_eval=False):
+    """Main entry point for PPO RNN training.
+    
+    Args:
+        envs: Vectorized environment
+        config: Configuration object
+        seed: Random seed
+        num_iterations: Number of training iterations (optional)
+        training_env: Training environment (optional)
+        skip_subset_eval: Whether to skip subset evaluation (for subset policy training)
+    """
     trainer = PPORnnTrainer(envs, config, seed, training_env=training_env)
     
     # Override num_iterations if provided
     if num_iterations is not None:
         trainer.config.num_iterations = num_iterations
     
-    return trainer.train()
+    return trainer.train(skip_subset_eval=skip_subset_eval)
 
 def main():
     """Main entry point for PPO RNN training."""

@@ -22,6 +22,7 @@ from baselines.shared.policy_utils import (
     load_metadata_from_dir
 )
 from subset_policies.load_subset_policy import SubsetPolicyLoader
+from baselines.shared.masking_utils import mask_observations_for_student
 
 
 class ExpertPolicyManager:
@@ -292,6 +293,10 @@ class PPODistillAgent:
             }
             self.expert_manager.expert_eval_keys = default_eval_keys
         
+        # Pre-compute teacher keys for each expert configuration
+        self.teacher_keys_cache = {}
+        self._precompute_teacher_keys()
+        
         # Initialize configuration scheduler
         self.config_scheduler = ConfigurationScheduler(
             self.expert_manager.expert_eval_keys, 
@@ -312,6 +317,58 @@ class PPODistillAgent:
         
         # Initialize current configuration
         self.current_config_name, self.current_eval_keys = self.get_current_config()
+    
+    def _parse_teacher_keys(self, eval_keys: Dict, available_keys: List[str]) -> List[str]:
+        """
+        Helper method to parse teacher keys from eval_keys patterns.
+        
+        Args:
+            eval_keys: Dictionary with 'mlp_keys' and 'cnn_keys' patterns
+            available_keys: List of available observation keys
+            
+        Returns:
+            List[str]: Parsed teacher keys
+        """
+        def parse_keys(pattern, available_keys):
+            """Filter available keys based on regex pattern."""
+            if pattern == '.*':
+                return available_keys
+            elif pattern == '^$':
+                return []
+            else:
+                import re
+                return [k for k in available_keys if re.search(pattern, k)]
+        
+        mlp_keys = parse_keys(eval_keys['mlp_keys'], available_keys)
+        cnn_keys = parse_keys(eval_keys['cnn_keys'], available_keys)
+        return mlp_keys + cnn_keys
+    
+    def _precompute_teacher_keys(self):
+        """Pre-compute teacher keys for each expert configuration."""
+        # Get teacher keys directly from the loaded expert policies
+        all_possible_keys = set()
+        
+        # Collect all possible keys from all expert policies
+        for config_name, expert_agent in self.expert_manager.expert_policies.items():
+            if hasattr(expert_agent, 'mlp_keys'):
+                all_possible_keys.update(expert_agent.mlp_keys)
+            if hasattr(expert_agent, 'cnn_keys'):
+                all_possible_keys.update(expert_agent.cnn_keys)
+        
+        # Also add the student's keys to ensure we have all possible keys
+        if hasattr(self.base_agent, 'mlp_keys'):
+            all_possible_keys.update(self.base_agent.mlp_keys)
+        if hasattr(self.base_agent, 'cnn_keys'):
+            all_possible_keys.update(self.base_agent.cnn_keys)
+        
+        all_possible_keys = list(all_possible_keys)
+        print(f"🔧 All possible keys from expert policies and student: {all_possible_keys}")
+        
+        # Pre-compute teacher keys for each expert configuration
+        for config_name, eval_keys in self.expert_manager.expert_eval_keys.items():
+            teacher_keys = self._parse_teacher_keys(eval_keys, all_possible_keys)
+            self.teacher_keys_cache[config_name] = teacher_keys
+            print(f"🔧 Pre-computed teacher keys for {config_name}: {teacher_keys}")
     
     def get_current_config(self) -> Tuple[str, Dict]:
         """Get the current configuration."""
@@ -350,141 +407,21 @@ class PPODistillAgent:
         """
         Mask observations based on eval_keys while keeping the original structure.
         This matches the exact logic from eval_utils.py.
-        
         The student receives full_keys, but we map them to available keys in the current subset.
-        
         Args:
             obs: Full observations (full_keys)
             eval_keys: Eval keys for current configuration (subset keys)
-            
         Returns:
             Dict: Masked observations with same structure as input
         """
-        # Debug logging to see if this method is being called (less frequent)
-        if not hasattr(self, '_last_mask_log_time'):
-            self._last_mask_log_time = 0
+        student_keys = self.mlp_keys + self.cnn_keys
         
-        current_time = time.time()
-        if current_time - self._last_mask_log_time > 60.0:  # Log every 60 seconds
-            print(f"🎭 _mask_observations called with config: {self.current_config_name}")
-            self._last_mask_log_time = current_time
+        # Get teacher keys from cache using current configuration name
+        config_name, _ = self.get_current_config()
+        teacher_keys = self.teacher_keys_cache.get(config_name, [])
+        print("[DEBUG TEACHER] Teacher keys:", teacher_keys)
         
-        # Step 1: Filter observations by patterns (like filter_observations_by_keys)
-        mlp_pattern = eval_keys['mlp_keys']
-        cnn_pattern = eval_keys['cnn_keys']
-        
-        if not hasattr(self, '_last_mask_debug_time'):
-            self._last_mask_debug_time = 0
-        
-        current_time = time.time()
-        if current_time - self._last_mask_debug_time > 30.0:  # Log every 30 seconds
-            print(f"🎭 _mask_observations debug for {self.current_config_name}:")
-            print(f"  MLP pattern: {mlp_pattern}")
-            print(f"  CNN pattern: {cnn_pattern}")
-            print(f"  Available keys: {list(obs.keys())}")
-            self._last_mask_debug_time = current_time
-        
-        def matches_pattern(key, pattern):
-            if pattern == '.*':
-                return True
-            elif pattern == '^$':
-                return False
-            else:
-                return re.search(pattern, key) is not None
-        
-        # Collect all keys that match the patterns (these are the "available" keys)
-        available_keys = set()
-        
-        # Process MLP keys
-        for key, value in obs.items():
-            if key in ['reward', 'is_first', 'is_last', 'is_terminal']:
-                continue
-            if matches_pattern(key, mlp_pattern):
-                available_keys.add(key)
-        
-        # Process CNN keys
-        for key, value in obs.items():
-            if key in ['reward', 'is_first', 'is_last', 'is_terminal']:
-                continue
-            if matches_pattern(key, cnn_pattern):
-                available_keys.add(key)
-        
-        # Create filtered observations dict
-        filtered_obs = {}
-        for key, value in obs.items():
-            if key in available_keys:
-                filtered_obs[key] = value
-        
-        # Step 2: Substitute unprivileged keys for agent keys (like substitute_unprivileged_for_agent)
-        # Get all keys the agent expects (full_keys)
-        all_keys = self.mlp_keys + self.cnn_keys
-        final_obs = {}
-        
-        # Detailed logging for key processing (less frequent)
-        key_logs = []
-        
-        for key in all_keys:
-            if key in filtered_obs:
-                # Key is directly available
-                final_obs[key] = filtered_obs[key]
-                key_logs.append(f"  {key}: {key} (direct)")
-            else:
-                # Key is not available, look for unprivileged version with prefix matching
-                unprivileged_key = self._find_unprivileged_key(key, filtered_obs)
-                if unprivileged_key:
-                    # Use unprivileged version as substitute
-                    final_obs[key] = filtered_obs[unprivileged_key]
-                    key_logs.append(f"  {key}: {unprivileged_key} (unprivileged substitute)")
-                else:
-                    # Neither privileged nor unprivileged available, will be zeroed later
-                    final_obs[key] = None
-                    key_logs.append(f"  {key}: zeroed (not available)")
-        
-        # Print detailed key processing log (less frequent to avoid spam)
-        if not hasattr(self, '_last_key_log_time'):
-            self._last_key_log_time = 0
-        
-        current_time = time.time()
-        if current_time - self._last_key_log_time > 15.0:  # Log every 15 seconds
-            print(f"🔑 Key processing for {self.current_config_name}:")
-            for log in key_logs:
-                print(log)
-            print("-" * 30)
-            self._last_key_log_time = current_time
-        
-        # Step 3: Convert to tensors and handle None values (zero out)
-        masked_obs = {}
-        zeroed_keys = []
-        for key in all_keys:
-            if final_obs[key] is not None:
-                if isinstance(final_obs[key], torch.Tensor):
-                    # Ensure tensor is float32
-                    if final_obs[key].dtype != torch.float32:
-                        masked_obs[key] = final_obs[key].float()
-                    else:
-                        masked_obs[key] = final_obs[key].clone()
-                else:
-                    # Convert to tensor and ensure float32 dtype
-                    masked_obs[key] = torch.tensor(final_obs[key], device=self.device, dtype=torch.float32)
-            else:
-                # Zero out missing observations
-                zeroed_keys.append(key)
-                if key in obs:
-                    if isinstance(obs[key], torch.Tensor):
-                        # Create zero tensor with same shape and ensure float32
-                        masked_obs[key] = torch.zeros_like(obs[key], dtype=torch.float32)
-                    else:
-                        # Create zero tensor with expected shape and float32
-                        masked_obs[key] = torch.zeros_like(torch.tensor(obs[key], device=self.device, dtype=torch.float32))
-                else:
-                    # Fallback: create zero tensor with expected shape and float32
-                    # This shouldn't happen in practice, but just in case
-                    masked_obs[key] = torch.zeros(1, device=self.device, dtype=torch.float32)
-        
-        # Debug: Show zeroed keys
-        if zeroed_keys and current_time - self._last_mask_debug_time > 30.0:
-            print(f"🎭 Zeroed keys for {self.current_config_name}: {zeroed_keys}")
-        
+        masked_obs = mask_observations_for_student(obs, student_keys, teacher_keys, device=self.device)
         return masked_obs
     
     def _find_unprivileged_key(self, full_key: str, available_keys: dict) -> Optional[str]:
@@ -507,12 +444,38 @@ class PPODistillAgent:
         
         return None
     
-    def get_action_and_value(self, obs, lstm_state=None, done=None, action=None):
+    def get_action_and_value(self, obs, lstm_state=None, done=None, action=None, evaluation_mode=False):
         """
         Get action and value from the student policy, along with expert actions for distillation.
         Every 100 steps, print the action chosen by the student and the expert for the first environment in the batch.
+        
+        Args:
+            obs: Observations from environment
+            lstm_state: LSTM state (for RNN agents)
+            done: Done flags (for RNN agents)
+            action: Action (for PPO)
+            evaluation_mode: If True, skip expert computation and internal masking
         """
-        # Get current configuration
+        if evaluation_mode:
+            # In evaluation mode, observations are already masked externally
+            # Skip expert computation and internal masking
+            if self.student_policy_type == "ppo_rnn":
+                action, logprob, entropy, value, new_lstm_state = self.base_agent.get_action_and_value(
+                    obs, lstm_state, done, action
+                )
+            else:
+                action, logprob, entropy, value = self.base_agent.get_action_and_value(
+                    obs, action
+                )
+                new_lstm_state = None
+            
+            # Return dummy values for expert_actions and student_logits to maintain interface
+            dummy_expert_actions = {}
+            dummy_student_logits = torch.zeros_like(action) if hasattr(action, 'shape') else torch.tensor(0.0)
+            
+            return action, logprob, entropy, value, new_lstm_state, dummy_expert_actions, dummy_student_logits
+        
+        # Normal training mode - get current configuration and mask observations
         config_name, eval_keys = self.get_current_config()
         
         # Mask observations based on current configuration

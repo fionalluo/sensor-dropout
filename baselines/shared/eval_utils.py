@@ -6,6 +6,7 @@ This module provides evaluation functions that can be used across different base
 import numpy as np
 import torch
 import re
+from baselines.shared.masking_utils import mask_observations_for_student
 
 
 def get_eval_keys(config, eval_mode="full"):
@@ -391,427 +392,200 @@ def process_video_frames(frames, key):
         raise ValueError(f"Unexpected shape for {key}: {frames.shape}")
 
 
-def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_envs_func=None, 
-                                          writer=None, use_wandb=False, global_step=0, debug=False):
-    """Evaluate agent across multiple observation subsets defined in eval_keys.
-    
-    Args:
-        agent: Agent to evaluate
-        envs: Vectorized environment
-        device: Device to run evaluation on
-        config: Configuration object with eval_keys structure
-        make_envs_func: Function to create evaluation environments
-        writer: TensorBoard writer (optional)
-        use_wandb: Whether to use wandb logging
-        global_step: Current global step for logging
-        debug: Whether to print detailed debugging information
-        
-    Returns:
-        dict: Combined evaluation metrics
+def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_envs_func=None, writer=None, use_wandb=False, global_step=0, debug=False):
     """
-    if not hasattr(config, 'eval') or not hasattr(config.eval, 'num_eval_configs'):
-        print("Warning: No eval.num_eval_configs found in config, skipping subset evaluation")
-        return {}
-    
+    Evaluate agent across multiple observation subsets defined in eval_keys.
+    For each envN, mask observations to the keys specified in config.eval_keys.envN.
+    The student always receives all training keys (agent.mlp_keys + agent.cnn_keys), zeroing out missing ones.
+    Fail fast if any config is missing. No fallbacks, no hardcoded logic.
+    """
+    if not hasattr(config, 'eval_keys') or not hasattr(config, 'eval') or not hasattr(config.eval, 'num_eval_configs'):
+        raise RuntimeError("Missing eval_keys or num_eval_configs in config!")
     num_eval_configs = config.eval.num_eval_configs
     env_metrics = {}
-    
-    if debug:
-        print(f"Running evaluation across {num_eval_configs} observation subsets...")
-    
-    all_episode_returns = []
-    all_episode_lengths = []
-    
+
+    # The full set of student keys (in order) from training
+    if not hasattr(agent, 'mlp_keys') or not hasattr(agent, 'cnn_keys'):
+        raise RuntimeError("Agent is missing mlp_keys or cnn_keys!")
+    student_keys = agent.mlp_keys + agent.cnn_keys
+
     for subset_idx in range(1, num_eval_configs + 1):
         env_name = f"env{subset_idx}"
-        
-        # Get eval keys for this environment
-        if hasattr(config, 'eval_keys') and hasattr(config.eval_keys, env_name):
-            eval_keys = getattr(config.eval_keys, env_name)
-            mlp_keys_pattern = eval_keys.mlp_keys
-            cnn_keys_pattern = eval_keys.cnn_keys
-        else:
-            if debug:
-                print(f"Warning: No eval_keys.{env_name} found, using default patterns")
-            mlp_keys_pattern = '.*'
-            cnn_keys_pattern = '.*'
-        
-        if debug:
-            print(f"\n=== {env_name} Configuration ===")
-            print(f"MLP keys pattern: {mlp_keys_pattern}")
-            print(f"CNN keys pattern: {cnn_keys_pattern}")
-        
+        if not hasattr(config.eval_keys, env_name):
+            raise RuntimeError(f"Missing eval_keys for {env_name} in config!")
+        eval_keys = getattr(config.eval_keys, env_name)
+        mlp_keys_pattern = getattr(eval_keys, 'mlp_keys', None)
+        cnn_keys_pattern = getattr(eval_keys, 'cnn_keys', None)
+        if mlp_keys_pattern is None or cnn_keys_pattern is None:
+            raise RuntimeError(f"Missing mlp_keys or cnn_keys for {env_name} in config!")
+
         # Create evaluation environments
         if make_envs_func is None:
-            raise ValueError("make_envs_func must be provided")
+            raise RuntimeError("make_envs_func must be provided!")
         eval_envs = make_envs_func(config, num_envs=config.eval.eval_envs)
         eval_envs.num_envs = config.eval.eval_envs
-        
-        # If this is env1, compare with training configuration
-        if env_name == "env1" and debug:
-            print(f"\n--- Comparing env1 with training configuration ---")
-            print(f"Training MLP keys: {agent.mlp_keys}")
-            print(f"Training CNN keys: {agent.cnn_keys}")
-            print(f"Training full_keys MLP pattern: {getattr(config.full_keys, 'mlp_keys', 'N/A')}")
-            print(f"Training full_keys CNN pattern: {getattr(config.full_keys, 'cnn_keys', 'N/A')}")
-            
-            # Check if patterns are equivalent
-            training_mlp_matches = []
-            training_cnn_matches = []
-            
-            for key in eval_envs.obs_space.keys():
-                if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
-                    if re.search(getattr(config.full_keys, 'mlp_keys', '.*'), key):
-                        training_mlp_matches.append(key)
-                    if re.search(getattr(config.full_keys, 'cnn_keys', '.*'), key):
-                        training_cnn_matches.append(key)
-            
-            print(f"Training would match MLP keys: {training_mlp_matches}")
-            print(f"Training would match CNN keys: {training_cnn_matches}")
-        
-        # Print available observation keys in environment
-        if debug:
-            print(f"Available observation keys in environment:")
-            for key, space in eval_envs.obs_space.items():
-                if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
-                    print(f"  {key}: {space.shape}")
-            
-            # Print agent's expected keys
-            print(f"Agent expects these keys:")
-            print(f"  MLP keys: {agent.mlp_keys}")
-            print(f"  CNN keys: {agent.cnn_keys}")
-            
-            # Print what keys will be used for masking
-            if hasattr(agent, 'current_eval_keys'):
-                print(f"Agent's current eval_keys: {agent.current_eval_keys}")
-            else:
-                print(f"Using eval_keys from config: mlp_keys={mlp_keys_pattern}, cnn_keys={cnn_keys_pattern}")
-        
-        # Run evaluation with observation filtering
+
+        num_episodes = config.eval.num_eval_episodes
         env_episode_returns = []
         env_episode_lengths = []
-        num_episodes = config.eval.num_eval_episodes
-        
-        # Initialize video logging for this environment
         video_frames = {key: [] for key in getattr(config, 'log_keys_video', [])}
-        
-        # Initialize observation storage
-        obs = {}
-        # Use agent's expected keys instead of evaluation environment's keys
-        # This ensures consistency with the training environment
-        if hasattr(agent, 'mlp_keys') and hasattr(agent, 'cnn_keys'):
-            all_keys = agent.mlp_keys + agent.cnn_keys
-        else:
-            # Fallback: use evaluation environment's keys
-            all_keys = []
-            for key in eval_envs.obs_space:
-                if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
-                    all_keys.append(key)
-        
-        for key in all_keys:
-            if key in eval_envs.obs_space:
-                if len(eval_envs.obs_space[key].shape) == 3 and eval_envs.obs_space[key].shape[-1] == 3:
-                    obs[key] = torch.zeros((eval_envs.num_envs,) + eval_envs.obs_space[key].shape).to(device)
-                else:
-                    size = np.prod(eval_envs.obs_space[key].shape)
-                    obs[key] = torch.zeros((eval_envs.num_envs, size)).to(device)
-            else:
-                # Key not in evaluation environment, create a placeholder
-                # This can happen when the agent expects keys that aren't in the eval environment
-                obs[key] = torch.zeros((eval_envs.num_envs, 1)).to(device)
-        
+
         # Initialize actions
         action_shape = eval_envs.act_space['action'].shape
         acts = {
             'action': np.zeros((eval_envs.num_envs,) + action_shape, dtype=np.float32),
             'reset': np.ones(eval_envs.num_envs, dtype=bool)
         }
-        
-        # Get initial observations
         obs_dict = eval_envs.step(acts)
-        next_obs = {}
         
-        # For PPO Distill agents, temporarily set the current configuration to match this evaluation environment
-        original_config_name = None
-        original_eval_keys = None
-        if hasattr(agent, 'config_scheduler') and hasattr(agent, 'current_config_name'):
-            # Save original configuration
-            original_config_name = agent.current_config_name
-            original_eval_keys = agent.current_eval_keys
-            
-            # Set configuration to match this evaluation environment
-            if hasattr(agent, 'expert_manager') and env_name in agent.expert_manager.expert_eval_keys:
-                agent.current_config_name = env_name
-                agent.current_eval_keys = agent.expert_manager.expert_eval_keys[env_name]
-                if debug:
-                    print(f"Temporarily set agent config to {env_name}: {agent.current_eval_keys}")
+        # Now parse teacher_keys from the current envN's patterns using actual available keys
+        def parse_keys(pattern, available_keys):
+            """Filter available keys based on regex pattern."""
+            if pattern == '.*':
+                return available_keys
+            elif pattern == '^$':
+                return []
+            else:
+                import re
+                matched_keys = [k for k in available_keys if re.search(pattern, k)]
+                print(f"[REGEX DEBUG] Pattern: '{pattern}'")
+                print(f"[REGEX DEBUG] Available keys: {available_keys}")
+                print(f"[REGEX DEBUG] Matched keys: {matched_keys}")
+                return matched_keys
         
-        # Use agent's own observation masking logic instead of manual filtering
-        if hasattr(agent, '_mask_observations'):
-            # Use the agent's internal masking logic
-            masked_obs = agent._mask_observations(obs_dict, agent.current_eval_keys if hasattr(agent, 'current_eval_keys') else {'mlp_keys': '.*', 'cnn_keys': '.*'})
-            
-            # Store video frames for the first episode only (to log 1 video per evaluation)
-            # Use masked observations to show what the agent actually sees
-            if len(env_episode_returns) == 0:  # Only for the first episode
-                for key in video_frames.keys():
-                    if key in masked_obs:
-                        video_frames[key].append(masked_obs[key][0].cpu().numpy().copy())
-                    elif key in obs_dict:
-                        # Fallback to original if not in masked
-                        video_frames[key].append(obs_dict[key][0].copy())
-            
-            # Process observations
-            for key in all_keys:
-                if key in masked_obs:
-                    next_obs[key] = masked_obs[key]
-                else:
-                    # Zero out missing observations
-                    if key in obs:
-                        next_obs[key] = torch.zeros_like(obs[key])
-        else:
-            # Fallback to manual filtering for non-distill agents
-            filtered_obs_dict = filter_observations_by_keys(obs_dict, mlp_keys_pattern, cnn_keys_pattern)
-            final_obs_dict = substitute_unprivileged_for_agent(all_keys, filtered_obs_dict, obs_dict)
-            
-            # Store video frames for the first episode only (to log 1 video per evaluation)
-            # Use filtered observations to show what the agent actually sees
-            if len(env_episode_returns) == 0:  # Only for the first episode
-                for key in video_frames.keys():
-                    if key in final_obs_dict and final_obs_dict[key] is not None:
-                        # Use the filtered/substituted observation
-                        video_frames[key].append(final_obs_dict[key][0].copy())
-                    elif key in obs_dict:
-                        # Fallback to original if not in filtered
-                        video_frames[key].append(obs_dict[key][0].copy())
-            
-            # Process observations
-            for key in all_keys:
-                if final_obs_dict[key] is not None:
-                    next_obs[key] = torch.Tensor(final_obs_dict[key].astype(np.float32)).to(device)
-                else:
-                    # Zero out missing observations
-                    if key in obs:
-                        next_obs[key] = torch.zeros_like(obs[key])
+        # Get available keys from the first observation
+        available_keys = [k for k in obs_dict.keys() if k not in ['reward', 'is_first', 'is_last', 'is_terminal']]
+        print(f"[REGEX DEBUG] All available keys: {available_keys}")
+        
+        teacher_keys = parse_keys(mlp_keys_pattern, available_keys) + parse_keys(cnn_keys_pattern, available_keys)
         
         next_done = torch.Tensor(obs_dict['is_last'].astype(np.float32)).to(device)
-        
+
         # Track episode returns and lengths
         env_returns = np.zeros(eval_envs.num_envs)
         env_lengths = np.zeros(eval_envs.num_envs)
-        
-        # Initialize LSTM state for RNN agents
         lstm_state = None
         if hasattr(agent, 'get_initial_lstm_state'):
             try:
-                # Try calling with num_envs argument first (for PPO-RNN agents)
                 initial_state = agent.get_initial_lstm_state(eval_envs.num_envs)
                 lstm_state = (
                     initial_state[0].expand(-1, eval_envs.num_envs, -1),
                     initial_state[1].expand(-1, eval_envs.num_envs, -1)
                 )
             except TypeError:
-                # If that fails, try calling without arguments (for PPO agents that return None)
                 initial_state = agent.get_initial_lstm_state()
                 if initial_state is not None:
                     lstm_state = (
                         initial_state[0].expand(-1, eval_envs.num_envs, -1),
                         initial_state[1].expand(-1, eval_envs.num_envs, -1)
                     )
-        
-        # Run evaluation until we have enough episodes
+
+        first_episode = True
         while len(env_episode_returns) < num_episodes:
-            # Convert obs_dict to tensors for the agent
+            # Convert obs_dict to tensors
             obs_tensors = {}
             for key, value in obs_dict.items():
                 if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
-                    obs_tensors[key] = torch.Tensor(value.astype(np.float32)).to(device)
+                    obs_tensors[key] = torch.tensor(value, device=device, dtype=torch.float32)
                 else:
                     obs_tensors[key] = value
-            
+            # Mask to the full set of student_keys, using teacher_keys from the current envN
+            masked_obs = mask_observations_for_student(obs_tensors, student_keys, teacher_keys, device=device, debug=debug)
+
+            # Debug logging for the first episode of each envN
+            if first_episode:
+                print(f"[DEBUG][{env_name}] Teacher keys: {teacher_keys}")
+                print(f"[DEBUG][{env_name}] Student keys: {student_keys}")
+                print(f"[DEBUG][{env_name}] Masked obs keys: {list(masked_obs.keys())}")
+                for k in masked_obs:
+                    v = masked_obs[k]
+                    if isinstance(v, torch.Tensor):
+                        print(f"  key: {k}, shape: {tuple(v.shape)}, mean: {v.float().mean().item():.4f}, std: {v.float().std().item():.4f}, min: {v.float().min().item():.4f}, max: {v.float().max().item():.4f}")
+                    else:
+                        print(f"  key: {k}, value: {v}")
+                first_episode = False
+
             # Get action from policy
             with torch.no_grad():
                 if hasattr(agent, 'get_action_and_value'):
                     if hasattr(agent, 'get_initial_lstm_state') and lstm_state is not None:
-                        # PPO RNN agent: needs lstm_state and done
-                        # Pass the full obs_tensors so expert policies can access all available observations
-                        result = agent.get_action_and_value(obs_tensors, lstm_state, next_done)
+                        # Check if agent supports evaluation_mode parameter
+                        import inspect
+                        sig = inspect.signature(agent.get_action_and_value)
+                        if 'evaluation_mode' in sig.parameters:
+                            result = agent.get_action_and_value(masked_obs, lstm_state, next_done, evaluation_mode=True)
+                        else:
+                            result = agent.get_action_and_value(masked_obs, lstm_state, next_done)
+                        
                         if len(result) == 5:
-                            # PPO RNN agent: (action, log_prob, entropy, value, new_lstm_state)
                             action, _, _, _, lstm_state = result
                         elif len(result) == 6:
-                            # PPO Distill agent (old): (action, log_prob, entropy, value, new_lstm_state, expert_actions)
                             action, _, _, _, lstm_state, _ = result
                         elif len(result) == 7:
-                            # PPO Distill agent (new): (action, log_prob, entropy, value, new_lstm_state, expert_actions, student_logits)
                             action, _, _, _, lstm_state, _, _ = result
                         else:
-                            # Fallback: just take the first value as action
                             action = result[0]
                     else:
-                        # Regular PPO agent
-                        # Pass the full obs_tensors so expert policies can access all available observations
-                        result = agent.get_action_and_value(obs_tensors)
-                    if len(result) == 4:
-                        # Regular PPO agent: (action, log_prob, entropy, value)
-                        action, _, _, _ = result
-                    else:
-                        # Fallback: just take the first value as action
-                        action = result[0]
+                        # Check if agent supports evaluation_mode parameter
+                        import inspect
+                        sig = inspect.signature(agent.get_action_and_value)
+                        if 'evaluation_mode' in sig.parameters:
+                            result = agent.get_action_and_value(masked_obs, evaluation_mode=True)
+                        else:
+                            result = agent.get_action_and_value(masked_obs)
+                        
+                        if len(result) == 4:
+                            action, _, _, _ = result
+                        else:
+                            action = result[0]
                 else:
-                    # For other agent types, pass the full obs_tensors
-                    action = agent.get_action(obs_tensors)
-            
+                    action = agent.get_action(masked_obs)
+
             # Step environment
             action_np = action.cpu().numpy()
             if hasattr(agent, 'is_discrete') and agent.is_discrete:
                 action_np = action_np.reshape(eval_envs.num_envs, -1)
-            
             acts = {
                 'action': action_np,
                 'reset': next_done.cpu().numpy()
             }
-            
             obs_dict = eval_envs.step(acts)
-            
-            # Use agent's own observation masking logic instead of manual filtering
-            if hasattr(agent, '_mask_observations'):
-                # Use the agent's internal masking logic
-                masked_obs = agent._mask_observations(obs_dict, agent.current_eval_keys if hasattr(agent, 'current_eval_keys') else {'mlp_keys': '.*', 'cnn_keys': '.*'})
-                
-                # Store video frames for the first episode only (to log 1 video per evaluation)
-                # Use masked observations to show what the agent actually sees
-                if len(env_episode_returns) == 0:  # Only for the first episode
-                    for key in video_frames.keys():
-                        if key in masked_obs:
-                            video_frames[key].append(masked_obs[key][0].cpu().numpy().copy())
-                        elif key in obs_dict:
-                            # Fallback to original if not in masked
-                            video_frames[key].append(obs_dict[key][0].copy())
-                
-                # Process observations
-                for key in all_keys:
-                    if key in masked_obs:
-                        next_obs[key] = masked_obs[key]
-                    else:
-                        # Zero out missing observations
-                        if key in obs:
-                            next_obs[key] = torch.zeros_like(obs[key])
-            else:
-                # Fallback to manual filtering for non-distill agents
-                filtered_obs_dict = filter_observations_by_keys(obs_dict, mlp_keys_pattern, cnn_keys_pattern)
-                final_obs_dict = substitute_unprivileged_for_agent(all_keys, filtered_obs_dict, obs_dict)
-                
-                # Store video frames for the first episode only (to log 1 video per evaluation)
-                # Use filtered observations to show what the agent actually sees
-                if len(env_episode_returns) == 0:  # Only for the first episode
-                    for key in video_frames.keys():
-                        if key in final_obs_dict and final_obs_dict[key] is not None:
-                            # Use the filtered/substituted observation
-                            video_frames[key].append(final_obs_dict[key][0].copy())
-                        elif key in obs_dict:
-                            # Fallback to original if not in filtered
-                            video_frames[key].append(obs_dict[key][0].copy())
-                
-                # Process observations
-                for key in all_keys:
-                    if final_obs_dict[key] is not None:
-                        next_obs[key] = torch.Tensor(final_obs_dict[key].astype(np.float32)).to(device)
-                    else:
-                        # Zero out missing observations
-                        if key in obs:
-                            next_obs[key] = torch.zeros_like(obs[key])
-            
             next_done = torch.Tensor(obs_dict['is_last'].astype(np.float32)).to(device)
-            
-            # Update episode tracking
+
+            # Track episode returns and lengths
             for env_idx in range(eval_envs.num_envs):
                 env_returns[env_idx] += obs_dict['reward'][env_idx]
                 env_lengths[env_idx] += 1
-                
                 if obs_dict['is_last'][env_idx]:
                     if len(env_episode_returns) < num_episodes:
                         env_episode_returns.append(env_returns[env_idx])
                         env_episode_lengths.append(env_lengths[env_idx])
-                    
                     env_returns[env_idx] = 0
                     env_lengths[env_idx] = 0
-        
-        # Calculate metrics for this environment
+
+        # Compute metrics
         env_episode_returns = np.array(env_episode_returns)
         env_episode_lengths = np.array(env_episode_lengths)
-        
-        # Collect for overall stats
-        all_episode_returns.extend(env_episode_returns.tolist())
-        all_episode_lengths.extend(env_episode_lengths.tolist())
-        
         env_metrics[env_name] = {
             'mean_return': np.mean(env_episode_returns),
             'std_return': np.std(env_episode_returns),
             'mean_length': np.mean(env_episode_lengths),
             'std_length': np.std(env_episode_lengths)
         }
+        print(f"  {env_name}: mean_return={env_metrics[env_name]['mean_return']:.2f}, std_return={env_metrics[env_name]['std_return']:.2f}")
         
-        print(f"  {env_name}: mean_return={env_metrics[env_name]['mean_return']:.2f}, "
-              f"std_return={env_metrics[env_name]['std_return']:.2f}")
-        
-        # Log metrics with full_eval prefix for subset evaluations
-        if writer is not None:
-            writer.add_scalar(f"full_eval/{env_name}/mean_return", env_metrics[env_name]['mean_return'], global_step)
-            writer.add_scalar(f"full_eval/{env_name}/std_return", env_metrics[env_name]['std_return'], global_step)
-            writer.add_scalar(f"full_eval/{env_name}/mean_length", env_metrics[env_name]['mean_length'], global_step)
-            writer.add_scalar(f"full_eval/{env_name}/std_length", env_metrics[env_name]['std_length'], global_step)
-        
-        if use_wandb:
-            import wandb
-            wandb.log({
-                f"full_eval/{env_name}/mean_return": env_metrics[env_name]['mean_return'],
+        # Log metrics to wandb and tensorboard
+        if use_wandb or writer is not None:
+            log_metrics = {
+                f"full_eval_return/{env_name}": env_metrics[env_name]['mean_return'],
                 f"full_eval/{env_name}/std_return": env_metrics[env_name]['std_return'],
                 f"full_eval/{env_name}/mean_length": env_metrics[env_name]['mean_length'],
                 f"full_eval/{env_name}/std_length": env_metrics[env_name]['std_length'],
-                f"full_eval_return/{env_name}": env_metrics[env_name]['mean_return'],  # Separate section for returns
-            }, step=global_step)
-        
-        # Log video if available - use full_eval prefix for subset videos
-        if video_frames and any(video_frames.values()) and writer is not None:
-            for key, frames in video_frames.items():
-                if frames:
-                    # Convert frames to video format
-                    video_tensor = torch.stack([torch.from_numpy(frame) for frame in frames])
-                    video_tensor = video_tensor.permute(0, 3, 1, 2).unsqueeze(0)  # [1, T, C, H, W]
-                    writer.add_video(f"full_eval/{env_name}/{key}", video_tensor, global_step, fps=4)
-        
-        # Restore original configuration for PPO Distill agents
-        if hasattr(agent, 'config_scheduler') and hasattr(agent, 'current_config_name'):
-            if original_config_name is not None and original_eval_keys is not None:
-                agent.current_config_name = original_config_name
-                agent.current_eval_keys = original_eval_keys
-                if debug:
-                    print(f"Restored agent config to {original_config_name}")
+            }
+            log_evaluation_metrics(log_metrics, global_step, use_wandb, writer)
         
         eval_envs.close()
-    
-    # Print overall mean and std return across all evaluation environments
-    if all_episode_returns:
-        overall_mean = np.mean(all_episode_returns)
-        overall_std = np.std(all_episode_returns)
-        print(f"  OVERALL: mean_return={overall_mean:.2f}, std_return={overall_std:.2f}")
-        
-        # Log overall metrics to wandb and tensorboard
-        if writer is not None:
-            writer.add_scalar("full_eval/overall/mean_return", overall_mean, global_step)
-            writer.add_scalar("full_eval/overall/std_return", overall_std, global_step)
-        
-        if use_wandb:
-            import wandb
-            wandb.log({
-                "full_eval/overall/mean_return": overall_mean,
-                "full_eval/overall/std_return": overall_std,
-                "full_eval_return/overall": overall_mean,  # Separate section for overall return
-            }, step=global_step)
-    
-    # Return only the individual environment metrics for subset evaluations
-    # No overall metrics should be calculated for subset evaluations
+
     return env_metrics
 
 
@@ -859,7 +633,7 @@ def evaluate_agent(agent, envs, device, config, log_video=False, make_envs_func=
 
 
 def run_periodic_evaluation(agent, config, device, global_step, last_eval, eval_envs, 
-                          make_envs_func=None, writer=None, use_wandb=False, debug=False):
+                          make_envs_func=None, writer=None, use_wandb=False, debug=False, skip_subset_eval=False):
     """Run periodic evaluation if enough steps have passed.
     
     Args:
@@ -873,6 +647,7 @@ def run_periodic_evaluation(agent, config, device, global_step, last_eval, eval_
         writer: TensorBoard writer (optional)
         use_wandb: Whether to use wandb logging
         debug: Whether to print detailed debugging information
+        skip_subset_eval: Whether to skip subset evaluation entirely
         
     Returns:
         tuple: (new_last_eval, eval_envs)
@@ -894,22 +669,23 @@ def run_periodic_evaluation(agent, config, device, global_step, last_eval, eval_
             global_step=global_step
         )
         
-        # Run subset evaluation (observation subsets)
-        subset_metrics = evaluate_agent_with_observation_subsets(
-            agent, eval_envs, device, config,
-            make_envs_func=make_envs_func,
-            writer=writer,
-            use_wandb=use_wandb,
-            global_step=global_step,
-            debug=debug
-        )
+        # Run subset evaluation (observation subsets) only if not skipped
+        if not skip_subset_eval:
+            subset_metrics = evaluate_agent_with_observation_subsets(
+                agent, eval_envs, device, config,
+                make_envs_func=make_envs_func,
+                writer=writer,
+                use_wandb=use_wandb,
+                global_step=global_step,
+                debug=debug
+            )
         
         last_eval = global_step
     
     return last_eval, eval_envs
 
 
-def run_initial_evaluation(agent, config, device, make_envs_func, writer=None, use_wandb=False, debug=False):
+def run_initial_evaluation(agent, config, device, make_envs_func, writer=None, use_wandb=False, debug=False, skip_subset_eval=False):
     """Run initial evaluation at the start of training.
     
     Args:
@@ -920,6 +696,7 @@ def run_initial_evaluation(agent, config, device, make_envs_func, writer=None, u
         writer: TensorBoard writer (optional)
         use_wandb: Whether to use wandb logging
         debug: Whether to print detailed debugging information
+        skip_subset_eval: Whether to skip subset evaluation entirely
         
     Returns:
         tuple: (eval_envs, eval_metrics)
@@ -939,15 +716,16 @@ def run_initial_evaluation(agent, config, device, make_envs_func, writer=None, u
         global_step=0
     )
     
-    # Run initial subset evaluation (observation subsets)
-    print("Running initial subset evaluation...")
-    subset_metrics = evaluate_agent_with_observation_subsets(
-        agent, eval_envs, device, config,
-        make_envs_func=make_envs_func,
-        writer=writer,
-        use_wandb=use_wandb,
-        global_step=0,
-        debug=debug
-    )
+    # Run initial subset evaluation (observation subsets) only if not skipped
+    if not skip_subset_eval:
+        print("Running initial subset evaluation...")
+        subset_metrics = evaluate_agent_with_observation_subsets(
+            agent, eval_envs, device, config,
+            make_envs_func=make_envs_func,
+            writer=writer,
+            use_wandb=use_wandb,
+            global_step=0,
+            debug=debug
+        )
     
     return eval_envs, eval_metrics 

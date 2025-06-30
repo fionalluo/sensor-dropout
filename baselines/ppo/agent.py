@@ -200,15 +200,26 @@ class PPOAgent(BaseAgent):
                 mlp_features = []
                 batch_size = None
                 for key in self.mlp_keys:
-                    if key not in x:  # Skip if key doesn't exist
-                        continue
                     if batch_size is None:
-                        batch_size = x[key].shape[0]
-                    # Ensure the observation is flattened
-                    if x[key].dim() > 2:
-                        mlp_features.append(x[key].view(batch_size, -1))
+                        # Get batch size from any available key, or use 1 as default
+                        for k in x.keys():
+                            if isinstance(x[k], torch.Tensor):
+                                batch_size = x[k].shape[0]
+                                break
+                        if batch_size is None:
+                            batch_size = 1
+                    
+                    if key in x:
+                        # Ensure the observation is flattened
+                        if x[key].dim() > 2:
+                            mlp_features.append(x[key].view(batch_size, -1))
+                        else:
+                            mlp_features.append(x[key])
                     else:
-                        mlp_features.append(x[key])
+                        # Provide zeros for missing keys
+                        key_size = self.mlp_key_sizes[key]
+                        zeros = torch.zeros(batch_size, key_size, device=x[list(x.keys())[0]].device, dtype=torch.float32)
+                        mlp_features.append(zeros)
                 
                 if mlp_features:  # Only process if we have any MLP features
                     mlp_features = torch.cat(mlp_features, dim=1)
@@ -216,7 +227,7 @@ class PPOAgent(BaseAgent):
                     if mlp_features.shape[1] != self.total_mlp_size:
                         raise ValueError(f"MLP input size mismatch. Expected {self.total_mlp_size}, got {mlp_features.shape[1]}")
                     mlp_features = self.mlp_encoder(mlp_features)
-                        
+            
             # Handle the case where neither exists
             if cnn_features is None and mlp_features is None:
                 raise ValueError("No valid observations found in input dictionary")

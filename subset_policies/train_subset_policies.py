@@ -212,9 +212,9 @@ def train_subset_policy(config, subset_name, eval_keys, output_dir, device, poli
     # Train the policy based on type
     print(f"Starting training for {subset_name}...")
     if policy_type == 'ppo':
-        trained_agent = train_ppo(envs, subset_config, config.seed, num_iterations=num_iterations)
+        trained_agent = train_ppo(envs, subset_config, config.seed, num_iterations=num_iterations, skip_subset_eval=True)
     else:  # ppo_rnn
-        trained_agent = train_ppo_rnn(envs, subset_config, config.seed, num_iterations=num_iterations)
+        trained_agent = train_ppo_rnn(envs, subset_config, config.seed, num_iterations=num_iterations, skip_subset_eval=True)
     
     # Save the policy with timestamp
     policy_dir = os.path.join(output_dir, subset_name)
