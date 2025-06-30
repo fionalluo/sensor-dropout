@@ -480,6 +480,12 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
             print(f"Agent expects these keys:")
             print(f"  MLP keys: {agent.mlp_keys}")
             print(f"  CNN keys: {agent.cnn_keys}")
+            
+            # Print what keys will be used for masking
+            if hasattr(agent, 'current_eval_keys'):
+                print(f"Agent's current eval_keys: {agent.current_eval_keys}")
+            else:
+                print(f"Using eval_keys from config: mlp_keys={mlp_keys_pattern}, cnn_keys={cnn_keys_pattern}")
         
         # Run evaluation with observation filtering
         env_episode_returns = []
@@ -491,7 +497,17 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         
         # Initialize observation storage
         obs = {}
-        all_keys = agent.mlp_keys + agent.cnn_keys
+        # Use agent's expected keys instead of evaluation environment's keys
+        # This ensures consistency with the training environment
+        if hasattr(agent, 'mlp_keys') and hasattr(agent, 'cnn_keys'):
+            all_keys = agent.mlp_keys + agent.cnn_keys
+        else:
+            # Fallback: use evaluation environment's keys
+            all_keys = []
+            for key in eval_envs.obs_space:
+                if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                    all_keys.append(key)
+        
         for key in all_keys:
             if key in eval_envs.obs_space:
                 if len(eval_envs.obs_space[key].shape) == 3 and eval_envs.obs_space[key].shape[-1] == 3:
@@ -499,6 +515,10 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
                 else:
                     size = np.prod(eval_envs.obs_space[key].shape)
                     obs[key] = torch.zeros((eval_envs.num_envs, size)).to(device)
+            else:
+                # Key not in evaluation environment, create a placeholder
+                # This can happen when the agent expects keys that aren't in the eval environment
+                obs[key] = torch.zeros((eval_envs.num_envs, 1)).to(device)
         
         # Initialize actions
         action_shape = eval_envs.act_space['action'].shape
@@ -511,41 +531,68 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         obs_dict = eval_envs.step(acts)
         next_obs = {}
         
-        # Filter and substitute observations using prefix-based approach
-        filtered_obs_dict = filter_observations_by_keys(obs_dict, mlp_keys_pattern, cnn_keys_pattern)
-        final_obs_dict = substitute_unprivileged_for_agent(all_keys, filtered_obs_dict, obs_dict)
-        
-        if debug:
-            print(f"After filtering, available keys:")
-            for key in filtered_obs_dict.keys():
-                if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
-                    print(f"  {key}: {filtered_obs_dict[key].shape}")
-        
-        if debug:
-            print(f"Keys that will be zeroed out (agent expects but not in filtered):")
-            for key in all_keys:
-                if final_obs_dict[key] is None:
-                    print(f"  {key}")
+        # For PPO Distill agents, temporarily set the current configuration to match this evaluation environment
+        original_config_name = None
+        original_eval_keys = None
+        if hasattr(agent, 'config_scheduler') and hasattr(agent, 'current_config_name'):
+            # Save original configuration
+            original_config_name = agent.current_config_name
+            original_eval_keys = agent.current_eval_keys
             
-            # Debug: Show what the agent will actually receive
-            print(f"Final observation keys that agent will receive:")
+            # Set configuration to match this evaluation environment
+            if hasattr(agent, 'expert_manager') and env_name in agent.expert_manager.expert_eval_keys:
+                agent.current_config_name = env_name
+                agent.current_eval_keys = agent.expert_manager.expert_eval_keys[env_name]
+                if debug:
+                    print(f"Temporarily set agent config to {env_name}: {agent.current_eval_keys}")
+        
+        # Use agent's own observation masking logic instead of manual filtering
+        if hasattr(agent, '_mask_observations'):
+            # Use the agent's internal masking logic
+            masked_obs = agent._mask_observations(obs_dict, agent.current_eval_keys if hasattr(agent, 'current_eval_keys') else {'mlp_keys': '.*', 'cnn_keys': '.*'})
+            
+            # Store video frames for the first episode only (to log 1 video per evaluation)
+            # Use masked observations to show what the agent actually sees
+            if len(env_episode_returns) == 0:  # Only for the first episode
+                for key in video_frames.keys():
+                    if key in masked_obs:
+                        video_frames[key].append(masked_obs[key][0].cpu().numpy().copy())
+                    elif key in obs_dict:
+                        # Fallback to original if not in masked
+                        video_frames[key].append(obs_dict[key][0].copy())
+            
+            # Process observations
+            for key in all_keys:
+                if key in masked_obs:
+                    next_obs[key] = masked_obs[key]
+                else:
+                    # Zero out missing observations
+                    if key in obs:
+                        next_obs[key] = torch.zeros_like(obs[key])
+        else:
+            # Fallback to manual filtering for non-distill agents
+            filtered_obs_dict = filter_observations_by_keys(obs_dict, mlp_keys_pattern, cnn_keys_pattern)
+            final_obs_dict = substitute_unprivileged_for_agent(all_keys, filtered_obs_dict, obs_dict)
+            
+            # Store video frames for the first episode only (to log 1 video per evaluation)
+            # Use filtered observations to show what the agent actually sees
+            if len(env_episode_returns) == 0:  # Only for the first episode
+                for key in video_frames.keys():
+                    if key in final_obs_dict and final_obs_dict[key] is not None:
+                        # Use the filtered/substituted observation
+                        video_frames[key].append(final_obs_dict[key][0].copy())
+                    elif key in obs_dict:
+                        # Fallback to original if not in filtered
+                        video_frames[key].append(obs_dict[key][0].copy())
+            
+            # Process observations
             for key in all_keys:
                 if final_obs_dict[key] is not None:
-                    unprivileged_key = find_unprivileged_key(key, filtered_obs_dict)
-                    if unprivileged_key and key not in filtered_obs_dict:
-                        print(f"  {key}: {final_obs_dict[key].shape} (substituted from {unprivileged_key})")
-                    else:
-                        print(f"  {key}: {final_obs_dict[key].shape} (direct)")
+                    next_obs[key] = torch.Tensor(final_obs_dict[key].astype(np.float32)).to(device)
                 else:
-                    print(f"  {key}: zeroed out")
-        
-        for key in all_keys:
-            if final_obs_dict[key] is not None:
-                next_obs[key] = torch.Tensor(final_obs_dict[key].astype(np.float32)).to(device)
-            else:
-                # Zero out missing observations
-                if key in obs:
-                    next_obs[key] = torch.zeros_like(obs[key])
+                    # Zero out missing observations
+                    if key in obs:
+                        next_obs[key] = torch.zeros_like(obs[key])
         
         next_done = torch.Tensor(obs_dict['is_last'].astype(np.float32)).to(device)
         
@@ -574,12 +621,21 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         
         # Run evaluation until we have enough episodes
         while len(env_episode_returns) < num_episodes:
+            # Convert obs_dict to tensors for the agent
+            obs_tensors = {}
+            for key, value in obs_dict.items():
+                if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                    obs_tensors[key] = torch.Tensor(value.astype(np.float32)).to(device)
+                else:
+                    obs_tensors[key] = value
+            
             # Get action from policy
             with torch.no_grad():
                 if hasattr(agent, 'get_action_and_value'):
                     if hasattr(agent, 'get_initial_lstm_state') and lstm_state is not None:
                         # PPO RNN agent: needs lstm_state and done
-                        result = agent.get_action_and_value(next_obs, lstm_state, next_done)
+                        # Pass the full obs_tensors so expert policies can access all available observations
+                        result = agent.get_action_and_value(obs_tensors, lstm_state, next_done)
                         if len(result) == 5:
                             # PPO RNN agent: (action, log_prob, entropy, value, new_lstm_state)
                             action, _, _, _, lstm_state = result
@@ -594,7 +650,8 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
                             action = result[0]
                     else:
                         # Regular PPO agent
-                        result = agent.get_action_and_value(next_obs)
+                        # Pass the full obs_tensors so expert policies can access all available observations
+                        result = agent.get_action_and_value(obs_tensors)
                     if len(result) == 4:
                         # Regular PPO agent: (action, log_prob, entropy, value)
                         action, _, _, _ = result
@@ -602,7 +659,8 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
                         # Fallback: just take the first value as action
                         action = result[0]
                 else:
-                    action = agent.get_action(next_obs)
+                    # For other agent types, pass the full obs_tensors
+                    action = agent.get_action(obs_tensors)
             
             # Step environment
             action_np = action.cpu().numpy()
@@ -616,29 +674,53 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
             
             obs_dict = eval_envs.step(acts)
             
-            # Filter and substitute observations using prefix-based approach
-            filtered_obs_dict = filter_observations_by_keys(obs_dict, mlp_keys_pattern, cnn_keys_pattern)
-            final_obs_dict = substitute_unprivileged_for_agent(all_keys, filtered_obs_dict, obs_dict)
-            
-            # Store video frames for the first episode only (to log 1 video per evaluation)
-            # Use filtered observations to show what the agent actually sees
-            if len(env_episode_returns) == 0:  # Only for the first episode
-                for key in video_frames.keys():
-                    if key in final_obs_dict and final_obs_dict[key] is not None:
-                        # Use the filtered/substituted observation
-                        video_frames[key].append(final_obs_dict[key][0].copy())
-                    elif key in obs_dict:
-                        # Fallback to original if not in filtered
-                        video_frames[key].append(obs_dict[key][0].copy())
-            
-            # Process observations
-            for key in all_keys:
-                if final_obs_dict[key] is not None:
-                    next_obs[key] = torch.Tensor(final_obs_dict[key].astype(np.float32)).to(device)
-                else:
-                    # Zero out missing observations
-                    if key in obs:
-                        next_obs[key] = torch.zeros_like(obs[key])
+            # Use agent's own observation masking logic instead of manual filtering
+            if hasattr(agent, '_mask_observations'):
+                # Use the agent's internal masking logic
+                masked_obs = agent._mask_observations(obs_dict, agent.current_eval_keys if hasattr(agent, 'current_eval_keys') else {'mlp_keys': '.*', 'cnn_keys': '.*'})
+                
+                # Store video frames for the first episode only (to log 1 video per evaluation)
+                # Use masked observations to show what the agent actually sees
+                if len(env_episode_returns) == 0:  # Only for the first episode
+                    for key in video_frames.keys():
+                        if key in masked_obs:
+                            video_frames[key].append(masked_obs[key][0].cpu().numpy().copy())
+                        elif key in obs_dict:
+                            # Fallback to original if not in masked
+                            video_frames[key].append(obs_dict[key][0].copy())
+                
+                # Process observations
+                for key in all_keys:
+                    if key in masked_obs:
+                        next_obs[key] = masked_obs[key]
+                    else:
+                        # Zero out missing observations
+                        if key in obs:
+                            next_obs[key] = torch.zeros_like(obs[key])
+            else:
+                # Fallback to manual filtering for non-distill agents
+                filtered_obs_dict = filter_observations_by_keys(obs_dict, mlp_keys_pattern, cnn_keys_pattern)
+                final_obs_dict = substitute_unprivileged_for_agent(all_keys, filtered_obs_dict, obs_dict)
+                
+                # Store video frames for the first episode only (to log 1 video per evaluation)
+                # Use filtered observations to show what the agent actually sees
+                if len(env_episode_returns) == 0:  # Only for the first episode
+                    for key in video_frames.keys():
+                        if key in final_obs_dict and final_obs_dict[key] is not None:
+                            # Use the filtered/substituted observation
+                            video_frames[key].append(final_obs_dict[key][0].copy())
+                        elif key in obs_dict:
+                            # Fallback to original if not in filtered
+                            video_frames[key].append(obs_dict[key][0].copy())
+                
+                # Process observations
+                for key in all_keys:
+                    if final_obs_dict[key] is not None:
+                        next_obs[key] = torch.Tensor(final_obs_dict[key].astype(np.float32)).to(device)
+                    else:
+                        # Zero out missing observations
+                        if key in obs:
+                            next_obs[key] = torch.zeros_like(obs[key])
             
             next_done = torch.Tensor(obs_dict['is_last'].astype(np.float32)).to(device)
             
@@ -698,6 +780,14 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
                     video_tensor = torch.stack([torch.from_numpy(frame) for frame in frames])
                     video_tensor = video_tensor.permute(0, 3, 1, 2).unsqueeze(0)  # [1, T, C, H, W]
                     writer.add_video(f"full_eval/{env_name}/{key}", video_tensor, global_step, fps=4)
+        
+        # Restore original configuration for PPO Distill agents
+        if hasattr(agent, 'config_scheduler') and hasattr(agent, 'current_config_name'):
+            if original_config_name is not None and original_eval_keys is not None:
+                agent.current_config_name = original_config_name
+                agent.current_eval_keys = original_eval_keys
+                if debug:
+                    print(f"Restored agent config to {original_config_name}")
         
         eval_envs.close()
     

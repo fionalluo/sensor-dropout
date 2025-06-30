@@ -373,6 +373,17 @@ class PPODistillAgent:
         mlp_pattern = eval_keys['mlp_keys']
         cnn_pattern = eval_keys['cnn_keys']
         
+        if not hasattr(self, '_last_mask_debug_time'):
+            self._last_mask_debug_time = 0
+        
+        current_time = time.time()
+        if current_time - self._last_mask_debug_time > 30.0:  # Log every 30 seconds
+            print(f"🎭 _mask_observations debug for {self.current_config_name}:")
+            print(f"  MLP pattern: {mlp_pattern}")
+            print(f"  CNN pattern: {cnn_pattern}")
+            print(f"  Available keys: {list(obs.keys())}")
+            self._last_mask_debug_time = current_time
+        
         def matches_pattern(key, pattern):
             if pattern == '.*':
                 return True
@@ -443,23 +454,36 @@ class PPODistillAgent:
         
         # Step 3: Convert to tensors and handle None values (zero out)
         masked_obs = {}
+        zeroed_keys = []
         for key in all_keys:
             if final_obs[key] is not None:
                 if isinstance(final_obs[key], torch.Tensor):
-                    masked_obs[key] = final_obs[key].clone()
+                    # Ensure tensor is float32
+                    if final_obs[key].dtype != torch.float32:
+                        masked_obs[key] = final_obs[key].float()
+                    else:
+                        masked_obs[key] = final_obs[key].clone()
                 else:
-                    masked_obs[key] = torch.tensor(final_obs[key], device=self.device)
+                    # Convert to tensor and ensure float32 dtype
+                    masked_obs[key] = torch.tensor(final_obs[key], device=self.device, dtype=torch.float32)
             else:
                 # Zero out missing observations
+                zeroed_keys.append(key)
                 if key in obs:
                     if isinstance(obs[key], torch.Tensor):
-                        masked_obs[key] = torch.zeros_like(obs[key])
+                        # Create zero tensor with same shape and ensure float32
+                        masked_obs[key] = torch.zeros_like(obs[key], dtype=torch.float32)
                     else:
-                        masked_obs[key] = torch.zeros_like(torch.tensor(obs[key], device=self.device))
+                        # Create zero tensor with expected shape and float32
+                        masked_obs[key] = torch.zeros_like(torch.tensor(obs[key], device=self.device, dtype=torch.float32))
                 else:
-                    # Fallback: create zero tensor with expected shape
+                    # Fallback: create zero tensor with expected shape and float32
                     # This shouldn't happen in practice, but just in case
-                    masked_obs[key] = torch.zeros(1, device=self.device)
+                    masked_obs[key] = torch.zeros(1, device=self.device, dtype=torch.float32)
+        
+        # Debug: Show zeroed keys
+        if zeroed_keys and current_time - self._last_mask_debug_time > 30.0:
+            print(f"🎭 Zeroed keys for {self.current_config_name}: {zeroed_keys}")
         
         return masked_obs
     
@@ -582,36 +606,26 @@ class PPODistillAgent:
         Returns:
             Dict: Comprehensive observations with all possible keys
         """
-        comprehensive_obs = obs.copy()
+        comprehensive_obs = {}
         
-        # Add unprivileged versions of keys if they don't exist
-        # This is needed because some expert policies expect unprivileged versions
-        keys_to_add_unprivileged = []
-        for key in obs.keys():
+        # Convert ALL observations to float32 tensors, not just the ones the student agent expects
+        # Expert policies might need different keys than the student agent
+        for key, value in obs.items():
             if key in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                comprehensive_obs[key] = value
                 continue
-            unprivileged_key = f"{key}_unprivileged"
-            if unprivileged_key not in comprehensive_obs:
-                keys_to_add_unprivileged.append((key, unprivileged_key))
+                
+            if isinstance(value, torch.Tensor):
+                if value.dtype != torch.float32:
+                    comprehensive_obs[key] = value.float()
+                else:
+                    comprehensive_obs[key] = value
+            else:
+                comprehensive_obs[key] = torch.tensor(value, device=self.device, dtype=torch.float32)
         
-        # Add unprivileged versions using the original key as substitute
-        for original_key, unprivileged_key in keys_to_add_unprivileged:
-            comprehensive_obs[unprivileged_key] = comprehensive_obs[original_key]
-        
-        # Add privileged versions of unprivileged keys if they don't exist
-        # This handles the reverse case
-        keys_to_add_privileged = []
-        for key in obs.keys():
-            if key in ['reward', 'is_first', 'is_last', 'is_terminal']:
-                continue
-            if key.endswith('_unprivileged'):
-                privileged_key = key[:-13]  # Remove '_unprivileged' suffix
-                if privileged_key not in comprehensive_obs:
-                    keys_to_add_privileged.append((key, privileged_key))
-        
-        # Add privileged versions using the unprivileged key as substitute
-        for unprivileged_key, privileged_key in keys_to_add_privileged:
-            comprehensive_obs[privileged_key] = comprehensive_obs[unprivileged_key]
+        # DO NOT create fake observations! Only use what the environment provides.
+        # If expert policies need unprivileged keys, the environment should provide them.
+        # If they're missing, that's a problem that needs to be fixed at the environment level.
         
         return comprehensive_obs
     
