@@ -586,6 +586,23 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
         
         eval_envs.close()
 
+    # Compute overall metrics across all environments
+    all_returns = [metrics['mean_return'] for metrics in env_metrics.values()]
+    all_lengths = [metrics['mean_length'] for metrics in env_metrics.values()]
+    
+    overall_metrics = {
+        'full_eval_return/mean': np.mean(all_returns),
+        'full_eval_return/std': np.std(all_returns),
+        'full_eval/length/mean': np.mean(all_lengths),
+        'full_eval/length/std': np.std(all_lengths),
+    }
+    
+    # Log overall metrics to wandb and tensorboard
+    if use_wandb or writer is not None:
+        log_evaluation_metrics(overall_metrics, global_step, use_wandb, writer)
+    
+    print(f"  Overall: mean_return={overall_metrics['full_eval_return/mean']:.2f}, std_return={overall_metrics['full_eval_return/std']:.2f}")
+
     return env_metrics
 
 

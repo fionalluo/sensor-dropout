@@ -23,7 +23,7 @@ CONFIGS=(
   # "gymnasium_blindpick"
 )
 
-NUM_SEEDS=1
+NUM_SEEDS=5
 INITIAL_SEED=$(generate_unique_seed)
 
 SEEDS=()
