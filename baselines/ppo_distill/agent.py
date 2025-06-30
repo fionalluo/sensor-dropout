@@ -512,17 +512,22 @@ class PPODistillAgent:
             hidden = self.base_agent.encode_observations(masked_obs)
         student_logits = self.base_agent.actor(hidden)
         
+        # Create comprehensive observations for all expert policies
+        # This ensures that all expert policies get the keys they need
+        comprehensive_obs = self._create_comprehensive_observations(obs)
+        
         # Get expert actions for distillation
         expert_actions = {}
         if self.expert_manager.expert_policies:
             try:
-                expert_actions, _ = self.expert_manager.get_all_expert_actions(obs, {})
+                expert_actions, _ = self.expert_manager.get_all_expert_actions(comprehensive_obs, {})
             except Exception as e:
                 print(f"❌ CRITICAL ERROR: Failed to get expert actions: {e}")
                 print(f"❌ This is a critical error - expert actions are required for distillation!")
                 print(f"❌ Available expert policies: {list(self.expert_manager.expert_policies.keys())}")
                 print(f"❌ Current config: {config_name}")
-                print(f"❌ Observation keys: {list(obs.keys())}")
+                print(f"❌ Original observation keys: {list(obs.keys())}")
+                print(f"❌ Comprehensive observation keys: {list(comprehensive_obs.keys())}")
                 raise RuntimeError(f"Failed to get expert actions: {e}")
         else:
             print("❌ CRITICAL ERROR: No expert policies loaded!")
@@ -565,6 +570,50 @@ class PPODistillAgent:
             print(f"[Logits Debug] Student logits: {student_logits_first}, Expert logits: {expert_logits_first}")
         
         return action, logprob, entropy, value, new_lstm_state, expert_actions, student_logits
+    
+    def _create_comprehensive_observations(self, obs: Dict) -> Dict:
+        """
+        Create comprehensive observations that include all keys that any expert policy might need.
+        This ensures that expert policies get access to their required observation keys.
+        
+        Args:
+            obs: Original observations from environment
+            
+        Returns:
+            Dict: Comprehensive observations with all possible keys
+        """
+        comprehensive_obs = obs.copy()
+        
+        # Add unprivileged versions of keys if they don't exist
+        # This is needed because some expert policies expect unprivileged versions
+        keys_to_add_unprivileged = []
+        for key in obs.keys():
+            if key in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                continue
+            unprivileged_key = f"{key}_unprivileged"
+            if unprivileged_key not in comprehensive_obs:
+                keys_to_add_unprivileged.append((key, unprivileged_key))
+        
+        # Add unprivileged versions using the original key as substitute
+        for original_key, unprivileged_key in keys_to_add_unprivileged:
+            comprehensive_obs[unprivileged_key] = comprehensive_obs[original_key]
+        
+        # Add privileged versions of unprivileged keys if they don't exist
+        # This handles the reverse case
+        keys_to_add_privileged = []
+        for key in obs.keys():
+            if key in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                continue
+            if key.endswith('_unprivileged'):
+                privileged_key = key[:-13]  # Remove '_unprivileged' suffix
+                if privileged_key not in comprehensive_obs:
+                    keys_to_add_privileged.append((key, privileged_key))
+        
+        # Add privileged versions using the unprivileged key as substitute
+        for unprivileged_key, privileged_key in keys_to_add_privileged:
+            comprehensive_obs[privileged_key] = comprehensive_obs[unprivileged_key]
+        
+        return comprehensive_obs
     
     def compute_distillation_loss(self, student_logits: torch.Tensor, expert_actions: Dict[str, torch.Tensor]) -> torch.Tensor:
         """

@@ -93,8 +93,38 @@ class PPODistillTrainer:
         self.current_config_name = None
         self.episode_configs = []
         
+        # --- Compute the union of all required observation keys (student + all experts) ---
+        self.all_required_keys = set(self.agent.mlp_keys + self.agent.cnn_keys)
+        # Add all expert keys from eval_keys in config
+        if hasattr(config, 'eval_keys'):
+            for env_name in getattr(config, 'eval_keys').__dict__:
+                eval_keys = getattr(config.eval_keys, env_name)
+                # Parse mlp_keys and cnn_keys patterns into actual keys if possible
+                for pattern in [eval_keys.mlp_keys, eval_keys.cnn_keys]:
+                    # Remove regex boundaries and split by |
+                    pattern_clean = pattern.replace('\\b', '').replace('(', '').replace(')', '')
+                    for key in pattern_clean.split('|'):
+                        if key and key != '^$' and key != '.*':
+                            self.all_required_keys.add(key)
+        # --- Use self.all_required_keys everywhere obs is constructed or updated ---
+
         # Initialize training storage (copied from base trainer)
         self.obs = {}
+        for key in self.all_required_keys:
+            if key in self.envs.obs_space:
+                if len(self.envs.obs_space[key].shape) == 3 and self.envs.obs_space[key].shape[-1] == 3:
+                    self.obs[key] = torch.zeros(
+                        (self.config.num_steps, self.config.num_envs) + self.envs.obs_space[key].shape,
+                        dtype=torch.float32,
+                        device=self.device
+                    )
+                else:
+                    size = np.prod(self.envs.obs_space[key].shape)
+                    self.obs[key] = torch.zeros(
+                        (self.config.num_steps, self.config.num_envs, size),
+                        dtype=torch.float32,
+                        device=self.device
+                    )
         self.actions = torch.zeros((self.config.num_steps, self.config.num_envs) + self.envs.act_space['action'].shape, dtype=torch.float32, device=self.device)
         self.logprobs = torch.zeros(self.config.num_steps, self.config.num_envs, dtype=torch.float32, device=self.device)
         self.values = torch.zeros(self.config.num_steps, self.config.num_envs, dtype=torch.float32, device=self.device)
@@ -126,25 +156,6 @@ class PPODistillTrainer:
         # print("🚀 PPODistillTrainer.collect_rollout called!")
         # print("🚀 About to initialize observation storage...")
         
-        # Initialize observation storage if not already done
-        if not self.obs:
-            # Initialize observation storage for all keys
-            for key in self.agent.mlp_keys + self.agent.cnn_keys:
-                if key in self.envs.obs_space:
-                    if len(self.envs.obs_space[key].shape) == 3 and self.envs.obs_space[key].shape[-1] == 3:  # Image observations
-                        self.obs[key] = torch.zeros(
-                            (self.config.num_steps, self.config.num_envs) + self.envs.obs_space[key].shape,
-                            dtype=torch.float32,
-                            device=self.device
-                        )
-                    else:  # Non-image observations
-                        size = np.prod(self.envs.obs_space[key].shape)
-                        self.obs[key] = torch.zeros(
-                            (self.config.num_steps, self.config.num_envs, size),
-                            dtype=torch.float32,
-                            device=self.device
-                        )
-        
         # Get initial observations using the same logic as thesis
         action_shape = self.envs.act_space['action'].shape
         acts = {
@@ -155,7 +166,7 @@ class PPODistillTrainer:
         
         # Process initial observations
         next_obs = {}
-        for key in self.agent.mlp_keys + self.agent.cnn_keys:
+        for key in self.all_required_keys:
             if key in obs_dict:
                 next_obs[key] = torch.Tensor(obs_dict[key].astype(np.float32)).to(self.device)
         next_done = torch.Tensor(obs_dict['is_last'].astype(np.float32)).to(self.device)
@@ -164,7 +175,7 @@ class PPODistillTrainer:
             self.global_step += self.config.num_envs
             
             # Store observations for all keys
-            for key in self.agent.mlp_keys + self.agent.cnn_keys:
+            for key in self.all_required_keys:
                 if key in next_obs:
                     self.obs[key][step] = next_obs[key]
             self.dones[step] = next_done
@@ -221,7 +232,7 @@ class PPODistillTrainer:
             obs_dict = self.envs.step(acts)
             
             # Process observations
-            for key in self.agent.mlp_keys + self.agent.cnn_keys:
+            for key in self.all_required_keys:
                 if key in obs_dict:
                     next_obs[key] = torch.Tensor(obs_dict[key].astype(np.float32)).to(self.device)
             next_done = torch.Tensor(obs_dict['is_last'].astype(np.float32)).to(self.device)
@@ -254,7 +265,7 @@ class PPODistillTrainer:
         # print(f"🔍 agent.cnn_keys: {self.agent.cnn_keys}")
         
         processed_next_obs = {}
-        for key in self.agent.mlp_keys + self.agent.cnn_keys:
+        for key in self.all_required_keys:
             if key in next_obs:
                 processed_next_obs[key] = next_obs[key]
                 # Remove excessive debug prints
