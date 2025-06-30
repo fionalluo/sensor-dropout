@@ -69,14 +69,14 @@ This section describes how to run the different baselines and experiments in the
 ### Run PPO Baseline
 
 1. **Before running**, modify the environment and number of seeds in `./ppo.sh`:
-   - Change the environment variable to specify which environment to run on
-   - Adjust the number of seeds for reproducibility
+   - Environment
+   - Number of runs
 
 2. **Before running**, configure PPO parameters in `baselines/ppo/config.yaml`:
    - Expert subset configurations are defined in these config.yaml files
    - Modify hyperparameters, network architectures, and training settings as needed
 
-3. Execute the PPO training script:
+3. **Execute the PPO training script:**
    ```bash
    ./ppo.sh
    ```
@@ -86,21 +86,20 @@ This section describes how to run the different baselines and experiments in the
 #### Step 1: Save Expert Policies
 
 1. **Before running**, modify the environment and policy type you want in `./train_subset_policies.sh`:
-   - Change the environment variable
-   - Specify the policy type to train
+   - Environment
+   - Policy Type
 
 2. **Before running**, modify the policy type specific config (e.g., `ppo/config.yaml`) for the subset policy parameters:
-   - Adjust hyperparameters for the subset policies
-   - Configure observation space subsets
+   - Hyperparameters
 
-3. Execute the script to save all expert policies. They will be saved to `policies/{policy_type}/{task}/env{n}/....pt`:
+3. **Execute the script to save all expert policies.** They will be saved to `policies/{policy_type}/{task}/env{n}/....pt`:
    ```bash
    ./train_subset_policies.sh
    ```
 
 #### Step 1a (Optional): Test Policy Loading
 
-1. Verify that your subset policies can be loaded correctly:
+1. **Verify that your subset policies can be loaded correctly:**
    ```bash
    python test/test_ppo_loading.py
    ```
@@ -108,14 +107,13 @@ This section describes how to run the different baselines and experiments in the
 #### Step 2: Run Distillation
 
 1. **Before running**, modify the environment and number of seeds in `./ppo_distill.sh`:
-   - Change the environment to run on
-   - Adjust the number of seeds for reproducibility
+   - Environment
+   - Number of runs
 
 2. **Before running**, configure the PPO settings in `baselines/ppo_distill/config.yaml`:
-   - Configure distillation-specific parameters
-   - Set up teacher-student learning settings
+   - Hyperparameters
 
-3. Execute the distillation training:
+3. **Execute the distillation training:**
    ```bash
    ./ppo_distill.sh
    ```
@@ -126,7 +124,62 @@ This section describes how to run the different baselines and experiments in the
 
 ## Project Structure
 
-[Add project structure information here]
+```
+sensor-dropout/
+├── README.md                    # This file
+├── requirements.txt             # Python dependencies
+├── pyproject.toml              # Poetry configuration
+├── poetry.lock                 # Poetry lock file
+│
+├── baselines/                   # Main algorithm implementations
+│   ├── ppo/                    # PPO baseline
+│   │   ├── agent.py           # PPO agent implementation
+│   │   ├── config.yaml        # PPO configuration
+│   │   ├── ppo.py             # PPO training logic
+│   │   └── train.py           # Training script
+│   │
+│   ├── ppo_distill/           # PPO distillation baseline
+│   │   ├── agent.py           # Distillation agent
+│   │   ├── config.yaml        # Distillation config
+│   │   ├── ppo_distill.py     # Distillation logic
+│   │   └── train.py           # Training script
+│   │
+│   ├── shared/                # Shared utilities
+│   │   ├── agent.py           # Base agent class
+│   │   ├── config_utils.py    # Configuration utilities
+│   │   ├── env_utils.py       # Environment utilities
+│   │   ├── eval_utils.py      # Evaluation utilities
+│   │   ├── masking_utils.py   # Observation masking
+│   │   ├── nets.py            # Neural network architectures
+│   │   └── policy_utils.py    # Policy utilities
+│   │
+│   ├── ppo_lstm/              # LSTM variant (outdated)
+│   ├── ppo_rnn/               # RNN variant (outdated)
+│   └── ppo_moe/               # Mixture of experts (outdated)
+│
+├── embodied/                   # Embodied AI framework
+│   ├── core/                  # Core utilities
+│   ├── envs/                  # Environment wrappers
+│   ├── replay/                # Replay buffer implementations
+│   ├── run/                   # Training runners
+│   └── scripts/               # Installation scripts
+│
+├── subset_policies/           # Subset policy training
+│   ├── train_subset_policies.py
+│   ├── load_subset_policy.py
+│   └── example_usage.py
+│
+├── thesis/                    # Thesis-related code (OUTDATED)
+│
+├── test/                      # Testing utilities
+│   └── test_ppo_loading.py   # Policy loading tests
+│
+├──ppo.sh                # PPO training script
+├──ppo_distill.sh        # Distillation training script
+├──train_subset_policies.sh
+├──ppo_lstm.sh           # LSTM training (outdated)
+├──ppo_rnn.sh            # RNN training (outdated)
+```
 
 ## Contributing
 
