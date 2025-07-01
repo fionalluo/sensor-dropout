@@ -62,7 +62,6 @@ for CONFIG in "${CONFIGS[@]}"; do
     timeout 8h python3 -u baselines/ppo_distill/train.py \
       --configs ${CONFIG} \
       --expert_policy_dir "$EXPERT_POLICY_DIR" \
-      --student_policy_type "$STUDENT_POLICY_TYPE" \
       --seed "$SEED" \
       --cuda \
       --track

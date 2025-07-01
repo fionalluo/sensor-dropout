@@ -21,7 +21,7 @@ from baselines.shared.eval_utils import run_initial_evaluation, run_periodic_eva
 class PPODistillTrainer:
     """PPO Distill Trainer that handles distillation from expert policies."""
     
-    def __init__(self, envs, config, expert_policy_dir: str, device: str = 'cpu', student_policy_type: str = "ppo_rnn"):
+    def __init__(self, envs, config, expert_policy_dir: str, device: str = 'cpu'):
         """
         Initialize the PPO Distill trainer.
         
@@ -30,25 +30,17 @@ class PPODistillTrainer:
             config: Configuration
             expert_policy_dir: Directory containing expert subset policies
             device: Device to use
-            student_policy_type: Type of student agent ("ppo" or "ppo_rnn")
         """
         self.envs = envs
         self.config = config
         self.device = device
-        self.student_policy_type = student_policy_type
         
-        # Create the appropriate base trainer based on student_policy_type
-        if student_policy_type == "ppo":
-            from baselines.ppo.ppo import PPOTrainer
-            self.base_trainer = PPOTrainer(envs, config, seed=getattr(config, 'seed', 42))
-        elif student_policy_type == "ppo_rnn":
-            from baselines.ppo_rnn.ppo_rnn import PPORnnTrainer
-            self.base_trainer = PPORnnTrainer(envs, config, seed=getattr(config, 'seed', 42))
-        else:
-            raise ValueError(f"Unknown student policy type: {student_policy_type}")
+        # Create the base PPO trainer
+        from baselines.ppo.ppo import PPOTrainer
+        self.base_trainer = PPOTrainer(envs, config, seed=getattr(config, 'seed', 42))
         
         # Create PPO Distill agent
-        self.agent = PPODistillAgent(envs, config, expert_policy_dir, device, student_policy_type)
+        self.agent = PPODistillAgent(envs, config, expert_policy_dir, device)
         
         # Copy all attributes from the base trainer (but exclude our custom methods and agent)
         for attr_name in dir(self.base_trainer):
@@ -67,25 +59,7 @@ class PPODistillTrainer:
         self.episodes_completed = 0
         self.last_episode_count = 0
         
-        # Initialize LSTM states for PPO-RNN
-        if student_policy_type == "ppo_rnn":
-            self.lstm_hidden = torch.zeros(
-                self.agent.lstm.num_layers, 
-                self.config.num_envs, 
-                self.agent.lstm.hidden_size, 
-                device=self.device
-            )
-            self.lstm_cell = torch.zeros(
-                self.agent.lstm.num_layers, 
-                self.config.num_envs, 
-                self.agent.lstm.hidden_size, 
-                device=self.device
-            )
-            self.next_lstm_state = (self.lstm_hidden, self.lstm_cell)
-        else:
-            self.lstm_hidden = None
-            self.lstm_cell = None
-            self.next_lstm_state = None
+
         
         # Configuration tracking
         self.current_config_name = None
@@ -178,11 +152,6 @@ class PPODistillTrainer:
                     self.obs[key][step] = next_obs[key]
             self.dones[step] = next_done
             
-            # Store LSTM states (only for PPO-RNN)
-            if self.student_policy_type == "ppo_rnn" and self.next_lstm_state is not None:
-                self.lstm_hidden[step] = self.next_lstm_state[0].transpose(0, 1)
-                self.lstm_cell[step] = self.next_lstm_state[1].transpose(0, 1)
-            
             # Get current configuration
             config_name, _ = self.agent.get_current_config()
             
@@ -196,21 +165,19 @@ class PPODistillTrainer:
                 # Remove excessive debug print
                 # print(f"🔄 Starting training with configuration: {config_name}")
             
-            # Get action and value with LSTM state, plus expert actions
+            # Get action and value, plus expert actions
             with torch.no_grad():
                 result = self.agent.get_action_and_value(
                     next_obs,
-                    self.next_lstm_state,
-                    next_done,
                     None  # action=None for inference
                 )
                 
-                # Handle the new return format with student_logits
+                # Handle the return format with student_logits
                 if len(result) == 7:
-                    action, logprob, entropy, value, self.next_lstm_state, expert_actions, student_logits = result
+                    action, logprob, entropy, value, _, expert_actions, student_logits = result
                 else:
                     # Fallback for older version
-                    action, logprob, entropy, value, self.next_lstm_state, expert_actions = result
+                    action, logprob, entropy, value, _, expert_actions = result
                     student_logits = None
                 self.values[step] = value.flatten()
             
@@ -279,23 +246,10 @@ class PPODistillTrainer:
         self.next_done = next_done
 
     def compute_advantages(self):
-        """Compute advantages and returns for the collected rollout."""
-        # Remove excessive debug prints
-        # print(f"🔍 compute_advantages called with student_policy_type: {self.student_policy_type}")
-        # print(f"🔍 agent type: {type(self.agent)}")
-        # print(f"🔍 next_obs type: {type(self.next_obs)}")
-        # print(f"🔍 next_obs keys: {list(self.next_obs.keys()) if isinstance(self.next_obs, dict) else 'not a dict'}")
-        
+        """Compute advantages and returns for the collected rollout.""" 
         with torch.no_grad():
-            # Call get_value with the correct parameters for PPO-RNN
-            if self.student_policy_type == "ppo_rnn":
-                # Remove excessive debug print
-                # print(f"🔍 Calling get_value with PPO-RNN parameters")
-                next_value = self.agent.get_value(self.next_obs, self.next_lstm_state, self.next_done).reshape(1, -1)
-            else:
-                # Remove excessive debug print
-                # print(f"🔍 Calling get_value with PPO parameters")
-                next_value = self.agent.get_value(self.next_obs).reshape(1, -1)
+            # Call get_value with PPO parameters
+            next_value = self.agent.get_value(self.next_obs).reshape(1, -1)
             
             advantages = torch.zeros_like(self.rewards)
             lastgaelam = 0
@@ -327,13 +281,8 @@ class PPODistillTrainer:
                 mb_inds = flatinds[:, mb_envinds].ravel()
 
                 self.optimizer.zero_grad()
-                # Call get_action_and_value with correct arguments for agent type
-                if self.student_policy_type == "ppo_rnn":
-                    # PPO-RNN expects lstm_state, done, action
-                    _, _, _, _, _, expert_actions, student_logits = self.agent.get_action_and_value(b_obs, lstm_state=None, done=None, action=None)
-                else:
-                    # PPO expects only obs and action
-                    _, _, _, _, _, expert_actions, student_logits = self.agent.get_action_and_value(b_obs, action=None)
+                # Call get_action_and_value with PPO arguments
+                _, _, _, _, _, expert_actions, student_logits = self.agent.get_action_and_value(b_obs, action=None)
                 distill_loss = self.agent.compute_distillation_loss(student_logits, expert_actions)
                 distill_loss.backward()
 
@@ -370,7 +319,6 @@ class PPODistillTrainer:
         print("🚀 PPODistillTrainer.train() called!")
         print("Starting PPO Distill training...")
         print(f"Expert policy directory: {self.agent.expert_manager.policy_dir}")
-        print(f"Student policy type: {self.student_policy_type}")
         print(f"Cycle mode: {self.cycle_mode}")
 
         print(f"Number of expert configurations: {len(self.agent.expert_manager.expert_policies)}")
@@ -487,7 +435,6 @@ class PPODistillTrainer:
         print(f"Configuration cycles: {self.agent.config_scheduler.episode_count}")
         print(f"Expert configurations used: {list(self.agent.expert_manager.expert_policies.keys())}")
         print(f"Final configuration: {self.agent.current_config_name}")
-        print(f"Student policy type: {self.student_policy_type}")
         print(f"Cycle mode: {self.cycle_mode}")
         print("="*60)
         
@@ -500,7 +447,7 @@ class PPODistillTrainer:
         return self.agent
 
 
-def train_ppo_distill(envs, config, seed: int, expert_policy_dir: str, student_policy_type: str = "ppo_rnn", num_iterations: int = 1000):
+def train_ppo_distill(envs, config, seed: int, expert_policy_dir: str, num_iterations: int = 1000):
     """
     Train a PPO Distill agent.
     
@@ -509,7 +456,6 @@ def train_ppo_distill(envs, config, seed: int, expert_policy_dir: str, student_p
         config: Configuration
         seed: Random seed
         expert_policy_dir: Directory containing expert subset policies
-        student_policy_type: Type of student agent to distill into ("ppo" or "ppo_rnn")
         num_iterations: Number of training iterations
         
     Returns:
@@ -521,9 +467,9 @@ def train_ppo_distill(envs, config, seed: int, expert_policy_dir: str, student_p
     torch.manual_seed(seed)
     np.random.seed(seed)
     
-    # Create trainer with the specified student policy type
+    # Create trainer
     print("🚀 Creating PPODistillTrainer...")
-    trainer = PPODistillTrainer(envs, config, expert_policy_dir, device='cuda' if torch.cuda.is_available() else 'cpu', student_policy_type=student_policy_type)
+    trainer = PPODistillTrainer(envs, config, expert_policy_dir, device='cuda' if torch.cuda.is_available() else 'cpu')
     print("🚀 PPODistillTrainer created successfully!")
     
     # Train

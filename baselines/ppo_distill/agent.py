@@ -14,7 +14,7 @@ import re
 import os
 import time
 
-from baselines.ppo_rnn.agent import PPORnnAgent
+
 from baselines.shared.eval_utils import filter_observations_by_keys, substitute_unprivileged_for_agent
 from baselines.shared.policy_utils import (
     load_policy_like_subset_policies,
@@ -53,10 +53,10 @@ class ExpertPolicyManager:
         # Load metadata to determine policy type
         metadata = load_metadata_from_dir(self.policy_dir)
         if metadata:
-            policy_type = metadata.get('policy_type', 'ppo_rnn')
+            policy_type = metadata.get('policy_type', 'ppo')
         else:
             # Fallback: try to determine from directory structure
-            policy_type = 'ppo_rnn'  # Default to ppo_rnn
+            policy_type = 'ppo'  # Default to ppo
         
         # Use the working approach to load policies
         loaded_policies = load_policy_like_subset_policies(self.policy_dir, policy_type, self.device)
@@ -71,7 +71,7 @@ class ExpertPolicyManager:
         
         print(f"Loaded {len(self.expert_policies)} expert policies")
     
-    def get_expert_action(self, subset_name: str, obs: Dict, lstm_state: Optional[Tuple] = None) -> Tuple[torch.Tensor, Optional[Tuple]]:
+    def get_expert_action(self, subset_name: str, obs: Dict) -> torch.Tensor:
         """
         Get action logits from a specific expert policy for distillation.
         Only select the keys from the raw obs dict that match the expert's eval_keys patterns. Raise an error if any expected key is missing.
@@ -146,51 +146,32 @@ class ExpertPolicyManager:
         # Forward through expert agent
         if hasattr(expert_agent, 'get_action_logits'):
             expert_logits = expert_agent.get_action_logits(obs_tensor)
-            return expert_logits, None
+            return expert_logits
         elif hasattr(expert_agent, 'actor') and hasattr(expert_agent, 'encode_observations'):
             # Standard PPO agent
             hidden = expert_agent.encode_observations(obs_tensor)
             expert_logits = expert_agent.actor(hidden)
-            return expert_logits, None
-        elif hasattr(expert_agent, 'get_action_and_value'):
-            # PPO-RNN or similar
-            result = expert_agent.get_action_and_value(obs_tensor, lstm_state)
-            # result: (action, logprob, entropy, value, new_lstm_state) or (action, logprob, entropy, value, new_lstm_state, logits)
-            if len(result) == 6:
-                # (action, logprob, entropy, value, new_lstm_state, logits)
-                return result[-1], result[4]
-            else:
-                # Fallback: try to reconstruct logits
-                if hasattr(expert_agent, 'get_states'):
-                    hidden, _ = expert_agent.get_states(obs_tensor, lstm_state)
-                    expert_logits = expert_agent.actor(hidden)
-                    return expert_logits, result[4]
-                else:
-                    raise RuntimeError(f"Expert agent for {subset_name} get_action_and_value did not return logits and cannot reconstruct.")
+            return expert_logits
         else:
             raise RuntimeError(f"Expert agent for {subset_name} does not have a recognized method to get logits.")
     
-    def get_all_expert_actions(self, obs: Dict, lstm_states: Optional[Dict] = None) -> Dict[str, torch.Tensor]:
+    def get_all_expert_actions(self, obs: Dict) -> Dict[str, torch.Tensor]:
         """
         Get action logits from all expert policies for distillation.
         
         Args:
             obs: Observation dictionary
-            lstm_states: Dictionary of LSTM states for each expert (optional)
             
         Returns:
             dict: Dictionary of expert action logits for each subset
         """
         expert_actions = {}
-        new_lstm_states = {}
         
         for subset_name in self.expert_policies.keys():
-            lstm_state = lstm_states.get(subset_name) if lstm_states else None
-            expert_logits, new_lstm_state = self.get_expert_action(subset_name, obs, lstm_state)
+            expert_logits = self.get_expert_action(subset_name, obs)
             expert_actions[subset_name] = expert_logits
-            new_lstm_states[subset_name] = new_lstm_state
         
-        return expert_actions, new_lstm_states
+        return expert_actions
 
 
 class ConfigurationScheduler:
@@ -244,7 +225,7 @@ class ConfigurationScheduler:
 class PPODistillAgent:
     """PPO Distill Agent that learns from expert subset policies."""
     
-    def __init__(self, envs, config, expert_policy_dir: str, device: str = 'cpu', student_policy_type: str = "ppo_rnn"):
+    def __init__(self, envs, config, expert_policy_dir: str, device: str = 'cpu'):
         """
         Initialize the PPO Distill agent.
         
@@ -253,19 +234,11 @@ class PPODistillAgent:
             config: Configuration
             expert_policy_dir: Directory containing expert subset policies
             device: Device to use
-            student_policy_type: Type of student agent ("ppo" or "ppo_rnn")
         """
-        self.student_policy_type = student_policy_type
         
-        # Create the appropriate base agent based on student_policy_type
-        if student_policy_type == "ppo":
-            from baselines.ppo.agent import PPOAgent
-            self.base_agent = PPOAgent(envs, config)
-        elif student_policy_type == "ppo_rnn":
-            from baselines.ppo_rnn.agent import PPORnnAgent
-            self.base_agent = PPORnnAgent(envs, config)
-        else:
-            raise ValueError(f"Unknown student policy type: {student_policy_type}")
+        # Create the base PPO agent
+        from baselines.ppo.agent import PPOAgent
+        self.base_agent = PPOAgent(envs, config)
         
         # Set device
         self.device = device
@@ -389,17 +362,6 @@ class PPODistillAgent:
         old_config_name = self.current_config_name
         self.config_scheduler.cycle_config(episode_done)
         self.current_config_name, self.current_eval_keys = self.get_current_config()
-        
-        # Only print detailed logging when configuration actually changes
-        if old_config_name != self.current_config_name:
-            # Remove excessive debug prints
-            # print(f"\n🔄 Cycling to configuration: {self.current_config_name}")
-            # print(f"📋 Expert policy to mimic: {self.current_config_name}")
-            # print(f"🔍 Observation filtering patterns:")
-            # print(f"   MLP keys: {self.current_eval_keys['mlp_keys']}")
-            # print(f"   CNN keys: {self.current_eval_keys['cnn_keys']}")
-            # print("-" * 50)
-            pass
     
     def _mask_observations(self, obs: Dict, eval_keys: Dict) -> Dict:
         """
@@ -422,56 +384,28 @@ class PPODistillAgent:
         masked_obs = mask_observations_for_student(obs, student_keys, teacher_keys, device=self.device)
         return masked_obs
     
-    def _find_unprivileged_key(self, full_key: str, available_keys: dict) -> Optional[str]:
-        """
-        Find the unprivileged version of a key.
-        
-        Args:
-            full_key: The full key to find unprivileged version for
-            available_keys: Dictionary of available keys in current subset
-            
-        Returns:
-            Optional[str]: The unprivileged key if found, None otherwise
-        """
-        # Look for keys that start with 'full_key_unprivileged'
-        unprivileged_pattern = f"{full_key}_unprivileged"
-        
-        for key in available_keys:
-            if key.startswith(unprivileged_pattern):
-                return key
-        
-        return None
-    
-    def get_action_and_value(self, obs, lstm_state=None, done=None, action=None, evaluation_mode=False):
+    def get_action_and_value(self, obs, action=None, evaluation_mode=False):
         """
         Get action and value from the student policy, along with expert actions for distillation.
         Every 100 steps, print the action chosen by the student and the expert for the first environment in the batch.
         
         Args:
             obs: Observations from environment
-            lstm_state: LSTM state (for RNN agents)
-            done: Done flags (for RNN agents)
             action: Action (for PPO)
             evaluation_mode: If True, skip expert computation and internal masking
         """
         if evaluation_mode:
             # In evaluation mode, observations are already masked externally
             # Skip expert computation and internal masking
-            if self.student_policy_type == "ppo_rnn":
-                action, logprob, entropy, value, new_lstm_state = self.base_agent.get_action_and_value(
-                    obs, lstm_state, done, action
-                )
-            else:
-                action, logprob, entropy, value = self.base_agent.get_action_and_value(
-                    obs, action
-                )
-                new_lstm_state = None
+            action, logprob, entropy, value = self.base_agent.get_action_and_value(
+                obs, action
+            )
             
             # Return dummy values for expert_actions and student_logits to maintain interface
             dummy_expert_actions = {}
             dummy_student_logits = torch.zeros_like(action) if hasattr(action, 'shape') else torch.tensor(0.0)
             
-            return action, logprob, entropy, value, new_lstm_state, dummy_expert_actions, dummy_student_logits
+            return action, logprob, entropy, value, None, dummy_expert_actions, dummy_student_logits
         
         # Normal training mode - get current configuration and mask observations
         config_name, eval_keys = self.get_current_config()
@@ -480,21 +414,12 @@ class PPODistillAgent:
         masked_obs = self._mask_observations(obs, eval_keys)
         
         # Get student action and value using masked observations
-        if self.student_policy_type == "ppo_rnn":
-            action, logprob, entropy, value, new_lstm_state = self.base_agent.get_action_and_value(
-                masked_obs, lstm_state, done, action
-            )
-        else:
-            action, logprob, entropy, value = self.base_agent.get_action_and_value(
-                masked_obs, action
-            )
-            new_lstm_state = None
+        action, logprob, entropy, value = self.base_agent.get_action_and_value(
+            masked_obs, action
+        )
         
         # Get student logits for distillation loss computation
-        if self.student_policy_type == "ppo_rnn":
-            hidden, _ = self.base_agent.get_states(masked_obs, lstm_state, done)
-        else:
-            hidden = self.base_agent.encode_observations(masked_obs)
+        hidden = self.base_agent.encode_observations(masked_obs)
         student_logits = self.base_agent.actor(hidden)
         
         # Create comprehensive observations for all expert policies
@@ -505,7 +430,7 @@ class PPODistillAgent:
         expert_actions = {}
         if self.expert_manager.expert_policies:
             try:
-                expert_actions, _ = self.expert_manager.get_all_expert_actions(comprehensive_obs, {})
+                expert_actions = self.expert_manager.get_all_expert_actions(comprehensive_obs)
             except Exception as e:
                 print(f"❌ CRITICAL ERROR: Failed to get expert actions: {e}")
                 print(f"❌ This is a critical error - expert actions are required for distillation!")
@@ -554,7 +479,7 @@ class PPODistillAgent:
             print(f"[Action Debug] Student action: {student_action}, Expert action: {expert_action}")
             print(f"[Logits Debug] Student logits: {student_logits_first}, Expert logits: {expert_logits_first}")
         
-        return action, logprob, entropy, value, new_lstm_state, expert_actions, student_logits
+        return action, logprob, entropy, value, None, expert_actions, student_logits
     
     def _create_comprehensive_observations(self, obs: Dict) -> Dict:
         """
@@ -621,39 +546,27 @@ class PPODistillAgent:
         # print(f"[Distill Debug] Distillation loss: {distill_loss.item():.6f}")
         return distill_loss
     
-    def get_value(self, obs, lstm_state=None, done=None):
+    def get_value(self, obs):
         """Get value from the student policy."""
         config_name, eval_keys = self.get_current_config()
         masked_obs = self._mask_observations(obs, eval_keys)
         
-        if self.student_policy_type == "ppo_rnn":
-            return self.base_agent.get_value(masked_obs, lstm_state, done)
-        else:
-            return self.base_agent.get_value(masked_obs)
+        return self.base_agent.get_value(masked_obs)
     
-    def get_states(self, obs, lstm_state=None, done=None):
+    def get_states(self, obs):
         """Get states from the student policy."""
         config_name, eval_keys = self.get_current_config()
         masked_obs = self._mask_observations(obs, eval_keys)
         
-        if self.student_policy_type == "ppo_rnn":
-            return self.base_agent.get_states(masked_obs, lstm_state, done)
-        else:
-            return self.base_agent.get_states(masked_obs)
+        return self.base_agent.get_states(masked_obs)
     
-    def get_action_logits(self, obs, lstm_state=None, done=None):
+    def get_action_logits(self, obs):
         """Get action logits from the student policy."""
         config_name, eval_keys = self.get_current_config()
         masked_obs = self._mask_observations(obs, eval_keys)
         
-        if self.student_policy_type == "ppo_rnn":
-            return self.base_agent.get_action_logits(masked_obs, lstm_state, done)
-        else:
-            return self.base_agent.get_action_logits(masked_obs)
+        return self.base_agent.get_action_logits(masked_obs)
     
     def get_initial_lstm_state(self):
-        """Get initial LSTM state (only for PPO-RNN)."""
-        if self.student_policy_type == "ppo_rnn":
-            return self.base_agent.get_initial_lstm_state()
-        else:
-            return None 
+        """Get initial LSTM state (not used for PPO)."""
+        return None 
