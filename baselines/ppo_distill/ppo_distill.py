@@ -62,17 +62,30 @@ class PPODistillTrainer:
         
         # --- Compute the union of all required observation keys (student + all experts) ---
         self.all_required_keys = set(self.agent.mlp_keys + self.agent.cnn_keys)
-        # Add all expert keys from eval_keys in config
-        if hasattr(config, 'eval_keys'):
-            for env_name in getattr(config, 'eval_keys').__dict__:
-                eval_keys = getattr(config.eval_keys, env_name)
-                # Parse mlp_keys and cnn_keys patterns into actual keys if possible
-                for pattern in [eval_keys.mlp_keys, eval_keys.cnn_keys]:
-                    # Remove regex boundaries and split by |
-                    pattern_clean = pattern.replace('\\b', '').replace('(', '').replace(')', '')
-                    for key in pattern_clean.split('|'):
-                        if key and key != '^$' and key != '.*':
-                            self.all_required_keys.add(key)
+        
+        # Add all expert keys by filtering existing environment observation space with eval_keys patterns
+        if hasattr(config, 'eval') and hasattr(config.eval, 'num_eval_configs'):
+            # Get all available observation keys from the existing environment
+            available_keys = []
+            for key in envs.obs_space:
+                if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                    available_keys.append(key)
+            
+            # For each eval environment, filter keys using eval_keys patterns
+            if hasattr(config, 'eval_keys'):
+                for env_idx in range(1, config.eval.num_eval_configs + 1):
+                    env_name = f"env{env_idx}"
+                    if hasattr(config.eval_keys, env_name):
+                        eval_keys = getattr(config.eval_keys, env_name)
+                        mlp_pattern = eval_keys.mlp_keys
+                        cnn_pattern = eval_keys.cnn_keys
+                        
+                        # Filter available keys using regex patterns
+                        import re
+                        for key in available_keys:
+                            if re.match(mlp_pattern, key) or re.match(cnn_pattern, key):
+                                self.all_required_keys.add(key)
+        
         # --- Use self.all_required_keys everywhere obs is constructed or updated ---
 
         # Initialize training storage (only what's needed for distillation)
