@@ -38,16 +38,7 @@ from embodied import wrappers
 
 # Import PPO training function
 from baselines.ppo.ppo import train_ppo
-
-def dict_to_namespace(d):
-    """Convert a dictionary to a SimpleNamespace recursively."""
-    namespace = SimpleNamespace()
-    for key, value in d.items():
-        if isinstance(value, dict):
-            setattr(namespace, key, dict_to_namespace(value))
-        else:
-            setattr(namespace, key, value)
-    return namespace
+from baselines.shared.config_utils import load_config
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -64,35 +55,7 @@ def parse_args():
     parser.add_argument('--wandb_project', type=str, default="sensor-dropout", help="Wandb project name.")
     return parser.parse_args()
 
-def load_config(argv=None):
-    """Load configuration from YAML file."""
-    configs = ruamel.yaml.YAML(typ='safe').load(
-        (embodied.Path(__file__).parent / 'config.yaml').read())
-    
-    parsed, other = embodied.Flags(configs=['defaults']).parse_known(argv)
-    config_dict = embodied.Config(configs['defaults'])
 
-    for name in parsed.configs:
-        config_dict = config_dict.update(configs[name])
-    config_dict = embodied.Flags(config_dict).parse(other)
-    
-    # Convert to SimpleNamespace
-    config = dict_to_namespace(config_dict)
-    # Print config in a more readable format
-    def print_config_recursive(obj, indent=0):
-        for key, value in vars(obj).items():
-            if isinstance(value, SimpleNamespace):
-                print("  " * indent + f"{key}:")
-                print_config_recursive(value, indent + 1)
-            else:
-                print("  " * indent + f"{key}: {value}")
-
-    print("\nConfiguration:")
-    print("-" * 50)
-    print_config_recursive(config)
-    print("-" * 50)
-
-    return config
 
 def make_envs(config, num_envs):
     suite, task = config.task.split('_', 1)
@@ -174,7 +137,8 @@ def main(argv=None):
     """Main training function."""
     argv = sys.argv[1:] if argv is None else argv
     parsed_args = parse_args()
-    config = load_config(argv)
+    config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+    config = load_config(argv, config_path)
 
     # Seeding
     seed = parsed_args.seed if parsed_args.seed is not None else config.seed

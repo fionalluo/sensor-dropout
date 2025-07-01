@@ -24,16 +24,7 @@ import embodied
 
 from baselines.ppo_distill.ppo_distill import train_ppo_distill
 from baselines.shared.policy_utils import make_envs_for_distillation
-
-def dict_to_namespace(d):
-    """Convert a dictionary to a SimpleNamespace recursively."""
-    namespace = SimpleNamespace()
-    for key, value in d.items():
-        if isinstance(value, dict):
-            setattr(namespace, key, dict_to_namespace(value))
-        else:
-            setattr(namespace, key, value)
-    return namespace
+from baselines.shared.config_utils import load_config
 
 def set_seed(seed):
     """Set random seed for reproducibility."""
@@ -94,42 +85,6 @@ def parse_args():
     
     return parser.parse_args()
 
-def load_config(argv=None):
-    """Load configuration from YAML file with support for named configs."""
-    configs = ruamel.yaml.YAML(typ='safe').load(
-        (embodied.Path(__file__).parent / 'config.yaml').read())
-    
-    # First, parse the config names and any other flags
-    parsed, other = embodied.Flags(configs=['defaults']).parse_known(argv)
-    config_dict = embodied.Config(configs['defaults'])
-
-    # Apply the named configs
-    for name in parsed.configs:
-        config_dict = config_dict.update(configs[name])
-    
-    # Only parse remaining flags if there are any
-    if other:
-        config_dict = embodied.Flags(config_dict).parse(other)
-    
-    # Convert to SimpleNamespace
-    config = dict_to_namespace(config_dict)
-    
-    # Print config in a more readable format
-    def print_config_recursive(obj, indent=0):
-        for key, value in vars(obj).items():
-            if isinstance(value, SimpleNamespace):
-                print("  " * indent + f"{key}:")
-                print_config_recursive(value, indent + 1)
-            else:
-                print("  " * indent + f"{key}: {value}")
-
-    print("\nConfiguration:")
-    print("-" * 50)
-    print_config_recursive(config)
-    print("-" * 50)
-
-    return config
-
 def make_envs_ppo_distill(config, num_envs):
     """Create vectorized environments for PPO Distill with ALL observation keys."""
     return make_envs_for_distillation(config, num_envs)
@@ -139,24 +94,9 @@ def main():
     argv = sys.argv[1:] if len(sys.argv) > 1 else []
     args = parse_args()
     
-    # Filter out boolean flags from argv before passing to embodied config system
-    filtered_argv = []
-    i = 0
-    while i < len(argv):
-        arg = argv[i]
-        if arg in ['--cuda', '--track', '--debug']:
-            # Skip boolean flags
-            i += 1
-        elif arg == '--expert_policy_dir' and i + 1 < len(argv):
-            # Skip expert_policy_dir and its value
-            i += 2
-
-        else:
-            filtered_argv.append(arg)
-            i += 1
-    
-    # Load configuration
-    config = load_config(filtered_argv)
+    # Load configuration using the same logic as PPO
+    config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+    config = load_config(argv, config_path)
     
     # Override config with command line arguments
     if args.seed is not None:

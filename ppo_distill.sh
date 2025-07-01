@@ -63,8 +63,6 @@ for CONFIG in "${CONFIGS[@]}"; do
       --configs ${CONFIG} \
       --expert_policy_dir "$EXPERT_POLICY_DIR" \
       --seed "$SEED" \
-      --cuda \
-      --track
 
     if [ $? -eq 124 ]; then
       echo "Command timed out for config ${CONFIG} and seed ${SEED}."

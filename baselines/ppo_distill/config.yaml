@@ -7,6 +7,7 @@ defaults:
   wandb_project: "sensor-dropout-3"
   wandb_entity: null
   capture_video: false
+  expert_policy_dir: null  # Will be set via command line
 
   task: gymnasium_TigerDoorKey-v0
   total_timesteps: 500000
