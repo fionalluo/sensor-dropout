@@ -50,17 +50,12 @@ class PPODistillTrainer:
                 if not callable(attr_value) or attr_name not in ['update_policy', 'get_action_and_value', 'collect_rollout', 'train', 'agent', 'log_metrics']:
                     setattr(self, attr_name, attr_value)
         
-
-        
         # Cycling parameters
         self.cycle_mode = getattr(config, 'cycle_mode', 'episode')
         
         # Episode tracking for cycling
         self.episodes_completed = 0
         self.last_episode_count = 0
-        
-
-        
         # Configuration tracking
         self.current_config_name = None
         self.episode_configs = []
@@ -80,7 +75,7 @@ class PPODistillTrainer:
                             self.all_required_keys.add(key)
         # --- Use self.all_required_keys everywhere obs is constructed or updated ---
 
-        # Initialize training storage (copied from base trainer)
+        # Initialize training storage (only what's needed for distillation)
         self.obs = {}
         for key in self.all_required_keys:
             if key in self.envs.obs_space:
@@ -99,11 +94,9 @@ class PPODistillTrainer:
                     )
         self.actions = torch.zeros((self.config.num_steps, self.config.num_envs) + self.envs.act_space['action'].shape, dtype=torch.float32, device=self.device)
         self.logprobs = torch.zeros(self.config.num_steps, self.config.num_envs, dtype=torch.float32, device=self.device)
-        self.values = torch.zeros(self.config.num_steps, self.config.num_envs, dtype=torch.float32, device=self.device)
-        self.rewards = torch.zeros(self.config.num_steps, self.config.num_envs, dtype=torch.float32, device=self.device)
         self.dones = torch.zeros(self.config.num_steps, self.config.num_envs, dtype=torch.float32, device=self.device)
         
-        # Initialize next_obs and next_done (needed for compute_advantages)
+        # Initialize next_obs and next_done (needed for environment stepping)
         self.next_obs = {}
         self.next_done = torch.zeros(self.config.num_envs, dtype=torch.float32, device=self.device)
         
@@ -114,8 +107,6 @@ class PPODistillTrainer:
         self.start_time = time.time()
         
         # Initialize optimizer (copy from base trainer)
-        # self.optimizer = self.base_trainer.optimizer
-        # FIX: Use the actual student model parameters for the optimizer
         self.optimizer = torch.optim.Adam(self.agent.base_agent.parameters(), lr=self.config.learning_rate)
         
         # Initialize logging (copy from base trainer)
@@ -124,11 +115,7 @@ class PPODistillTrainer:
         
     def collect_rollout(self):
         """Collect a rollout with configuration cycling and expert action collection."""
-        # Remove excessive debug prints
-        # print("🚀 PPODistillTrainer.collect_rollout called!")
-        # print("🚀 About to initialize observation storage...")
-        
-        # Get initial observations using the same logic as thesis
+        # Get initial observations
         action_shape = self.envs.act_space['action'].shape
         acts = {
             'action': np.zeros((self.config.num_envs,) + action_shape, dtype=np.float32),
@@ -157,15 +144,11 @@ class PPODistillTrainer:
             
             # Debug logging for configuration cycling (only when config changes)
             if hasattr(self, '_last_config_log') and self._last_config_log != config_name:
-                # Remove excessive debug print
-                # print(f"🔄 Training with configuration: {config_name}")
                 self._last_config_log = config_name
             elif not hasattr(self, '_last_config_log'):
                 self._last_config_log = config_name
-                # Remove excessive debug print
-                # print(f"🔄 Starting training with configuration: {config_name}")
             
-            # Get action and value, plus expert actions
+            # Get action and expert actions for distillation
             with torch.no_grad():
                 result = self.agent.get_action_and_value(
                     next_obs,
@@ -179,7 +162,6 @@ class PPODistillTrainer:
                     # Fallback for older version
                     action, logprob, entropy, value, _, expert_actions = result
                     student_logits = None
-                self.values[step] = value.flatten()
             
             self.actions[step] = action
             self.logprobs[step] = logprob
@@ -201,22 +183,14 @@ class PPODistillTrainer:
                 if key in obs_dict:
                     next_obs[key] = torch.Tensor(obs_dict[key].astype(np.float32)).to(self.device)
             next_done = torch.Tensor(obs_dict['is_last'].astype(np.float32)).to(self.device)
-            self.rewards[step] = torch.tensor(obs_dict['reward'].astype(np.float32)).to(self.device).view(-1)
             
             # Cycle configuration if episode is done
             if self.cycle_mode == 'episode':
                 episode_done = next_done.any().item()
-                # Remove excessive debug print
-                # print(f"🔍 Checking episode done: {episode_done}")
                 if episode_done:
                     self.episodes_completed += 1
-                    # Only print episode completion every 100 episodes to reduce log spam
-                    if self.episodes_completed % 100 == 0:
-                        print(f"📺 Episode {self.episodes_completed} completed, cycling from {self.agent.current_config_name}")
                     self.agent.cycle_config(episode_done=True)
-                    # Remove redundant print since cycle_config already prints
-                    # print(f"✅ Cycled to configuration: {self.agent.current_config_name} (episode {self.episodes_completed})")
-        
+                    
         # Cycle configuration for batch mode
         if self.cycle_mode == 'batch':
             print(f"🔄 Batch mode cycling from {self.agent.current_config_name}")
@@ -224,50 +198,18 @@ class PPODistillTrainer:
             print(f"✅ Cycled to configuration: {self.agent.current_config_name}")
         
         # Store final observations and done state
-        # Remove excessive debug prints
-        # print(f"🔍 Processing next_obs: {list(next_obs.keys())}")
-        # print(f"🔍 agent.mlp_keys: {self.agent.mlp_keys}")
-        # print(f"🔍 agent.cnn_keys: {self.agent.cnn_keys}")
-        
         processed_next_obs = {}
         for key in self.all_required_keys:
             if key in next_obs:
                 processed_next_obs[key] = next_obs[key]
-                # Remove excessive debug prints
-                # print(f"🔍 Added key: {key}")
             else:
-                # Remove excessive debug prints
-                # print(f"🔍 Missing key: {key}")
                 pass
-        
-        # Remove excessive debug print
-        # print(f"🔍 Final processed_next_obs keys: {list(processed_next_obs.keys())}")
+
         self.next_obs = processed_next_obs
         self.next_done = next_done
 
-    def compute_advantages(self):
-        """Compute advantages and returns for the collected rollout.""" 
-        with torch.no_grad():
-            # Call get_value with PPO parameters
-            next_value = self.agent.get_value(self.next_obs).reshape(1, -1)
-            
-            advantages = torch.zeros_like(self.rewards)
-            lastgaelam = 0
-            for t in reversed(range(self.config.num_steps)):
-                if t == self.config.num_steps - 1:
-                    nextnonterminal = 1.0 - self.next_done
-                    nextvalues = next_value
-                else:
-                    nextnonterminal = 1.0 - self.dones[t + 1]
-                    nextvalues = self.values[t + 1]
-                delta = self.rewards[t] + self.config.gamma * nextvalues * nextnonterminal - self.values[t]
-                advantages[t] = lastgaelam = delta + self.config.gamma * self.config.gae_lambda * nextnonterminal * lastgaelam
-            returns = advantages + self.values
-        
-        return advantages, returns
-
-    def update_policy(self, b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values):
-        """Update the policy using pure distillation loss only, with debug prints for gradients and parameter updates."""
+    def update_policy(self, b_obs):
+        """Update the policy using pure distillation loss only."""
         assert self.config.num_envs % self.config.num_minibatches == 0
         envsperbatch = self.config.num_envs // self.config.num_minibatches
         envinds = np.arange(self.config.num_envs)
@@ -354,30 +296,15 @@ class PPODistillTrainer:
                 lrnow = frac * self.config.learning_rate
                 self.optimizer.param_groups[0]["lr"] = lrnow
             
-            # Collect experience using our custom collect_rollout with cycling
-            # print(f"🔄 About to call collect_rollout for iteration {iteration}")
-            # print(f"🔄 collect_rollout method: {self.collect_rollout}")
-            # print(f"🔄 collect_rollout method location: {self.collect_rollout.__module__}")
             self.collect_rollout()
-            # print(f"🔄 Finished collect_rollout for iteration {iteration}")
-            
-            # For pure distillation, we don't need advantages or returns
-            # We only need the observations and actions for distillation training
             
             # Flatten the batch
             b_obs = {}
             for key in self.obs:
                 b_obs[key] = self.obs[key].reshape((-1,) + self.obs[key].shape[2:])
-            b_logprobs = self.logprobs.reshape(-1)
-            b_actions = self.actions.reshape((-1,) + self.envs.act_space['action'].shape)
-            
-            # Create dummy tensors for compatibility (not used in distillation)
-            b_advantages = torch.zeros_like(b_logprobs)
-            b_returns = torch.zeros_like(b_logprobs)
-            b_values = self.values.reshape(-1)
             
             # Update policy using our custom update_policy with distillation
-            self.update_policy(b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values)
+            self.update_policy(b_obs)
             
             # Print distillation progress
             if iteration % getattr(self.config, 'log_interval', 10) == 0:
