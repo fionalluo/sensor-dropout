@@ -132,62 +132,7 @@ This section describes how to run the different baselines and experiments in the
 
 ## Project Structure
 
-```
-sensor-dropout/
-├── README.md                    # This file
-├── requirements.txt             # Python dependencies
-├── pyproject.toml              # Poetry configuration
-├── poetry.lock                 # Poetry lock file
-│
-├── baselines/                   # Main algorithm implementations
-│   ├── ppo/                    # PPO baseline
-│   │   ├── agent.py           # PPO agent implementation
-│   │   ├── config.yaml        # PPO configuration
-│   │   ├── ppo.py             # PPO training logic
-│   │   └── train.py           # Training script
-│   │
-│   ├── ppo_distill/           # PPO distillation baseline
-│   │   ├── agent.py           # Distillation agent
-│   │   ├── config.yaml        # Distillation config
-│   │   ├── ppo_distill.py     # Distillation logic
-│   │   └── train.py           # Training script
-│   │
-│   ├── shared/                # Shared utilities
-│   │   ├── agent.py           # Base agent class
-│   │   ├── config_utils.py    # Configuration utilities
-│   │   ├── env_utils.py       # Environment utilities
-│   │   ├── eval_utils.py      # Evaluation utilities
-│   │   ├── masking_utils.py   # Observation masking
-│   │   ├── nets.py            # Neural network architectures
-│   │   └── policy_utils.py    # Policy utilities
-│   │
-│   ├── ppo_lstm/              # LSTM variant (outdated)
-│   ├── ppo_rnn/               # RNN variant (outdated)
-│   └── ppo_moe/               # Mixture of experts (outdated)
-│
-├── embodied/                   # Embodied AI framework
-│   ├── core/                  # Core utilities
-│   ├── envs/                  # Environment wrappers
-│   ├── replay/                # Replay buffer implementations
-│   ├── run/                   # Training runners
-│   └── scripts/               # Installation scripts
-│
-├── subset_policies/           # Subset policy training
-│   ├── train_subset_policies.py
-│   ├── load_subset_policy.py
-│   └── example_usage.py
-│
-├── thesis/                    # Thesis-related code (OUTDATED)
-│
-├── test/                      # Testing utilities
-│   └── test_ppo_loading.py   # Policy loading tests
-│
-├──ppo.sh                # PPO training script
-├──ppo_distill.sh        # Distillation training script
-├──train_subset_policies.sh
-├──ppo_lstm.sh           # LSTM training (outdated)
-├──ppo_rnn.sh            # RNN training (outdated)
-```
+[Add file tree here]
 
 ## Contributing
 

@@ -15,7 +15,7 @@ import os
 import time
 
 
-from baselines.shared.eval_utils import filter_observations_by_keys, substitute_unprivileged_for_agent
+from baselines.shared.eval_utils import filter_observations_by_keys
 from baselines.shared.policy_utils import (
     load_policy_like_subset_policies,
     find_policy_files, 

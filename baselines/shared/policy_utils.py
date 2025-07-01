@@ -346,32 +346,6 @@ def load_policy_checkpoint(policy_path: str, device: str = 'cpu') -> Dict[str, A
     return checkpoint
 
 
-def load_agent_from_checkpoint(checkpoint: Dict[str, Any], agent_class, device: str = 'cpu'):
-    """
-    Load an agent from a checkpoint.
-    
-    Args:
-        checkpoint: Checkpoint dictionary
-        agent_class: Agent class to instantiate
-        device: Device to load the agent on
-        
-    Returns:
-        Loaded agent
-    """
-    agent_state_dict = checkpoint['agent_state_dict']
-    config = checkpoint['config']
-    
-    # Create environment for agent initialization
-    env = create_env_for_agent(config)
-    
-    # Create agent instance
-    agent = agent_class(env, config)
-    agent.load_state_dict(agent_state_dict)
-    agent.to(device)
-    
-    return agent
-
-
 def convert_obs_to_tensor(obs: Dict[str, Any], device: str = 'cpu') -> Dict[str, torch.Tensor]:
     """
     Convert observation dictionary to tensor dictionary.
@@ -395,36 +369,6 @@ def convert_obs_to_tensor(obs: Dict[str, Any], device: str = 'cpu') -> Dict[str,
             obs_tensor[key] = torch.tensor([value], dtype=torch.float32).to(device)
     
     return obs_tensor
-
-
-def load_policy_with_metadata(policy_path: str, agent_class, device: str = 'cpu') -> Tuple[Any, SimpleNamespace, Dict[str, Any]]:
-    """
-    Load a policy with its metadata from a .pt file.
-    
-    Args:
-        policy_path: Path to the .pt file
-        agent_class: Agent class to instantiate
-        device: Device to load the policy on
-        
-    Returns:
-        Tuple of (agent, config, metadata)
-    """
-    checkpoint = load_policy_checkpoint(policy_path, device)
-    
-    # Extract components
-    agent_state_dict = checkpoint['agent_state_dict']
-    config = checkpoint['config']
-    
-    # Extract additional metadata if available
-    metadata = {}
-    for key in ['eval_keys', 'subset_name', 'task', 'seed']:
-        if key in checkpoint:
-            metadata[key] = checkpoint[key]
-    
-    # Create and load agent
-    agent = load_agent_from_checkpoint(checkpoint, agent_class, device)
-    
-    return agent, config, metadata
 
 
 def find_policy_files(policy_dir: str, pattern: str = "policy*.pt") -> Dict[str, str]:
@@ -546,31 +490,3 @@ def load_policy_like_subset_policies(policy_dir: str, policy_type: str, device: 
         loaded_policies[subset_name] = (agent, config, eval_keys)
     
     return loaded_policies
-
-
-def load_single_policy_like_subset_policies(policy_path: str, policy_type: str, device: str = 'cpu'):
-    """
-    Load a single policy using the exact same approach as subset_policies.
-    
-    Args:
-        policy_path: Path to the policy file
-        policy_type: 'ppo' or 'ppo_rnn'
-        device: Device to load policy on
-        
-    Returns:
-        tuple: (agent, config, eval_keys)
-    """
-    # Import here to avoid circular imports
-    from subset_policies.load_subset_policy import SubsetPolicyLoader
-    
-    # Create a temporary loader for this single policy
-    policy_dir = os.path.dirname(policy_path)
-    loader = SubsetPolicyLoader(policy_dir, device=device)
-    
-    # Extract subset name from path
-    subset_name = os.path.basename(os.path.dirname(policy_path))
-    
-    # Load the policy
-    agent, config, eval_keys = loader.load_policy(subset_name)
-    
-    return agent, config, eval_keys 
