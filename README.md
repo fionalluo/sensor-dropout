@@ -128,7 +128,7 @@ This section describes how to run the different baselines and experiments in the
 
 ### Other Baselines
 
-**Note**: Other folders in `baselines` like `ppo_lstm`, `ppo_rnn`, etc., are currently out of date and not compatible with the current codebase. Use the main PPO and PPO Distill baselines for now. 
+**Note**: Other folders in `baselines` like `ppo_lstm`, `ppo_rnn`, etc., are currently out of date and not compatible with the current codebase. They have been moved to a separate branch. Use the main PPO and PPO Distill baselines for now. 
 
 ## Project Structure
 

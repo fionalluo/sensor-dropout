@@ -34,18 +34,9 @@ from embodied import wrappers
 
 # Import both PPO and PPO-RNN training functions
 from baselines.ppo.ppo import train_ppo
-from baselines.ppo_rnn.ppo_rnn import train_ppo_rnn
+# from baselines.ppo_rnn.ppo_rnn import train_ppo_rnn
 from baselines.shared.eval_utils import get_eval_keys
-
-def dict_to_namespace(d):
-    """Convert a dictionary to a SimpleNamespace recursively."""
-    namespace = SimpleNamespace()
-    for key, value in d.items():
-        if isinstance(value, dict):
-            setattr(namespace, key, dict_to_namespace(value))
-        else:
-            setattr(namespace, key, value)
-    return namespace
+from baselines.shared.config_utils import dict_to_namespace
 
 def set_seed(seed):
     """Set random seed for reproducibility."""

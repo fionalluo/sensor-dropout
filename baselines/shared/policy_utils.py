@@ -16,20 +16,10 @@ import glob
 import ruamel.yaml
 import embodied
 from embodied import wrappers
+from baselines.shared.config_utils import dict_to_namespace
 
 # Add SimpleNamespace to safe globals for torch.load
 torch.serialization.add_safe_globals([SimpleNamespace])
-
-
-def dict_to_namespace(d):
-    """Convert a dictionary to a SimpleNamespace recursively."""
-    namespace = SimpleNamespace()
-    for key, value in d.items():
-        if isinstance(value, dict):
-            setattr(namespace, key, dict_to_namespace(value))
-        else:
-            setattr(namespace, key, value)
-    return namespace
 
 
 def load_config_for_policy(policy_type: str, task_name: str, subset_name: str = None):
@@ -213,112 +203,6 @@ def make_envs_for_distillation(config, num_envs):
 
     # 5. Create environments with the modified config
     return make_envs(modified_config, num_envs)
-
-
-def initialize_agent_like_subset_policies(policy_type: str, task_name: str, subset_name: str, device: str = 'cpu', checkpoint_path: str = None):
-    """
-    Initialize an agent exactly like subset_policies does.
-    
-    Args:
-        policy_type: 'ppo' or 'ppo_rnn'
-        task_name: Task name (e.g., 'tigerdoorkey')
-        subset_name: Subset name (e.g., 'env1')
-        device: Device to load the agent on
-        checkpoint_path: Optional path to checkpoint to load config from
-        
-    Returns:
-        Initialized agent
-    """
-    print(f"\n{'='*60}")
-    print(f"Initializing {policy_type} agent for {subset_name}")
-    print(f"{'='*60}")
-    
-    # If checkpoint path is provided, load the exact config that was used during training
-    if checkpoint_path and os.path.exists(checkpoint_path):
-        print(f"Loading config from checkpoint: {checkpoint_path}")
-        checkpoint = load_policy_checkpoint(checkpoint_path, device)
-        if 'config' in checkpoint:
-            print("Using config from checkpoint")
-            config = checkpoint['config']
-            # Override task_name from checkpoint if available
-            if hasattr(config, 'task'):
-                task_name = config.task.split('_', 1)[-1] if '_' in config.task else config.task
-        else:
-            print("No config in checkpoint, loading from file")
-            config = load_config_for_policy(policy_type, task_name, subset_name)
-    else:
-        print("Loading config from file")
-        config = load_config_for_policy(policy_type, task_name, subset_name)
-    
-    print(f"Base config task: {getattr(config, 'task', 'Unknown')}")
-    print(f"Base config keys: {getattr(config, 'keys', 'Not set')}")
-    print(f"Base config full_keys: {getattr(config, 'full_keys', 'Not set')}")
-    
-    # Get eval keys for this subset - this is crucial for model architecture
-    if hasattr(config, 'eval_keys') and hasattr(config.eval_keys, subset_name):
-        env_keys = getattr(config.eval_keys, subset_name)
-        eval_keys = {
-            'mlp_keys': env_keys.mlp_keys,
-            'cnn_keys': env_keys.cnn_keys
-        }
-        print(f"Found eval_keys for {subset_name}: {eval_keys}")
-    else:
-        print(f"Warning: No eval_keys.{subset_name} found, using default patterns")
-        eval_keys = {'mlp_keys': '.*', 'cnn_keys': '.*'}
-    
-    # Create subset-specific config exactly like subset_policies
-    subset_config = SimpleNamespace()
-    for attr in dir(config):
-        if not attr.startswith('_'):
-            setattr(subset_config, attr, getattr(config, attr))
-    
-    # Update keys for this subset - keep full_keys as original, only change keys
-    # This is crucial because the model architecture depends on which keys are available
-    subset_config.keys = SimpleNamespace(**eval_keys)
-    # Keep the original full_keys for encoder building - this is important!
-    if hasattr(config, 'full_keys'):
-        subset_config.full_keys = config.full_keys
-    
-    # Update exp_name to include subset name for distinct logging
-    if hasattr(subset_config, 'exp_name'):
-        subset_config.exp_name = f"{subset_config.exp_name}_{subset_name}"
-    else:
-        subset_config.exp_name = f"subset_{subset_name}"
-    
-    print(f"\nFinal subset config:")
-    print(f"  Task: {getattr(subset_config, 'task', 'Unknown')}")
-    print(f"  MLP keys: {eval_keys['mlp_keys']}")
-    print(f"  CNN keys: {eval_keys['cnn_keys']}")
-    print(f"  Full keys: {getattr(subset_config, 'full_keys', 'Not set')}")
-    print(f"  Exp name: {getattr(subset_config, 'exp_name', 'Not set')}")
-    
-    # Create environment exactly like subset_policies
-    print(f"\nCreating environment...")
-    envs = make_envs(config, num_envs=config.num_envs)
-    print(f"Environment created successfully")
-    
-    # Create agent based on type
-    print(f"\nCreating {policy_type} agent...")
-    if policy_type == 'ppo':
-        from baselines.ppo.agent import PPOAgent
-        agent = PPOAgent(envs, subset_config)
-    else:  # ppo_rnn
-        from baselines.ppo_rnn.ppo_rnn import PPORnnAgent
-        agent = PPORnnAgent(envs, subset_config)
-    
-    agent.to(device)
-    print(f"Agent created successfully on {device}")
-    
-    # Print model architecture info for debugging
-    print(f"\nModel architecture info:")
-    if hasattr(agent, 'mlp_encoder') and hasattr(agent.mlp_encoder, '0'):
-        print(f"  MLP encoder input size: {agent.mlp_encoder[0].in_features}")
-    if hasattr(agent, 'latent_projector') and hasattr(agent.latent_projector, '0'):
-        print(f"  Latent projector input size: {agent.latent_projector[0].in_features}")
-    
-    print(f"{'='*60}\n")
-    
-    return agent, subset_config, eval_keys
 
 
 def load_policy_checkpoint(policy_path: str, device: str = 'cpu') -> Dict[str, Any]:
