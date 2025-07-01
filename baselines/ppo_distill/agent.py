@@ -84,76 +84,26 @@ class ExpertPolicyManager:
 
         # Only select the keys that match the expert's eval_keys patterns
         filtered_obs = {}
-        # Helper function to check if a key matches a pattern
-        def matches_pattern(key, pattern):
-            if pattern == '.*':
-                return True
-            elif pattern == '^$':
-                return False
-            else:
-                return re.match(pattern, key) is not None
-
+        
         # Get all keys that match the eval_keys pattern
         for key, value in obs.items():
             if key in ['reward', 'is_first', 'is_last', 'is_terminal']:
                 continue
-            if matches_pattern(key, eval_keys['mlp_keys']) or matches_pattern(key, eval_keys['cnn_keys']):
+            if re.match(eval_keys['mlp_keys'], key) or re.match(eval_keys['cnn_keys'], key):
                 filtered_obs[key] = value
 
-        # Dynamically parse the pattern to extract expected keys
-        pattern = eval_keys['mlp_keys']
-        pattern_clean = pattern.replace('\\b', '').replace('(', '').replace(')', '')
-        expected_keys = pattern_clean.split('|')
-        # Check that all expected keys are present
-        for expected_key in expected_keys:
-            if expected_key and expected_key not in filtered_obs:
-                raise KeyError(f"Expected expert key '{expected_key}' not found in filtered_obs. Available keys: {list(filtered_obs.keys())}")
-
-        # Print filtered_obs structure every 10 calls (debug)
-        if not hasattr(self, '_expert_obs_debug_counter'):
-            self._expert_obs_debug_counter = 0
-        self._expert_obs_debug_counter += 1
-        if self._expert_obs_debug_counter % 10 == 0:
-            # print(f"[Expert Obs Debug] subset_name: {subset_name}")
-            for k, v in filtered_obs.items():
-                if isinstance(v, torch.Tensor):
-                    shape = tuple(v.shape)
-                    sample = v[0].cpu().numpy() if v.dim() > 0 else v.cpu().numpy()
-                elif isinstance(v, np.ndarray):
-                    shape = v.shape
-                    sample = v[0] if v.ndim > 0 else v
-                else:
-                    shape = type(v)
-                    sample = v
-                # print(f"  key: {k}, shape: {shape}, sample: {sample}")
-
-        # Convert to tensor and add batch dimension (existing logic)
+        # Convert to tensor
         obs_tensor = {}
-        for key in expected_keys:
-            if key in filtered_obs:
-                value = filtered_obs[key]
-                try:
-                    if isinstance(value, np.ndarray):
-                        obs_tensor[key] = torch.tensor(value, device=self.device)
-                    elif isinstance(value, torch.Tensor):
-                        obs_tensor[key] = value.to(self.device)
-                    else:
-                        obs_tensor[key] = torch.tensor(value, device=self.device)
-                except Exception as e:
-                    print(f"❌ ERROR converting key {key} to tensor: {e}")
-                    raise
+        for key, value in filtered_obs.items():
+            if isinstance(value, torch.Tensor):
+                obs_tensor[key] = value
+            else:
+                obs_tensor[key] = torch.tensor(value, device=self.device)
 
         # Forward through expert agent
-        if hasattr(expert_agent, 'get_action_logits'):
-            expert_logits = expert_agent.get_action_logits(obs_tensor)
-            return expert_logits
-        elif hasattr(expert_agent, 'actor') and hasattr(expert_agent, 'encode_observations'):
-            # Standard PPO agent
-            hidden = expert_agent.encode_observations(obs_tensor)
-            expert_logits = expert_agent.actor(hidden)
-            return expert_logits
-        else:
-            raise RuntimeError(f"Expert agent for {subset_name} does not have a recognized method to get logits.")
+        hidden = expert_agent.encode_observations(obs_tensor)
+        expert_logits = expert_agent.actor(hidden)
+        return expert_logits
     
     def get_all_expert_actions(self, obs: Dict) -> Dict[str, torch.Tensor]:
         """
@@ -208,9 +158,6 @@ class ConfigurationScheduler:
         Args:
             episode_done: Whether the current episode is done (for episode-level cycling)
         """
-        # Remove excessive debug prints - only log when there's an actual change
-        old_config_name = self.config_names[self.current_config_idx]
-        
         if self.cycle_mode == 'episode' and episode_done:
             self.current_config_idx = (self.current_config_idx + 1) % len(self.config_names)
             self.episode_count += 1
@@ -225,7 +172,7 @@ class ConfigurationScheduler:
 class PPODistillAgent:
     """PPO Distill Agent that learns from expert subset policies."""
     
-    def __init__(self, envs, config, expert_policy_dir: str, device: str = 'cpu'):
+    def __init__(self, envs, config, expert_policy_dir: str, device: str = 'cuda'):
         """
         Initialize the PPO Distill agent.
         
@@ -256,19 +203,7 @@ class PPODistillAgent:
         
         # Check if any expert policies were loaded
         if not self.expert_manager.expert_policies:
-            print("Warning: No expert policies loaded. Using default configuration.")
-            # Create a default configuration with full keys
-            default_eval_keys = {
-                'env1': {
-                    'mlp_keys': '.*',
-                    'cnn_keys': '.*'
-                }
-            }
-            self.expert_manager.expert_eval_keys = default_eval_keys
-        
-        # Pre-compute teacher keys for each expert configuration
-        self.teacher_keys_cache = {}
-        self._precompute_teacher_keys()
+            raise RuntimeError("No expert policies loaded. Distillation cannot proceed without expert policies.")
         
         # Initialize configuration scheduler
         self.config_scheduler = ConfigurationScheduler(
@@ -280,66 +215,12 @@ class PPODistillAgent:
         print(f"🔧 Cycle mode: {getattr(config, 'cycle_mode', 'episode')}")
         print(f"🔧 Configuration scheduler initialized with {len(self.expert_manager.expert_eval_keys)} configs")
         
-
-        
         # Current configuration tracking
         self.current_config_name = None
         self.current_eval_keys = None
         
         # Initialize current configuration
         self.current_config_name, self.current_eval_keys = self.get_current_config()
-    
-    def _parse_teacher_keys(self, eval_keys: Dict, available_keys: List[str]) -> List[str]:
-        """
-        Helper method to parse teacher keys from eval_keys patterns.
-        
-        Args:
-            eval_keys: Dictionary with 'mlp_keys' and 'cnn_keys' patterns
-            available_keys: List of available observation keys
-            
-        Returns:
-            List[str]: Parsed teacher keys
-        """
-        def parse_keys(pattern, available_keys):
-            """Filter available keys based on regex pattern."""
-            if pattern == '.*':
-                return available_keys
-            elif pattern == '^$':
-                return []
-            else:
-                import re
-                return [k for k in available_keys if re.search(pattern, k)]
-        
-        mlp_keys = parse_keys(eval_keys['mlp_keys'], available_keys)
-        cnn_keys = parse_keys(eval_keys['cnn_keys'], available_keys)
-        return mlp_keys + cnn_keys
-    
-    def _precompute_teacher_keys(self):
-        """Pre-compute teacher keys for each expert configuration."""
-        # Get teacher keys directly from the loaded expert policies
-        all_possible_keys = set()
-        
-        # Collect all possible keys from all expert policies
-        for config_name, expert_agent in self.expert_manager.expert_policies.items():
-            if hasattr(expert_agent, 'mlp_keys'):
-                all_possible_keys.update(expert_agent.mlp_keys)
-            if hasattr(expert_agent, 'cnn_keys'):
-                all_possible_keys.update(expert_agent.cnn_keys)
-        
-        # Also add the student's keys to ensure we have all possible keys
-        if hasattr(self.base_agent, 'mlp_keys'):
-            all_possible_keys.update(self.base_agent.mlp_keys)
-        if hasattr(self.base_agent, 'cnn_keys'):
-            all_possible_keys.update(self.base_agent.cnn_keys)
-        
-        all_possible_keys = list(all_possible_keys)
-        print(f"🔧 All possible keys from expert policies and student: {all_possible_keys}")
-        
-        # Pre-compute teacher keys for each expert configuration
-        for config_name, eval_keys in self.expert_manager.expert_eval_keys.items():
-            teacher_keys = self._parse_teacher_keys(eval_keys, all_possible_keys)
-            self.teacher_keys_cache[config_name] = teacher_keys
-            print(f"🔧 Pre-computed teacher keys for {config_name}: {teacher_keys}")
     
     def get_current_config(self) -> Tuple[str, Dict]:
         """Get the current configuration."""
@@ -376,10 +257,13 @@ class PPODistillAgent:
         """
         student_keys = self.mlp_keys + self.cnn_keys
         
-        # Get teacher keys from cache using current configuration name
-        config_name, _ = self.get_current_config()
-        teacher_keys = self.teacher_keys_cache.get(config_name, [])
-        # print("[DEBUG TEACHER] Teacher keys:", teacher_keys)
+        # Get teacher keys by matching eval_keys patterns against available observation keys
+        teacher_keys = []
+        for key in obs.keys():
+            if key in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                continue
+            if re.match(eval_keys['mlp_keys'], key) or re.match(eval_keys['cnn_keys'], key):
+                teacher_keys.append(key)
         
         masked_obs = mask_observations_for_student(obs, student_keys, teacher_keys, device=self.device)
         return masked_obs
@@ -387,7 +271,6 @@ class PPODistillAgent:
     def get_action_and_value(self, obs, action=None, evaluation_mode=False):
         """
         Get action and value from the student policy, along with expert actions for distillation.
-        Every 100 steps, print the action chosen by the student and the expert for the first environment in the batch.
         
         Args:
             obs: Observations from environment
@@ -422,99 +305,23 @@ class PPODistillAgent:
         hidden = self.base_agent.encode_observations(masked_obs)
         student_logits = self.base_agent.actor(hidden)
         
-        # Create comprehensive observations for all expert policies
-        # This ensures that all expert policies get the keys they need
-        comprehensive_obs = self._create_comprehensive_observations(obs)
+        # Get expert action for current configuration only
+        try:
+            expert_logits = self.expert_manager.get_expert_action(config_name, obs)
+        except Exception as e:
+            print(f"❌ CRITICAL ERROR: Failed to get expert action for {config_name}: {e}")
+            print(f"❌ Available expert policies: {list(self.expert_manager.expert_policies.keys())}")
+            print(f"❌ Current config: {config_name}")
+            print(f"❌ Original observation keys: {list(obs.keys())}")
+            raise RuntimeError(f"Failed to get expert action for {config_name}: {e}")
         
-        # Get expert actions for distillation
-        expert_actions = {}
-        if self.expert_manager.expert_policies:
-            try:
-                expert_actions = self.expert_manager.get_all_expert_actions(comprehensive_obs)
-            except Exception as e:
-                print(f"❌ CRITICAL ERROR: Failed to get expert actions: {e}")
-                print(f"❌ This is a critical error - expert actions are required for distillation!")
-                print(f"❌ Available expert policies: {list(self.expert_manager.expert_policies.keys())}")
-                print(f"❌ Current config: {config_name}")
-                print(f"❌ Original observation keys: {list(obs.keys())}")
-                print(f"❌ Comprehensive observation keys: {list(comprehensive_obs.keys())}")
-                raise RuntimeError(f"Failed to get expert actions: {e}")
-        else:
-            print("❌ CRITICAL ERROR: No expert policies loaded!")
-            print("❌ This means no distillation can occur!")
-            raise RuntimeError("No expert policies loaded - distillation cannot proceed")
-        
-        # Verify we have expert actions for the current config
-        if not expert_actions:
-            print("❌ CRITICAL ERROR: No expert actions obtained!")
-            raise RuntimeError("No expert actions obtained - distillation cannot proceed")
-        if config_name not in expert_actions:
-            print(f"❌ CRITICAL ERROR: Current config '{config_name}' not found in expert actions!")
-            print(f"❌ Available expert actions: {list(expert_actions.keys())}")
-            raise RuntimeError(f"Current config '{config_name}' not found in expert actions")
+        # Verify we have expert action for the current config
+        if expert_logits is None:
+            print(f"❌ CRITICAL ERROR: Expert logits for {config_name} is None!")
+            raise RuntimeError(f"Expert logits for {config_name} is None")
 
-        # Print student and expert actions and logits for the first environment in the batch every 100 steps
-        if not hasattr(self, '_action_debug_counter'):
-            self._action_debug_counter = 0
-        self._action_debug_counter += 1
-        if self._action_debug_counter % 100 == 0:
-            # Student action (first env)
-            if hasattr(action[0], 'numel') and action[0].numel() == 1:
-                student_action = action[0].item()
-            elif hasattr(action[0], 'tolist'):
-                student_action = action[0].tolist()
-            else:
-                student_action = action[0]
-            # Expert logits and action (first env, current config)
-            expert_logits = expert_actions[config_name]
-            if hasattr(expert_logits[0], 'argmax'):
-                expert_action = expert_logits[0].argmax().item() if expert_logits[0].numel() > 1 else expert_logits[0].item()
-            elif hasattr(expert_logits[0], 'tolist'):
-                expert_action = expert_logits[0].tolist()
-            else:
-                expert_action = expert_logits[0]
-            # Print logits for both student and expert
-            student_logits_first = student_logits[0].tolist() if hasattr(student_logits[0], 'tolist') else student_logits[0]
-            expert_logits_first = expert_logits[0].tolist() if hasattr(expert_logits[0], 'tolist') else expert_logits[0]
-            print(f"[Action Debug] Student action: {student_action}, Expert action: {expert_action}")
-            print(f"[Logits Debug] Student logits: {student_logits_first}, Expert logits: {expert_logits_first}")
-        
-        return action, logprob, entropy, value, None, expert_actions, student_logits
-    
-    def _create_comprehensive_observations(self, obs: Dict) -> Dict:
-        """
-        Create comprehensive observations that include all keys that any expert policy might need.
-        This ensures that expert policies get access to their required observation keys.
-        
-        Args:
-            obs: Original observations from environment
-            
-        Returns:
-            Dict: Comprehensive observations with all possible keys
-        """
-        comprehensive_obs = {}
-        
-        # Convert ALL observations to float32 tensors, not just the ones the student agent expects
-        # Expert policies might need different keys than the student agent
-        for key, value in obs.items():
-            if key in ['reward', 'is_first', 'is_last', 'is_terminal']:
-                comprehensive_obs[key] = value
-                continue
-                
-            if isinstance(value, torch.Tensor):
-                if value.dtype != torch.float32:
-                    comprehensive_obs[key] = value.float()
-                else:
-                    comprehensive_obs[key] = value
-            else:
-                comprehensive_obs[key] = torch.tensor(value, device=self.device, dtype=torch.float32)
-        
-        # DO NOT create fake observations! Only use what the environment provides.
-        # If expert policies need unprivileged keys, the environment should provide them.
-        # If they're missing, that's a problem that needs to be fixed at the environment level.
-        
-        return comprehensive_obs
-    
+        return action, logprob, entropy, value, None, {config_name: expert_logits}, student_logits
+
     def compute_distillation_loss(self, student_logits: torch.Tensor, expert_actions: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
         Compute distillation loss between student and expert action distributions.
@@ -533,17 +340,12 @@ class PPODistillAgent:
             print(f"❌ CRITICAL ERROR: Expert logits for {config_name} is None!")
             raise RuntimeError(f"Expert logits for {config_name} is None")
 
-        # Debug: Print mean/std of logits
-        # print(f"[Distill Debug] Student logits mean: {student_logits.mean().item():.4f}, std: {student_logits.std().item():.4f}")
-        # print(f"[Distill Debug] Expert logits mean: {expert_logits.mean().item():.4f}, std: {expert_logits.std().item():.4f}")
-
         student_log_probs = F.log_softmax(student_logits, dim=-1)
         expert_probs = F.softmax(expert_logits, dim=-1)
         distill_loss = F.kl_div(
             student_log_probs, expert_probs,
             reduction='batchmean'
         )
-        # print(f"[Distill Debug] Distillation loss: {distill_loss.item():.6f}")
         return distill_loss
     
     def get_value(self, obs):
