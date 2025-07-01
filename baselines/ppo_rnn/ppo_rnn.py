@@ -1,7 +1,14 @@
+# Standard imports
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import numpy as np
+import warnings
+# Robust TensorBoard writer import
+try:
+    from torch.utils.tensorboard import SummaryWriter  # type: ignore
+except Exception:  # pragma: no cover
+    from tensorboardX import SummaryWriter  # type: ignore
 import time
 from typing import Dict, Any
 from ..shared.agent import BaseAgent
@@ -12,7 +19,6 @@ from ..shared.eval_utils import (
     run_periodic_evaluation, 
     run_initial_evaluation
 )
-from torch.utils.tensorboard import SummaryWriter
 import wandb
 import os
 from torch.distributions import Categorical, Normal

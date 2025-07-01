@@ -32,7 +32,7 @@ defaults:
   # RNN settings
   rnn:
     hidden_size: 128
-    num_layers: 1
+    num_layers: distill_coef1
 
   # Distillation settings
   distill_coef: 1.0  # Coefficient for distillation loss (pure distillation)

@@ -3,7 +3,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.tensorboard import SummaryWriter
+# Robust TensorBoard writer import
+try:
+    from torch.utils.tensorboard import SummaryWriter  # type: ignore
+except Exception:  # pragma: no cover
+    from tensorboardX import SummaryWriter  # type: ignore
 import wandb
 from .agent import PPOLSTMAgent
 from baselines.shared.eval_utils import (

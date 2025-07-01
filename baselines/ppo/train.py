@@ -20,12 +20,17 @@ warnings.filterwarnings('ignore', '.*using stateful random seeds*')
 warnings.filterwarnings('ignore', '.*is a deprecated alias for.*')
 warnings.filterwarnings('ignore', '.*truncated to dtype int32.*')
 
+# --- Standard imports
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
-from torch.utils.tensorboard import SummaryWriter
+# Robust TensorBoard import that avoids TensorFlow dependency issues.
+try:
+    from torch.utils.tensorboard import SummaryWriter  # type: ignore
+except Exception:  # pragma: no cover
+    from tensorboardX import SummaryWriter  # type: ignore
 import ruamel.yaml
 
 # Add project root to Python path
