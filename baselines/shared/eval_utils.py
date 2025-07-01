@@ -27,24 +27,6 @@ def get_eval_keys(config, eval_mode="full"):
         'cnn_keys': cnn_keys
     }
 
-
-def get_available_eval_modes(config):
-    """Get list of available evaluation modes from the config.
-    
-    Args:
-        config: Configuration object
-        
-    Returns:
-        list: List of available evaluation mode names
-    """
-    modes = []
-    for attr in dir(config):
-        if attr.startswith('eval_') and attr.endswith('_mlp_keys'):
-            mode = attr[5:-10]  # Remove 'eval_' prefix and '_mlp_keys' suffix
-            modes.append(mode)
-    return modes
-
-
 def filter_observations_by_keys(obs_dict, mlp_keys_pattern, cnn_keys_pattern):
     """Filter observations based on regex patterns and substitute unprivileged keys.
     
@@ -90,56 +72,6 @@ def filter_observations_by_keys(obs_dict, mlp_keys_pattern, cnn_keys_pattern):
             filtered_obs[key] = value
     
     return filtered_obs
-
-
-def substitute_unprivileged_for_agent(agent_keys, filtered_obs_dict, obs_dict):
-    """Substitute unprivileged keys for privileged keys that the agent needs.
-    
-    Args:
-        agent_keys: List of keys the agent expects
-        filtered_obs_dict: Dictionary of available filtered observations
-        obs_dict: Original observation dictionary
-        
-    Returns:
-        dict: Final observations with substitutions for the agent
-    """
-    final_obs = {}
-    
-    for key in agent_keys:
-        if key in filtered_obs_dict:
-            # Key is directly available
-            final_obs[key] = filtered_obs_dict[key]
-        else:
-            # Key is not available, look for unprivileged version with prefix matching
-            unprivileged_key = find_unprivileged_key(key, filtered_obs_dict)
-            if unprivileged_key:
-                # Use unprivileged version as substitute
-                final_obs[key] = filtered_obs_dict[unprivileged_key]
-            else:
-                # Neither privileged nor unprivileged available, will be zeroed later
-                final_obs[key] = None
-    
-    return final_obs
-
-
-def find_unprivileged_key(privileged_key, available_keys):
-    """Find the unprivileged key that matches a privileged key using prefix matching.
-    
-    Args:
-        privileged_key: The privileged key to find a substitute for
-        available_keys: Dictionary of available keys
-        
-    Returns:
-        str or None: The matching unprivileged key, or None if not found
-    """
-    # Look for key that starts with 'privileged_key_unprivileged'
-    prefix = f"{privileged_key}_unprivileged"
-    
-    for key in available_keys.keys():
-        if key.startswith(prefix):
-            return key
-    
-    return None
 
 
 def evaluate_policy(agent, envs, device, config, log_video=False):
@@ -229,27 +161,15 @@ def evaluate_policy(agent, envs, device, config, log_video=False):
                 if hasattr(agent, 'get_initial_lstm_state') and lstm_state is not None:
                     # PPO RNN agent: needs lstm_state and done
                     result = agent.get_action_and_value(next_obs, lstm_state, next_done)
-                    if len(result) == 5:
-                        # PPO RNN agent: (action, log_prob, entropy, value, new_lstm_state)
-                        action, _, _, _, lstm_state = result
-                    elif len(result) == 6:
-                        # PPO Distill agent (old): (action, log_prob, entropy, value, new_lstm_state, expert_actions)
-                        action, _, _, _, lstm_state, _ = result
-                    elif len(result) == 7:
-                        # PPO Distill agent (new): (action, log_prob, entropy, value, new_lstm_state, expert_actions, student_logits)
-                        action, _, _, _, lstm_state, _, _ = result
-                    else:
-                        # Fallback: just take the first value as action
-                        action = result[0]
+                    # Standard format: (action, log_prob, entropy, value, new_lstm_state, expert_actions, student_logits)
+                    action = result[0]
+                    if len(result) > 4:
+                        lstm_state = result[4]
                 else:
                     # Regular PPO agent
                     result = agent.get_action_and_value(next_obs)
-                    if len(result) == 4:
-                        # Regular PPO agent: (action, log_prob, entropy, value)
-                        action, _, _, _ = result
-                    else:
-                        # Fallback: just take the first value as action
-                        action = result[0]
+                    # Standard format: (action, log_prob, entropy, value, None, expert_actions, student_logits)
+                    action = result[0]
             else:
                 # For other agent types
                 action = agent.get_action(next_obs)
@@ -448,14 +368,10 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
             else:
                 import re
                 matched_keys = [k for k in available_keys if re.search(pattern, k)]
-                print(f"[REGEX DEBUG] Pattern: '{pattern}'")
-                print(f"[REGEX DEBUG] Available keys: {available_keys}")
-                print(f"[REGEX DEBUG] Matched keys: {matched_keys}")
                 return matched_keys
         
         # Get available keys from the first observation
         available_keys = [k for k in obs_dict.keys() if k not in ['reward', 'is_first', 'is_last', 'is_terminal']]
-        print(f"[REGEX DEBUG] All available keys: {available_keys}")
         
         teacher_keys = parse_keys(mlp_keys_pattern, available_keys) + parse_keys(cnn_keys_pattern, available_keys)
         
@@ -494,9 +410,6 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
 
             # Debug logging for the first episode of each envN
             if first_episode:
-                print(f"[DEBUG][{env_name}] Teacher keys: {teacher_keys}")
-                print(f"[DEBUG][{env_name}] Student keys: {student_keys}")
-                print(f"[DEBUG][{env_name}] Masked obs keys: {list(masked_obs.keys())}")
                 for k in masked_obs:
                     v = masked_obs[k]
                     if isinstance(v, torch.Tensor):
@@ -517,14 +430,10 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
                         else:
                             result = agent.get_action_and_value(masked_obs, lstm_state, next_done)
                         
-                        if len(result) == 5:
-                            action, _, _, _, lstm_state = result
-                        elif len(result) == 6:
-                            action, _, _, _, lstm_state, _ = result
-                        elif len(result) == 7:
-                            action, _, _, _, lstm_state, _, _ = result
-                        else:
-                            action = result[0]
+                        # Standard format: (action, log_prob, entropy, value, new_lstm_state, expert_actions, student_logits)
+                        action = result[0]
+                        if len(result) > 4:
+                            lstm_state = result[4]
                     else:
                         # Check if agent supports evaluation_mode parameter
                         import inspect
@@ -534,10 +443,8 @@ def evaluate_agent_with_observation_subsets(agent, envs, device, config, make_en
                         else:
                             result = agent.get_action_and_value(masked_obs)
                         
-                        if len(result) == 4:
-                            action, _, _, _ = result
-                        else:
-                            action = result[0]
+                        # Standard format: (action, log_prob, entropy, value, None, expert_actions, student_logits)
+                        action = result[0]
                 else:
                     action = agent.get_action(masked_obs)
 
@@ -650,7 +557,7 @@ def evaluate_agent(agent, envs, device, config, log_video=False, make_envs_func=
 
 
 def run_periodic_evaluation(agent, config, device, global_step, last_eval, eval_envs, 
-                          make_envs_func=None, writer=None, use_wandb=False, debug=False, skip_subset_eval=False):
+                            make_envs_func=None, writer=None, use_wandb=False, debug=False, skip_subset_eval=False):
     """Run periodic evaluation if enough steps have passed.
     
     Args:

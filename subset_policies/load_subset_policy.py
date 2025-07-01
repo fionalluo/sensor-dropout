@@ -22,7 +22,6 @@ import embodied
 from embodied import wrappers
 # Import both PPO and PPO-RNN agents
 from baselines.ppo.agent import PPOAgent
-from baselines.ppo_rnn.ppo_rnn import PPORnnAgent
 from baselines.shared.eval_utils import filter_observations_by_keys
 from baselines.shared.policy_utils import (
     load_policy_checkpoint,
@@ -129,8 +128,8 @@ class SubsetPolicyLoader:
         # Use the original config (with full_keys) for agent creation, not subset_config
         if self.policy_type == 'ppo':
             agent = PPOAgent(envs, config)  # Use original config, not subset_config
-        else:  # ppo_rnn
-            agent = PPORnnAgent(envs, config)  # Use original config, not subset_config
+        else:
+            agent = PPORnnAgent(envs, config)
         
         agent.to(self.device)
         
