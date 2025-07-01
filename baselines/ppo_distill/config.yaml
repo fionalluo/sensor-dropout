@@ -4,7 +4,7 @@ defaults:
   torch_deterministic: true
   cuda: true
   track: true
-  wandb_project: "sensor-dropout-2"
+  wandb_project: "sensor-dropout-3"
   wandb_entity: null
   capture_video: false
 
@@ -35,8 +35,6 @@ defaults:
     num_layers: 1
 
   # Distillation settings
-  distill_coef: 1.0  # Coefficient for distillation loss (pure distillation)
-  expert_coef: 0.5   # Coefficient for expert guidance
   cycle_mode: "episode"  # How to cycle configurations: "episode" or "batch"
 
   # Teacher and student observation keys
@@ -156,8 +154,6 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
       cnn_keys: '^$'
 
   # Distillation settings for tiger door key
-  distill_coef: 1.0  # Pure distillation
-  expert_coef: 0.5
   cycle_mode: "episode"
 
   # Improved encoder architecture for tiger door key
@@ -235,8 +231,6 @@ gymnasium_maze: &maze_base
       cnn_keys: '^$'
 
   # Distillation settings for maze
-  distill_coef: 0.1
-  expert_coef: 0.5
   cycle_mode: "episode"
 
   exp_name: "maze_ppo_distill"
@@ -280,21 +274,15 @@ gymnasium_blindpick: &blindpick_base
       cnn_keys: 'camera_side'
 
   # Distillation settings for blind pick
-  distill_coef: 0.1
-  expert_coef: 0.5
   cycle_mode: "episode"
 
   exp_name: "blindpick_ppo_distill"
 
 # Distillation-specific configurations
 high_distill:
-  distill_coef: 0.5
-  expert_coef: 0.8
   exp_name: "ppo_distill_high_distill"
 
 low_distill:
-  distill_coef: 0.05
-  expert_coef: 0.2
   exp_name: "ppo_distill_low_distill"
 
 batch_cycle:

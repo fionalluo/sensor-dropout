@@ -17,13 +17,13 @@ BASE_POLICY_DIR="./policies/${EXPERT_POLICY_TYPE}"
 
 # List of configs to run
 CONFIGS=(
-  # "gymnasium_tigerdoorkey"
+  "gymnasium_tigerdoorkey"
   # "gymnasium_tigerdoorkeylarge"
-  "gymnasium_maze"
+  # "gymnasium_maze"
   # "gymnasium_blindpick"
 )
 
-NUM_SEEDS=5
+NUM_SEEDS=1
 INITIAL_SEED=$(generate_unique_seed)
 
 SEEDS=()

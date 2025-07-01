@@ -307,9 +307,7 @@ class PPODistillAgent:
         print(f"🔧 Cycle mode: {getattr(config, 'cycle_mode', 'episode')}")
         print(f"🔧 Configuration scheduler initialized with {len(self.expert_manager.expert_eval_keys)} configs")
         
-        # Distillation parameters
-        self.distill_coef = getattr(config, 'distill_coef', 0.1)
-        self.expert_coef = getattr(config, 'expert_coef', 0.5)
+
         
         # Current configuration tracking
         self.current_config_name = None
@@ -419,7 +417,7 @@ class PPODistillAgent:
         # Get teacher keys from cache using current configuration name
         config_name, _ = self.get_current_config()
         teacher_keys = self.teacher_keys_cache.get(config_name, [])
-        print("[DEBUG TEACHER] Teacher keys:", teacher_keys)
+        # print("[DEBUG TEACHER] Teacher keys:", teacher_keys)
         
         masked_obs = mask_observations_for_student(obs, student_keys, teacher_keys, device=self.device)
         return masked_obs

@@ -58,9 +58,7 @@ class PPODistillTrainer:
                 if not callable(attr_value) or attr_name not in ['update_policy', 'get_action_and_value', 'collect_rollout', 'train', 'agent', 'log_metrics']:
                     setattr(self, attr_name, attr_value)
         
-        # Distillation parameters
-        self.distill_coef = getattr(config, 'distill_coef', 0.1)
-        self.expert_coef = getattr(config, 'expert_coef', 0.5)
+
         
         # Cycling parameters
         self.cycle_mode = getattr(config, 'cycle_mode', 'episode')
@@ -374,8 +372,7 @@ class PPODistillTrainer:
         print(f"Expert policy directory: {self.agent.expert_manager.policy_dir}")
         print(f"Student policy type: {self.student_policy_type}")
         print(f"Cycle mode: {self.cycle_mode}")
-        print(f"Distillation coefficient: {self.distill_coef}")
-        print(f"Expert coefficient: {self.expert_coef}")
+
         print(f"Number of expert configurations: {len(self.agent.expert_manager.expert_policies)}")
         print(f"Expert configurations: {list(self.agent.expert_manager.expert_policies.keys())}")
         print("-" * 60)

@@ -156,6 +156,65 @@ def wrap_env(env, config):
     return env
 
 
+def make_envs_for_distillation(config, num_envs):
+    """
+    Create vectorized environments for PPO Distill with ALL observation keys.
+    This ensures that all expert policies get access to their required observation keys.
+    Uses regex patterns to match actual environment keys.
+    
+    Args:
+        config: Configuration object
+        num_envs: Number of environments to create
+        
+    Returns:
+        Vectorized environment with all observation keys
+    """
+    import copy
+    from types import SimpleNamespace
+    import re
+
+    # 1. Instantiate a temporary environment to get available keys
+    temp_env = make_env(config)
+    available_keys = list(temp_env.obs_space.keys())
+    temp_env.close()
+
+    # 2. Determine how many eval configs there are
+    num_eval_configs = getattr(getattr(config, 'eval', SimpleNamespace()), 'num_eval_configs', 0)
+    all_mlp_keys = set()
+    all_cnn_keys = set()
+    if hasattr(config, 'eval_keys') and num_eval_configs > 0:
+        for i in range(1, num_eval_configs + 1):
+            env_name = f'env{i}'
+            if hasattr(config.eval_keys, env_name):
+                env_config = getattr(config.eval_keys, env_name)
+                # MLP keys
+                if hasattr(env_config, 'mlp_keys'):
+                    pattern = env_config.mlp_keys
+                    for key in available_keys:
+                        if re.search(pattern, key):
+                            all_mlp_keys.add(key)
+                # CNN keys
+                if hasattr(env_config, 'cnn_keys'):
+                    pattern = env_config.cnn_keys
+                    for key in available_keys:
+                        if re.search(pattern, key):
+                            all_cnn_keys.add(key)
+
+    # 3. Create a modified config that includes all keys
+    modified_config = copy.deepcopy(config)
+    if not hasattr(modified_config, 'full_keys'):
+        modified_config.full_keys = SimpleNamespace()
+
+    # 4. Create regex patterns that match all the keys we need
+    all_mlp_pattern = '|'.join([f'\\b{key}\\b' for key in all_mlp_keys]) if all_mlp_keys else '^$'
+    all_cnn_pattern = '|'.join([f'\\b{key}\\b' for key in all_cnn_keys]) if all_cnn_keys else '^$'
+    modified_config.full_keys.mlp_keys = all_mlp_pattern
+    modified_config.full_keys.cnn_keys = all_cnn_pattern
+
+    # 5. Create environments with the modified config
+    return make_envs(modified_config, num_envs)
+
+
 def initialize_agent_like_subset_policies(policy_type: str, task_name: str, subset_name: str, device: str = 'cpu', checkpoint_path: str = None):
     """
     Initialize an agent exactly like subset_policies does.
