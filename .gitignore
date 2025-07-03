@@ -117,3 +117,10 @@ venv.bak/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+
+
+# SB3 outputs
+models/
+tb_logs/
+slurm_outs/

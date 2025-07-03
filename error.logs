@@ -1,0 +1,617 @@
+2025-07-02 18:05:28.909695: W tensorflow/stream_executor/platform/default/dso_loader.cc:64] Could not load dynamic library 'libcudart.so.11.0'; dlerror: libcudart.so.11.0: cannot open shared object file: No such file or directory
+2025-07-02 18:05:28.909743: I tensorflow/stream_executor/cuda/cudart_stub.cc:29] Ignore above cudart dlerror if you do not have a GPU set up on your machine.
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchSlide-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchSlide-v2 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchPickAndPlace-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchPickAndPlace-v2 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchReach-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchReach-v2 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchPush-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchPush-v2 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandReach-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandReach-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateZ-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateZ-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateZ_BooleanTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateZ_BooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PrivilegedHandManipulateBlockRotateZ_BooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PrivilegedHandManipulateBlockRotateZ_ImageBooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HORAPrivilegedHandManipulateBlockRotateZ_BooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateZ_ContinuousTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateZ_ContinuousTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateParallel-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateParallel-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateParallel_BooleanTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateParallel_BooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateParallel_ContinuousTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateParallel_ContinuousTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateXYZ-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateXYZ-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateXYZ_BooleanTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateXYZ_BooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PrivilegedHandManipulateBlockRotateXYZ_BooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateXYZ_ContinuousTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateXYZ_ContinuousTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockFull-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockFull-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlock-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlock-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlock_BooleanTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlock_BooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PrivilegedHandManipulateBlock_BooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlock_ContinuousTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlock_ContinuousTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggRotate-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggRotate-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggRotate_BooleanTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggRotate_BooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggRotate_ContinuousTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggRotate_ContinuousTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggFull-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggFull-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEgg-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEgg-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEgg_BooleanTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEgg_BooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEgg_ContinuousTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEgg_ContinuousTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenRotate-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenRotate-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenRotate_BooleanTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenRotate_BooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PrivilegedHandManipulatePenRotate_BooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HORAPrivilegedHandManipulatePenRotate_BooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment TGRLHandManipulatePenRotate_BooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PrivilegedHandManipulatePenRotate_ImageBooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenRotate_ContinuousTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenRotate_ContinuousTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenFull-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenFull-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePen-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePen-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePen_BooleanTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePen_BooleanTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePen_ContinuousTouchSensors-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePen_ContinuousTouchSensors-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_UMaze-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_Open-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_Open_Diverse_G-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_Open_Diverse_GR-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_Medium-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_Medium_Diverse_G-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_Medium_Diverse_GR-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_Large-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_Large_Diverse_G-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_Large_Diverse_GR-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesPOPixelsSparse-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesPOCameraSparse-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesPOStateSparse-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesPODepthSparse-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesFOPixelsSparse-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesFOCameraSparse-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesFOStateSparse-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesFODepthSparse-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment VisualPointMaze_UMaze-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment VisualPointMaze_UMaze-v4 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment VisualPointMaze_UMaze-v5 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment VisualPointMaze_UMaze-v6 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment VisualPointMaze_UMaze-v7 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_UMaze-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_Open-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_Open_Diverse_G-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_Medium-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_Medium_Diverse_G-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_Medium_Diverse_GR-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_Large-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_Large_Diverse_G-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_Large_Diverse_GR-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchSlideDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchSlideDense-v2 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchPickAndPlaceDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchPickAndPlaceDense-v2 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchReachDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchReachDense-v2 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchPushDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchPushDense-v2 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandReachDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandReachDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateZDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateZDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateZ_BooleanTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateZ_BooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PrivilegedHandManipulateBlockRotateZ_BooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PrivilegedHandManipulateBlockRotateZ_ImageBooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HORAPrivilegedHandManipulateBlockRotateZ_BooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateZ_ContinuousTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateZ_ContinuousTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateParallelDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateParallelDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateParallel_BooleanTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateParallel_BooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateParallel_ContinuousTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateParallel_ContinuousTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateXYZDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateXYZDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateXYZ_BooleanTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateXYZ_BooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PrivilegedHandManipulateBlockRotateXYZ_BooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateXYZ_ContinuousTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockRotateXYZ_ContinuousTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockFullDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockFullDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlockDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlock_BooleanTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlock_BooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PrivilegedHandManipulateBlock_BooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlock_ContinuousTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateBlock_ContinuousTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggRotateDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggRotateDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggRotate_BooleanTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggRotate_BooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggRotate_ContinuousTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggRotate_ContinuousTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggFullDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggFullDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEggDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEgg_BooleanTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEgg_BooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEgg_ContinuousTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulateEgg_ContinuousTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenRotateDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenRotateDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenRotate_BooleanTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenRotate_BooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PrivilegedHandManipulatePenRotate_BooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HORAPrivilegedHandManipulatePenRotate_BooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment TGRLHandManipulatePenRotate_BooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PrivilegedHandManipulatePenRotate_ImageBooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenRotate_ContinuousTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenRotate_ContinuousTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenFullDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenFullDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePenDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePen_BooleanTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePen_BooleanTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePen_ContinuousTouchSensorsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandManipulatePen_ContinuousTouchSensorsDense-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_UMazeDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_OpenDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_Open_Diverse_GDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_Open_Diverse_GRDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_MediumDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_Medium_Diverse_GDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_Medium_Diverse_GRDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_LargeDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_Large_Diverse_GDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AntMaze_Large_Diverse_GRDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesPOPixelsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesPOCameraDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesPOStateDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesPODepthDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesFOPixelsDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesFOCameraDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesFOStateDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SweepMarblesFODepthDense-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment VisualPointMaze_UMazeDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment VisualPointMaze_UMazeDense-v4 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment VisualPointMaze_UMazeDense-v5 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment VisualPointMaze_UMazeDense-v6 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment VisualPointMaze_UMazeDense-v7 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_UMazeDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_OpenDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_Open_Diverse_GDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_MediumDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_Medium_Diverse_GDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_Medium_Diverse_GRDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_LargeDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_Large_Diverse_GDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PointMaze_Large_Diverse_GRDense-v3 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AdroitHandDoorSparse-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AdroitHandHammerSparse-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AdroitHandPenSparse-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AdroitHandRelocateSparse-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AdroitHandDoor-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AdroitHandHammer-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AdroitHandPen-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment AdroitHandRelocate-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FrankaKitchen-v1 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment ObjectPushQuadHard-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchPushQuadPose-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchPushQuadPOPose-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment ObjectPushQuadSparseHard-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchPushQuadHard-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchPushQuadSparseHard-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FetchPushQuadHardPO-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment DMCPointMaze-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FOIndicatorBoxBlock-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment POIndicatorBoxBlock-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FOOccludedPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment POOccludedPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment DepthFOOccludedPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment DepthPOOccludedPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment ClutterSearch5cm2x2-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment ClutterSearch2x2-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment ClutterSearch2x2Sparse-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment ClutterSearch2x2StateEasyReset-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FOGripper2DBlind7cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FOGripper2DBlind15cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment POGripper2DBlind7cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment POGripper2DBlind15cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment DepthFOGripper2DBlind7cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment DepthFOGripper2DBlind15cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment DepthPOGripper2DBlind7cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment DepthPOGripper2DBlind15cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FOUnderGripper2DBlind7cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FOUnderGripper2DBlind15cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment POUnderGripper2DBlind7cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment POUnderGripper2DBlind15cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FOFixedGripper2DBlind7cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FOFixedGripper2DBlind15cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment POFixedGripper2DBlind7cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment POFixedGripper2DBlind15cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment BlindPickPrivilegedReset0-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment BlindPickPrivilegedReset50-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment BlindPickPrivilegedReset100-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment BlindPickPrivilegedReset250-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment BlindPickPrivilegedReset500-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment BlindPickPrivilegedReset800-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment BlindPickPrivilegedReset1000-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment BlindPickPrivilegedReset1000000-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FO32pxFixedGripper2DBlind7cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FO32pxFixedGripper2DBlind15cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PO32pxFixedGripper2DBlind7cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment PO32pxFixedGripper2DBlind15cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HORABlind7cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment State2DBlind7cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment State2DBlind15cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment State2DBlind0.1cmPick-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment State2DBlind0.1cmPickSparse-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SingleClutterSearch0.1cm-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SingleClutterSearch0.1cmSparse-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SingleClutterSearch5cm-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment SingleClutterSearch5cmSparse-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment State7cmPick5cmPlace-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FixedToHand7cmPick5cmPlace-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment POFixedToHand7cmPick5cmPlace-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HORAFixedToHand7cmPick5cmPlace-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandToFixed7cmPick5cmPlace-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment POHandToFixed7cmPick5cmPlace-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HORAHandToFixed7cmPick5cmPlace-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment HandToFixed7cmPick5cmPlaceCam-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FOOccludedPickPlace-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment POOccludedPickPlace-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment DepthFOOccludedPickPlace-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment DepthPOOccludedPickPlace-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FOOccludedPickPlaceRecessed-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment POOccludedPickPlaceRecessed-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment DepthFOOccludedPickPlaceRecessed-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment DepthPOOccludedPickPlaceRecessed-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment FOOccludedPickPlaceRecessed2Goal-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment POOccludedPickPlaceRecessed2Goal-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment DepthFOOccludedPickPlaceRecessed2Goal-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/gymnasium/envs/registration.py:644: UserWarning: [33mWARN: Overriding environment DepthPOOccludedPickPlaceRecessed2Goal-v0 already in registry.[0m
+  logger.warn(f"Overriding environment {new_spec.id} already in registry.")
+Submitted batch job 123211
+Submitted batch job 123212
+Submitted batch job 123213
+Submitted batch job 123214
+Submitted batch job 123215
+Registering FOGripper2DBlind7cmPick-v0
+Registering FOGripper2DBlind15cmPick-v0
+Registering POGripper2DBlind7cmPick-v0
+Registering POGripper2DBlind15cmPick-v0
+Registering DepthFOGripper2DBlind7cmPick-v0
+Registering DepthFOGripper2DBlind15cmPick-v0
+Registering DepthPOGripper2DBlind7cmPick-v0
+Registering DepthPOGripper2DBlind15cmPick-v0
+Registering FOGripper2DBlind7cmPick-v0
+Registering FOGripper2DBlind15cmPick-v0
+Registering POGripper2DBlind7cmPick-v0
+Registering POGripper2DBlind15cmPick-v0
+Registering DepthFOGripper2DBlind7cmPick-v0
+Registering DepthFOGripper2DBlind15cmPick-v0
+Registering DepthPOGripper2DBlind7cmPick-v0
+Registering DepthPOGripper2DBlind15cmPick-v0
+[sbatch] sbatch --job-name=blindpick_ppo_0 --output=slurm_outs/blindpick_ppo/blindpick_ppo_0-%j.out --time=04:00:00 --partition=eaton-compute --qos=ee-med --gpus=1 --mem=32G --cpus-per-task=64 --wrap python -u /home/vlongle/code/rl_sensor/sensor-dropout/debug_blindpick.py --seed 1038875592
+[sbatch] sbatch --job-name=blindpick_ppo_1 --output=slurm_outs/blindpick_ppo/blindpick_ppo_1-%j.out --time=04:00:00 --partition=eaton-compute --qos=ee-med --gpus=1 --mem=32G --cpus-per-task=64 --wrap python -u /home/vlongle/code/rl_sensor/sensor-dropout/debug_blindpick.py --seed 1038875593
+[sbatch] sbatch --job-name=blindpick_ppo_2 --output=slurm_outs/blindpick_ppo/blindpick_ppo_2-%j.out --time=04:00:00 --partition=eaton-compute --qos=ee-med --gpus=1 --mem=32G --cpus-per-task=64 --wrap python -u /home/vlongle/code/rl_sensor/sensor-dropout/debug_blindpick.py --seed 1038875594
+[sbatch] sbatch --job-name=blindpick_ppo_3 --output=slurm_outs/blindpick_ppo/blindpick_ppo_3-%j.out --time=04:00:00 --partition=eaton-compute --qos=ee-med --gpus=1 --mem=32G --cpus-per-task=64 --wrap python -u /home/vlongle/code/rl_sensor/sensor-dropout/debug_blindpick.py --seed 1038875595
+[sbatch] sbatch --job-name=blindpick_ppo_4 --output=slurm_outs/blindpick_ppo/blindpick_ppo_4-%j.out --time=04:00:00 --partition=eaton-compute --qos=ee-med --gpus=1 --mem=32G --cpus-per-task=64 --wrap python -u /home/vlongle/code/rl_sensor/sensor-dropout/debug_blindpick.py --seed 1038875596
+✅ All jobs submitted to Slurm.

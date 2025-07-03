@@ -31,3 +31,4 @@ tqdm==4.66.4
 tyro==0.9.25
 wandb==0.17.1
 tensorboardX
+ipykernel

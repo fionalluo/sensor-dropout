@@ -33,6 +33,10 @@ except Exception:  # pragma: no cover
     from tensorboardX import SummaryWriter  # type: ignore
 import ruamel.yaml
 
+import gymnasium_robotics as _gym_robo  # type: ignore
+
+_gym_robo.register_robotics_envs()
+
 # Add project root to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
@@ -44,6 +48,7 @@ from embodied import wrappers
 # Import PPO training function
 from baselines.ppo.ppo import train_ppo
 from baselines.shared.config_utils import load_config
+import time
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -172,4 +177,7 @@ def main(argv=None):
     return trained_agent
 
 if __name__ == "__main__":
+    start_time = time.time()
     main() 
+    end_time = time.time()
+    print(f"Training completed in {end_time - start_time:.2f} seconds")
