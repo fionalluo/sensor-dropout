@@ -1,0 +1,445 @@
+2025-07-04 01:02:04,580 - INFO - Found 190 run directories to process.
+2025-07-04 01:02:04,672 - INFO - Processing metric 'eval/mean_reward' ...
+2025-07-04 01:02:04,678 - INFO - processing run gjb18x15 cfg_entity None cfg_project None
+2025-07-04 01:02:04,679 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/gjb18x15
+2025-07-04 01:02:04,902 - INFO - Run data fetched successfully.
+2025-07-04 01:02:04,902 - INFO - Loaded run from cloud: vlongle/blindpick-ppo-oracle-state/gjb18x15
+2025-07-04 01:02:05,025 - WARNING - Skipping run gjb18x15: empty or corrupted data
+2025-07-04 01:02:05,055 - INFO - Skipping run 5ulh85ge: config project 'sensor-dropout-2' does not match requested 'blindpick-ppo-oracle-state'
+2025-07-04 01:02:05,065 - INFO - processing run j01vsld7 cfg_entity None cfg_project None
+2025-07-04 01:02:05,065 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/j01vsld7
+2025-07-04 01:02:05,347 - INFO - Run data fetched successfully.
+2025-07-04 01:02:05,348 - INFO - Loaded run from cloud: vlongle/blindpick-ppo-oracle-state/j01vsld7
+2025-07-04 01:02:05,514 - WARNING - Skipping run j01vsld7: empty or corrupted data
+2025-07-04 01:02:05,524 - INFO - processing run qghf3ukx cfg_entity None cfg_project None
+2025-07-04 01:02:05,524 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/qghf3ukx
+2025-07-04 01:02:05,843 - INFO - Skipping run jox3ygnv: config project 'sensor-dropout-2' does not match requested 'blindpick-ppo-oracle-state'
+2025-07-04 01:02:05,866 - INFO - Skipping run i27onrkz: config project 'sensor-dropout-2' does not match requested 'blindpick-ppo-oracle-state'
+2025-07-04 01:02:05,894 - INFO - processing run o880oree cfg_entity None cfg_project None
+2025-07-04 01:02:05,894 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/o880oree
+2025-07-04 01:02:06,210 - INFO - processing run 1s03jn4a cfg_entity None cfg_project None
+2025-07-04 01:02:06,210 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/1s03jn4a
+2025-07-04 01:02:06,440 - INFO - processing run 7j6o42sc cfg_entity None cfg_project None
+2025-07-04 01:02:06,440 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/7j6o42sc
+2025-07-04 01:02:06,783 - INFO - processing run 9stmmhdg cfg_entity None cfg_project None
+2025-07-04 01:02:06,783 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/9stmmhdg
+2025-07-04 01:02:07,003 - INFO - processing run on9nrx7q cfg_entity None cfg_project None
+2025-07-04 01:02:07,003 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/on9nrx7q
+2025-07-04 01:02:07,270 - INFO - processing run z6e4x3ss cfg_entity None cfg_project None
+2025-07-04 01:02:07,270 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/z6e4x3ss
+2025-07-04 01:02:07,544 - INFO - processing run 1jl75m2w cfg_entity None cfg_project None
+2025-07-04 01:02:07,544 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/1jl75m2w
+2025-07-04 01:02:07,896 - INFO - Skipping run 2ho5oc22: config project 'sensor-dropout-2' does not match requested 'blindpick-ppo-oracle-state'
+2025-07-04 01:02:07,896 - INFO - processing run 8g8hbi10 cfg_entity None cfg_project None
+2025-07-04 01:02:07,896 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/8g8hbi10
+2025-07-04 01:02:08,204 - INFO - processing run r7512k3i cfg_entity None cfg_project None
+2025-07-04 01:02:08,204 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/r7512k3i
+2025-07-04 01:02:08,437 - INFO - processing run 9i56piwl cfg_entity None cfg_project None
+2025-07-04 01:02:08,437 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/9i56piwl
+2025-07-04 01:02:08,754 - INFO - processing run mtwyj91l cfg_entity None cfg_project None
+2025-07-04 01:02:08,755 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/mtwyj91l
+2025-07-04 01:02:09,059 - INFO - processing run pu2mw1g8 cfg_entity None cfg_project None
+2025-07-04 01:02:09,059 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/pu2mw1g8
+2025-07-04 01:02:09,286 - INFO - processing run znijvrff cfg_entity None cfg_project None
+2025-07-04 01:02:09,286 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/znijvrff
+2025-07-04 01:02:09,580 - INFO - processing run xi9mpzhu cfg_entity None cfg_project None
+2025-07-04 01:02:09,580 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/xi9mpzhu
+2025-07-04 01:02:09,848 - INFO - processing run 03etdi5v cfg_entity None cfg_project None
+2025-07-04 01:02:09,848 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/03etdi5v
+2025-07-04 01:02:10,131 - INFO - processing run qmutxdwa cfg_entity None cfg_project None
+2025-07-04 01:02:10,131 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/qmutxdwa
+2025-07-04 01:02:10,374 - INFO - processing run 4kbaqem9 cfg_entity None cfg_project None
+2025-07-04 01:02:10,374 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/4kbaqem9
+2025-07-04 01:02:10,610 - INFO - Run data fetched successfully.
+2025-07-04 01:02:10,611 - INFO - Loaded run from cloud: vlongle/blindpick-ppo-oracle-state/4kbaqem9
+2025-07-04 01:02:11,075 - INFO - Using step column '_step' for run 4kbaqem9
+/home/vlongle/code/rl_sensor/sensor-dropout/plot.py:185: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  hist_df.dropna(subset=[metric], inplace=True)
+2025-07-04 01:02:11,084 - INFO - processing run 9i949mmi cfg_entity None cfg_project None
+2025-07-04 01:02:11,085 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/9i949mmi
+2025-07-04 01:02:11,284 - INFO - processing run z6klrwpq cfg_entity None cfg_project None
+2025-07-04 01:02:11,284 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/z6klrwpq
+2025-07-04 01:02:11,507 - INFO - processing run 5yxlay6s cfg_entity None cfg_project None
+2025-07-04 01:02:11,507 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/5yxlay6s
+2025-07-04 01:02:11,719 - INFO - processing run xr3gcrs1 cfg_entity None cfg_project None
+2025-07-04 01:02:11,719 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/xr3gcrs1
+2025-07-04 01:02:11,989 - INFO - processing run d5on9nvn cfg_entity None cfg_project None
+2025-07-04 01:02:11,989 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/d5on9nvn
+2025-07-04 01:02:12,201 - INFO - processing run ab8pxcp4 cfg_entity None cfg_project None
+2025-07-04 01:02:12,202 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/ab8pxcp4
+2025-07-04 01:02:12,500 - INFO - processing run q81xhhod cfg_entity None cfg_project None
+2025-07-04 01:02:12,500 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/q81xhhod
+2025-07-04 01:02:12,793 - INFO - processing run wg7ez8rt cfg_entity None cfg_project None
+2025-07-04 01:02:12,793 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/wg7ez8rt
+2025-07-04 01:02:13,058 - INFO - processing run 2q5f878p cfg_entity None cfg_project None
+2025-07-04 01:02:13,058 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/2q5f878p
+2025-07-04 01:02:13,344 - INFO - processing run inwf1bkx cfg_entity None cfg_project None
+2025-07-04 01:02:13,345 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/inwf1bkx
+2025-07-04 01:02:13,546 - INFO - processing run s61st6nc cfg_entity None cfg_project None
+2025-07-04 01:02:13,547 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/s61st6nc
+2025-07-04 01:02:13,863 - INFO - processing run nrzhpram cfg_entity None cfg_project None
+2025-07-04 01:02:13,864 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/nrzhpram
+2025-07-04 01:02:14,052 - INFO - Run data fetched successfully.
+2025-07-04 01:02:14,053 - INFO - Loaded run from cloud: vlongle/blindpick-ppo-oracle-state/nrzhpram
+2025-07-04 01:02:14,598 - INFO - Using step column '_step' for run nrzhpram
+/home/vlongle/code/rl_sensor/sensor-dropout/plot.py:185: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  hist_df.dropna(subset=[metric], inplace=True)
+2025-07-04 01:02:14,601 - INFO - processing run trs3ccvv cfg_entity None cfg_project None
+2025-07-04 01:02:14,601 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/trs3ccvv
+2025-07-04 01:02:14,867 - INFO - processing run kc9qg23z cfg_entity None cfg_project None
+2025-07-04 01:02:14,867 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/kc9qg23z
+2025-07-04 01:02:15,150 - INFO - processing run tww8mw16 cfg_entity None cfg_project None
+2025-07-04 01:02:15,150 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/tww8mw16
+2025-07-04 01:02:15,376 - INFO - processing run 87e5sltm cfg_entity None cfg_project None
+2025-07-04 01:02:15,376 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/87e5sltm
+2025-07-04 01:02:15,610 - INFO - processing run wn3zz8qy cfg_entity None cfg_project None
+2025-07-04 01:02:15,610 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/wn3zz8qy
+2025-07-04 01:02:15,832 - INFO - processing run ikkpl8y6 cfg_entity None cfg_project None
+2025-07-04 01:02:15,832 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/ikkpl8y6
+2025-07-04 01:02:16,044 - INFO - Run data fetched successfully.
+2025-07-04 01:02:16,044 - INFO - Loaded run from cloud: vlongle/blindpick-ppo-oracle-state/ikkpl8y6
+2025-07-04 01:02:16,668 - INFO - Using step column '_step' for run ikkpl8y6
+/home/vlongle/code/rl_sensor/sensor-dropout/plot.py:185: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  hist_df.dropna(subset=[metric], inplace=True)
+2025-07-04 01:02:16,671 - INFO - processing run 31vx422j cfg_entity None cfg_project None
+2025-07-04 01:02:16,672 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/31vx422j
+2025-07-04 01:02:16,952 - INFO - processing run oeskjxf4 cfg_entity None cfg_project None
+2025-07-04 01:02:16,953 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/oeskjxf4
+2025-07-04 01:02:17,295 - INFO - processing run uvno7f72 cfg_entity None cfg_project None
+2025-07-04 01:02:17,295 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/uvno7f72
+2025-07-04 01:02:17,583 - INFO - processing run lc3avx51 cfg_entity None cfg_project None
+2025-07-04 01:02:17,583 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/lc3avx51
+2025-07-04 01:02:17,805 - INFO - processing run 409842oi cfg_entity None cfg_project None
+2025-07-04 01:02:17,805 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/409842oi
+2025-07-04 01:02:18,072 - INFO - processing run 0wr634je cfg_entity None cfg_project None
+2025-07-04 01:02:18,072 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/0wr634je
+2025-07-04 01:02:18,276 - INFO - processing run 0i2cljth cfg_entity None cfg_project None
+2025-07-04 01:02:18,276 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/0i2cljth
+2025-07-04 01:02:18,559 - INFO - Skipping run yb8baks0: config project 'sensor-dropout-2' does not match requested 'blindpick-ppo-oracle-state'
+2025-07-04 01:02:18,589 - INFO - processing run ibb11sgh cfg_entity None cfg_project None
+2025-07-04 01:02:18,589 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/ibb11sgh
+2025-07-04 01:02:18,854 - INFO - processing run povsyfuo cfg_entity None cfg_project None
+2025-07-04 01:02:18,854 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/povsyfuo
+2025-07-04 01:02:19,059 - INFO - processing run 4w93mkv6 cfg_entity None cfg_project None
+2025-07-04 01:02:19,059 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/4w93mkv6
+2025-07-04 01:02:19,365 - INFO - processing run 6fp7uhrp cfg_entity None cfg_project None
+2025-07-04 01:02:19,365 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/6fp7uhrp
+2025-07-04 01:02:19,575 - INFO - processing run qzezz1mo cfg_entity None cfg_project None
+2025-07-04 01:02:19,575 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/qzezz1mo
+2025-07-04 01:02:19,789 - INFO - processing run chgzw8d9 cfg_entity None cfg_project None
+2025-07-04 01:02:19,789 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/chgzw8d9
+2025-07-04 01:02:20,037 - INFO - processing run vejggl84 cfg_entity None cfg_project None
+2025-07-04 01:02:20,037 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/vejggl84
+2025-07-04 01:02:20,314 - INFO - processing run a8w4h1t2 cfg_entity None cfg_project None
+2025-07-04 01:02:20,314 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/a8w4h1t2
+2025-07-04 01:02:20,627 - INFO - processing run 6pvl2iyh cfg_entity None cfg_project None
+2025-07-04 01:02:20,627 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/6pvl2iyh
+2025-07-04 01:02:20,901 - INFO - processing run 7n9z0j8r cfg_entity None cfg_project None
+2025-07-04 01:02:20,901 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/7n9z0j8r
+2025-07-04 01:02:21,120 - INFO - processing run 4fbvfl8q cfg_entity None cfg_project None
+2025-07-04 01:02:21,120 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/4fbvfl8q
+2025-07-04 01:02:21,406 - INFO - processing run tv2jdj02 cfg_entity None cfg_project None
+2025-07-04 01:02:21,406 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/tv2jdj02
+2025-07-04 01:02:21,667 - INFO - processing run gttmgqrs cfg_entity None cfg_project None
+2025-07-04 01:02:21,667 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/gttmgqrs
+2025-07-04 01:02:21,925 - INFO - processing run pdcngvrq cfg_entity None cfg_project None
+2025-07-04 01:02:21,926 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/pdcngvrq
+2025-07-04 01:02:22,208 - INFO - Run data fetched successfully.
+2025-07-04 01:02:22,208 - INFO - Loaded run from cloud: vlongle/blindpick-ppo-oracle-state/pdcngvrq
+2025-07-04 01:02:22,703 - INFO - Using step column '_step' for run pdcngvrq
+/home/vlongle/code/rl_sensor/sensor-dropout/plot.py:185: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  hist_df.dropna(subset=[metric], inplace=True)
+2025-07-04 01:02:22,739 - INFO - processing run h30w5i17 cfg_entity None cfg_project None
+2025-07-04 01:02:22,739 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/h30w5i17
+2025-07-04 01:02:22,985 - INFO - processing run limmuxvd cfg_entity None cfg_project None
+2025-07-04 01:02:22,986 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/limmuxvd
+2025-07-04 01:02:23,303 - INFO - processing run 97bdan8a cfg_entity None cfg_project None
+2025-07-04 01:02:23,303 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/97bdan8a
+2025-07-04 01:02:23,570 - INFO - processing run ioew5hv8 cfg_entity None cfg_project None
+2025-07-04 01:02:23,570 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/ioew5hv8
+2025-07-04 01:02:23,817 - INFO - processing run v6g8awwy cfg_entity None cfg_project None
+2025-07-04 01:02:23,817 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/v6g8awwy
+2025-07-04 01:02:24,104 - INFO - processing run usasbher cfg_entity None cfg_project None
+2025-07-04 01:02:24,105 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/usasbher
+2025-07-04 01:02:24,339 - INFO - processing run e0fxymvh cfg_entity None cfg_project None
+2025-07-04 01:02:24,339 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/e0fxymvh
+2025-07-04 01:02:24,548 - INFO - processing run 2xspt3do cfg_entity None cfg_project None
+2025-07-04 01:02:24,548 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/2xspt3do
+2025-07-04 01:02:24,801 - INFO - processing run r8x5exjf cfg_entity None cfg_project None
+2025-07-04 01:02:24,801 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/r8x5exjf
+2025-07-04 01:02:25,098 - INFO - processing run 2ssvydx1 cfg_entity None cfg_project None
+2025-07-04 01:02:25,098 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/2ssvydx1
+2025-07-04 01:02:25,307 - INFO - processing run ktxk7fhe cfg_entity None cfg_project None
+2025-07-04 01:02:25,307 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/ktxk7fhe
+2025-07-04 01:02:25,488 - INFO - processing run wysa0z4d cfg_entity None cfg_project None
+2025-07-04 01:02:25,488 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/wysa0z4d
+2025-07-04 01:02:25,699 - INFO - processing run iwc5nb7m cfg_entity None cfg_project None
+2025-07-04 01:02:25,699 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/iwc5nb7m
+2025-07-04 01:02:26,023 - INFO - processing run g1bramay cfg_entity None cfg_project None
+2025-07-04 01:02:26,024 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/g1bramay
+2025-07-04 01:02:26,281 - INFO - processing run u2kb609h cfg_entity None cfg_project None
+2025-07-04 01:02:26,281 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/u2kb609h
+2025-07-04 01:02:26,522 - INFO - processing run yh0sk3e0 cfg_entity None cfg_project None
+2025-07-04 01:02:26,522 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/yh0sk3e0
+2025-07-04 01:02:26,824 - INFO - processing run 55l2a6xs cfg_entity None cfg_project None
+2025-07-04 01:02:26,824 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/55l2a6xs
+2025-07-04 01:02:27,118 - INFO - processing run h3xtz0qm cfg_entity None cfg_project None
+2025-07-04 01:02:27,119 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/h3xtz0qm
+2025-07-04 01:02:27,361 - INFO - processing run 8riyh5dv cfg_entity None cfg_project None
+2025-07-04 01:02:27,361 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/8riyh5dv
+2025-07-04 01:02:27,720 - INFO - processing run 11pusk6p cfg_entity None cfg_project None
+2025-07-04 01:02:27,720 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/11pusk6p
+2025-07-04 01:02:28,009 - INFO - processing run 6rsnfkjw cfg_entity None cfg_project None
+2025-07-04 01:02:28,009 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/6rsnfkjw
+2025-07-04 01:02:28,293 - INFO - processing run ymdyfeup cfg_entity None cfg_project None
+2025-07-04 01:02:28,293 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/ymdyfeup
+2025-07-04 01:02:28,517 - INFO - processing run urxwjifk cfg_entity None cfg_project None
+2025-07-04 01:02:28,517 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/urxwjifk
+2025-07-04 01:02:28,796 - INFO - processing run glxel9xq cfg_entity None cfg_project None
+2025-07-04 01:02:28,796 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/glxel9xq
+2025-07-04 01:02:29,052 - INFO - Run data fetched successfully.
+2025-07-04 01:02:29,053 - INFO - Loaded run from cloud: vlongle/blindpick-ppo-oracle-state/glxel9xq
+2025-07-04 01:02:29,492 - INFO - Using step column '_step' for run glxel9xq
+/home/vlongle/code/rl_sensor/sensor-dropout/plot.py:185: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  hist_df.dropna(subset=[metric], inplace=True)
+2025-07-04 01:02:29,496 - INFO - processing run ux3ud7fd cfg_entity None cfg_project None
+2025-07-04 01:02:29,496 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/ux3ud7fd
+2025-07-04 01:02:29,731 - INFO - processing run emox4u0w cfg_entity None cfg_project None
+2025-07-04 01:02:29,731 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/emox4u0w
+2025-07-04 01:02:29,962 - INFO - processing run fsgvkw7m cfg_entity None cfg_project None
+2025-07-04 01:02:29,962 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/fsgvkw7m
+2025-07-04 01:02:30,201 - INFO - processing run 09bqsqac cfg_entity None cfg_project None
+2025-07-04 01:02:30,201 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/09bqsqac
+2025-07-04 01:02:50,771 - INFO - processing run r27yc52v cfg_entity None cfg_project None
+2025-07-04 01:02:50,771 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/r27yc52v
+2025-07-04 01:02:51,066 - INFO - processing run yevio73j cfg_entity None cfg_project None
+2025-07-04 01:02:51,066 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/yevio73j
+2025-07-04 01:02:51,338 - INFO - processing run y1rfbyos cfg_entity None cfg_project None
+2025-07-04 01:02:51,338 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/y1rfbyos
+2025-07-04 01:02:51,576 - INFO - Run data fetched successfully.
+2025-07-04 01:02:51,577 - INFO - Loaded run from cloud: vlongle/blindpick-ppo-oracle-state/y1rfbyos
+2025-07-04 01:02:52,135 - INFO - Using step column '_step' for run y1rfbyos
+/home/vlongle/code/rl_sensor/sensor-dropout/plot.py:185: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  hist_df.dropna(subset=[metric], inplace=True)
+2025-07-04 01:02:52,142 - INFO - processing run 1oun5lpy cfg_entity None cfg_project None
+2025-07-04 01:02:52,142 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/1oun5lpy
+2025-07-04 01:02:52,334 - INFO - processing run ene2v09i cfg_entity None cfg_project None
+2025-07-04 01:02:52,334 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/ene2v09i
+2025-07-04 01:02:52,638 - INFO - processing run 8sfnk6h5 cfg_entity None cfg_project None
+2025-07-04 01:02:52,638 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/8sfnk6h5
+2025-07-04 01:02:52,897 - INFO - processing run onrgd7ik cfg_entity None cfg_project None
+2025-07-04 01:02:52,897 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/onrgd7ik
+2025-07-04 01:02:53,125 - INFO - processing run vwyyeuha cfg_entity None cfg_project None
+2025-07-04 01:02:53,125 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/vwyyeuha
+2025-07-04 01:02:53,330 - INFO - processing run xqsgng8k cfg_entity None cfg_project None
+2025-07-04 01:02:53,330 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/xqsgng8k
+2025-07-04 01:02:53,662 - INFO - processing run l6l8gesa cfg_entity None cfg_project None
+2025-07-04 01:02:53,662 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/l6l8gesa
+2025-07-04 01:02:54,000 - INFO - processing run xywu57cl cfg_entity None cfg_project None
+2025-07-04 01:02:54,000 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/xywu57cl
+2025-07-04 01:02:54,292 - INFO - processing run r1v4pr40 cfg_entity None cfg_project None
+2025-07-04 01:02:54,292 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/r1v4pr40
+2025-07-04 01:02:54,537 - INFO - processing run 0ufg6kal cfg_entity None cfg_project None
+2025-07-04 01:02:54,537 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/0ufg6kal
+2025-07-04 01:02:54,879 - INFO - processing run 2qu6zyyk cfg_entity None cfg_project None
+2025-07-04 01:02:54,879 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/2qu6zyyk
+2025-07-04 01:02:55,054 - INFO - processing run rquja39x cfg_entity None cfg_project None
+2025-07-04 01:02:55,054 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/rquja39x
+2025-07-04 01:02:55,254 - INFO - processing run 550f0lsg cfg_entity None cfg_project None
+2025-07-04 01:02:55,255 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/550f0lsg
+2025-07-04 01:02:55,544 - INFO - processing run tiujq00o cfg_entity None cfg_project None
+2025-07-04 01:02:55,544 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/tiujq00o
+2025-07-04 01:02:55,830 - INFO - processing run 8n7au478 cfg_entity None cfg_project None
+2025-07-04 01:02:55,830 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/8n7au478
+2025-07-04 01:02:56,154 - INFO - processing run vqotqtqy cfg_entity None cfg_project None
+2025-07-04 01:02:56,154 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/vqotqtqy
+2025-07-04 01:02:56,458 - INFO - Skipping run qxc5oqm7: config project 'sensor-dropout-2' does not match requested 'blindpick-ppo-oracle-state'
+2025-07-04 01:02:56,458 - INFO - processing run 25vsjn3j cfg_entity None cfg_project None
+2025-07-04 01:02:56,458 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/25vsjn3j
+2025-07-04 01:02:56,681 - INFO - processing run 07lc9k1b cfg_entity None cfg_project None
+2025-07-04 01:02:56,681 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/07lc9k1b
+2025-07-04 01:02:56,892 - INFO - processing run vprbp9od cfg_entity None cfg_project None
+2025-07-04 01:02:56,892 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/vprbp9od
+2025-07-04 01:02:57,116 - INFO - processing run 2wlmqykm cfg_entity None cfg_project None
+2025-07-04 01:02:57,116 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/2wlmqykm
+2025-07-04 01:02:57,402 - INFO - processing run wreafymt cfg_entity None cfg_project None
+2025-07-04 01:02:57,402 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/wreafymt
+2025-07-04 01:02:57,660 - INFO - processing run 4a07n2nq cfg_entity None cfg_project None
+2025-07-04 01:02:57,660 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/4a07n2nq
+2025-07-04 01:02:57,931 - INFO - processing run xbfmmtgj cfg_entity None cfg_project None
+2025-07-04 01:02:57,931 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/xbfmmtgj
+2025-07-04 01:02:58,194 - INFO - processing run 7bqmgjaa cfg_entity None cfg_project None
+2025-07-04 01:02:58,194 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/7bqmgjaa
+2025-07-04 01:02:58,499 - INFO - Run data fetched successfully.
+2025-07-04 01:02:58,499 - INFO - Loaded run from cloud: vlongle/blindpick-ppo-oracle-state/7bqmgjaa
+2025-07-04 01:02:58,921 - INFO - Using step column '_step' for run 7bqmgjaa
+/home/vlongle/code/rl_sensor/sensor-dropout/plot.py:185: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  hist_df.dropna(subset=[metric], inplace=True)
+2025-07-04 01:02:58,949 - INFO - processing run f309izpf cfg_entity None cfg_project None
+2025-07-04 01:02:58,949 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/f309izpf
+2025-07-04 01:02:59,192 - INFO - processing run w6mas9hv cfg_entity None cfg_project None
+2025-07-04 01:02:59,192 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/w6mas9hv
+2025-07-04 01:02:59,475 - INFO - processing run h3k615wq cfg_entity None cfg_project None
+2025-07-04 01:02:59,475 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/h3k615wq
+2025-07-04 01:02:59,768 - INFO - processing run edd1lk73 cfg_entity None cfg_project None
+2025-07-04 01:02:59,768 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/edd1lk73
+2025-07-04 01:03:00,050 - INFO - processing run zhrpkgaj cfg_entity None cfg_project None
+2025-07-04 01:03:00,050 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/zhrpkgaj
+2025-07-04 01:03:00,276 - INFO - processing run l3ve0xx3 cfg_entity None cfg_project None
+2025-07-04 01:03:00,276 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/l3ve0xx3
+2025-07-04 01:03:00,544 - INFO - processing run 9ftywsrh cfg_entity None cfg_project None
+2025-07-04 01:03:00,544 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/9ftywsrh
+2025-07-04 01:03:00,815 - INFO - processing run e4vycyvn cfg_entity None cfg_project None
+2025-07-04 01:03:00,815 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/e4vycyvn
+2025-07-04 01:03:01,034 - INFO - processing run ahs7a2c2 cfg_entity None cfg_project None
+2025-07-04 01:03:01,034 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/ahs7a2c2
+2025-07-04 01:03:01,336 - INFO - processing run mcnws1s3 cfg_entity None cfg_project None
+2025-07-04 01:03:01,336 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/mcnws1s3
+2025-07-04 01:03:01,627 - INFO - processing run udkivjhu cfg_entity None cfg_project None
+2025-07-04 01:03:01,627 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/udkivjhu
+2025-07-04 01:03:01,895 - INFO - processing run pxui3uc9 cfg_entity None cfg_project None
+2025-07-04 01:03:01,895 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/pxui3uc9
+2025-07-04 01:03:02,190 - INFO - processing run dyzz2b2r cfg_entity None cfg_project None
+2025-07-04 01:03:02,190 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/dyzz2b2r
+2025-07-04 01:03:02,453 - INFO - processing run pnv4f7rc cfg_entity None cfg_project None
+2025-07-04 01:03:02,453 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/pnv4f7rc
+2025-07-04 01:03:02,788 - INFO - processing run 45pf2m4n cfg_entity None cfg_project None
+2025-07-04 01:03:02,788 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/45pf2m4n
+2025-07-04 01:03:03,071 - INFO - processing run sbrhgtta cfg_entity None cfg_project None
+2025-07-04 01:03:03,072 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/sbrhgtta
+2025-07-04 01:03:03,333 - INFO - processing run oqguffeq cfg_entity None cfg_project None
+2025-07-04 01:03:03,333 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/oqguffeq
+2025-07-04 01:03:03,541 - INFO - processing run rryiix64 cfg_entity None cfg_project None
+2025-07-04 01:03:03,541 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/rryiix64
+2025-07-04 01:03:03,853 - INFO - processing run v6gc0p9t cfg_entity None cfg_project None
+2025-07-04 01:03:03,853 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/v6gc0p9t
+2025-07-04 01:03:04,123 - INFO - processing run 4401c0ju cfg_entity None cfg_project None
+2025-07-04 01:03:04,123 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/4401c0ju
+2025-07-04 01:03:04,350 - INFO - processing run nrk3zvq0 cfg_entity None cfg_project None
+2025-07-04 01:03:04,350 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/nrk3zvq0
+2025-07-04 01:03:04,685 - INFO - processing run 99gbzl8l cfg_entity None cfg_project None
+2025-07-04 01:03:04,685 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/99gbzl8l
+2025-07-04 01:03:04,972 - INFO - processing run hvw2dj7g cfg_entity None cfg_project None
+2025-07-04 01:03:04,972 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/hvw2dj7g
+2025-07-04 01:03:05,200 - INFO - processing run qd66fl3x cfg_entity None cfg_project None
+2025-07-04 01:03:05,200 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/qd66fl3x
+2025-07-04 01:03:05,424 - INFO - processing run 27p32boo cfg_entity None cfg_project None
+2025-07-04 01:03:05,424 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/27p32boo
+2025-07-04 01:03:05,651 - INFO - processing run ue5riknf cfg_entity None cfg_project None
+2025-07-04 01:03:05,651 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/ue5riknf
+2025-07-04 01:03:05,941 - INFO - processing run gurmznpj cfg_entity None cfg_project None
+2025-07-04 01:03:05,942 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/gurmznpj
+2025-07-04 01:03:06,225 - INFO - processing run zjdyb6yx cfg_entity None cfg_project None
+2025-07-04 01:03:06,225 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/zjdyb6yx
+2025-07-04 01:03:06,525 - INFO - processing run t26slrlb cfg_entity None cfg_project None
+2025-07-04 01:03:06,525 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/t26slrlb
+2025-07-04 01:03:06,781 - INFO - processing run vh468z4f cfg_entity None cfg_project None
+2025-07-04 01:03:06,781 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/vh468z4f
+2025-07-04 01:03:07,101 - INFO - processing run hkq1zrhe cfg_entity None cfg_project None
+2025-07-04 01:03:07,101 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/hkq1zrhe
+2025-07-04 01:03:07,397 - INFO - processing run ss9xg4hb cfg_entity None cfg_project None
+2025-07-04 01:03:07,397 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/ss9xg4hb
+2025-07-04 01:03:07,672 - INFO - processing run ehayek4u cfg_entity None cfg_project None
+2025-07-04 01:03:07,672 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/ehayek4u
+2025-07-04 01:03:07,956 - INFO - processing run hr1eve61 cfg_entity None cfg_project None
+2025-07-04 01:03:07,956 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/hr1eve61
+2025-07-04 01:03:08,262 - INFO - Skipping run gv8w948d: config project 'sensor-dropout-2' does not match requested 'blindpick-ppo-oracle-state'
+2025-07-04 01:03:08,263 - INFO - processing run soeife2z cfg_entity None cfg_project None
+2025-07-04 01:03:08,263 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/soeife2z
+2025-07-04 01:03:08,470 - INFO - processing run maesyp6y cfg_entity None cfg_project None
+2025-07-04 01:03:08,470 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/maesyp6y
+2025-07-04 01:03:08,727 - INFO - processing run a54buyx9 cfg_entity None cfg_project None
+2025-07-04 01:03:08,727 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/a54buyx9
+2025-07-04 01:03:09,439 - INFO - Skipping run o41ktq36: config project 'sensor-dropout-2' does not match requested 'blindpick-ppo-oracle-state'
+2025-07-04 01:03:09,439 - INFO - processing run gx3b3cff cfg_entity None cfg_project None
+2025-07-04 01:03:09,439 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/gx3b3cff
+2025-07-04 01:03:09,684 - INFO - processing run kbxxpq1i cfg_entity None cfg_project None
+2025-07-04 01:03:09,684 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/kbxxpq1i
+2025-07-04 01:03:09,978 - INFO - processing run 0jplmhcu cfg_entity None cfg_project None
+2025-07-04 01:03:09,978 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/0jplmhcu
+2025-07-04 01:03:10,188 - INFO - processing run fk97k092 cfg_entity None cfg_project None
+2025-07-04 01:03:10,188 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/fk97k092
+2025-07-04 01:03:10,401 - INFO - processing run g38khv3t cfg_entity None cfg_project None
+2025-07-04 01:03:10,401 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/g38khv3t
+2025-07-04 01:03:10,700 - INFO - processing run bd9w029w cfg_entity None cfg_project None
+2025-07-04 01:03:10,700 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/bd9w029w
+2025-07-04 01:03:10,974 - INFO - processing run x3a8vez1 cfg_entity None cfg_project None
+2025-07-04 01:03:10,974 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/x3a8vez1
+2025-07-04 01:03:11,262 - INFO - processing run gm3shbdl cfg_entity None cfg_project None
+2025-07-04 01:03:11,263 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/gm3shbdl
+2025-07-04 01:03:11,558 - INFO - Skipping run 2irfl0la: config project 'sensor-dropout-2' does not match requested 'blindpick-ppo-oracle-state'
+2025-07-04 01:03:11,567 - INFO - processing run zete53he cfg_entity None cfg_project None
+2025-07-04 01:03:11,567 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/zete53he
+2025-07-04 01:03:11,803 - INFO - processing run d1xwxone cfg_entity None cfg_project None
+2025-07-04 01:03:11,804 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/d1xwxone
+2025-07-04 01:03:12,070 - INFO - processing run eehf1gyq cfg_entity None cfg_project None
+2025-07-04 01:03:12,070 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/eehf1gyq
+2025-07-04 01:03:12,360 - INFO - processing run hqzro58y cfg_entity None cfg_project None
+2025-07-04 01:03:12,360 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/hqzro58y
+2025-07-04 01:03:12,563 - INFO - processing run k4qor8dz cfg_entity None cfg_project None
+2025-07-04 01:03:12,563 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/k4qor8dz
+2025-07-04 01:03:12,803 - INFO - processing run rb1fsxb5 cfg_entity None cfg_project None
+2025-07-04 01:03:12,803 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/rb1fsxb5
+2025-07-04 01:03:13,172 - INFO - processing run ajiiglu9 cfg_entity None cfg_project None
+2025-07-04 01:03:13,172 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/ajiiglu9
+2025-07-04 01:03:13,398 - INFO - processing run 0nzle3bm cfg_entity None cfg_project None
+2025-07-04 01:03:13,398 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/0nzle3bm
+2025-07-04 01:03:13,666 - INFO - processing run qouyecq0 cfg_entity None cfg_project None
+2025-07-04 01:03:13,667 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/qouyecq0
+2025-07-04 01:03:13,939 - INFO - processing run sartcifu cfg_entity None cfg_project None
+2025-07-04 01:03:13,939 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/sartcifu
+2025-07-04 01:03:14,270 - INFO - processing run g1v9koi7 cfg_entity None cfg_project None
+2025-07-04 01:03:14,270 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/g1v9koi7
+2025-07-04 01:03:14,452 - INFO - processing run 3ti293t1 cfg_entity None cfg_project None
+2025-07-04 01:03:14,452 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/3ti293t1
+2025-07-04 01:03:14,666 - INFO - processing run kyqhf6ob cfg_entity None cfg_project None
+2025-07-04 01:03:14,666 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/kyqhf6ob
+2025-07-04 01:03:14,904 - INFO - processing run 1sncu6uj cfg_entity None cfg_project None
+2025-07-04 01:03:14,904 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/1sncu6uj
+2025-07-04 01:03:15,171 - INFO - processing run kj3evjsc cfg_entity None cfg_project None
+2025-07-04 01:03:15,171 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/kj3evjsc
+2025-07-04 01:03:15,443 - INFO - processing run qghaa96u cfg_entity None cfg_project None
+2025-07-04 01:03:15,443 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/qghaa96u
+2025-07-04 01:03:15,649 - INFO - processing run 6fbc0cql cfg_entity None cfg_project None
+2025-07-04 01:03:15,649 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/6fbc0cql
+2025-07-04 01:03:15,923 - INFO - Run data fetched successfully.
+2025-07-04 01:03:15,924 - INFO - Loaded run from cloud: vlongle/blindpick-ppo-oracle-state/6fbc0cql
+2025-07-04 01:03:16,489 - INFO - Using step column '_step' for run 6fbc0cql
+/home/vlongle/code/rl_sensor/sensor-dropout/plot.py:185: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  hist_df.dropna(subset=[metric], inplace=True)
+2025-07-04 01:03:16,529 - INFO - processing run mxnxbf0v cfg_entity None cfg_project None
+2025-07-04 01:03:16,529 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/mxnxbf0v
+2025-07-04 01:03:16,843 - INFO - processing run i1r8pzkj cfg_entity None cfg_project None
+2025-07-04 01:03:16,843 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/i1r8pzkj
+2025-07-04 01:03:17,116 - INFO - processing run uxvqq7mt cfg_entity None cfg_project None
+2025-07-04 01:03:17,116 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/uxvqq7mt
+2025-07-04 01:03:17,291 - INFO - processing run ro0b4oux cfg_entity None cfg_project None
+2025-07-04 01:03:17,291 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/ro0b4oux
+2025-07-04 01:03:17,573 - INFO - processing run n2mi8nv3 cfg_entity None cfg_project None
+2025-07-04 01:03:17,574 - INFO - Attempting to fetch run data for: vlongle/blindpick-ppo-oracle-state/n2mi8nv3
+/mnt/kostas-graid/sw/envs/vlongle/miniconda3/envs/rl_sensor/lib/python3.9/site-packages/numpy/lib/nanfunctions.py:1878: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,

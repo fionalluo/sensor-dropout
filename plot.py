@@ -8,6 +8,7 @@ import sys
 import subprocess
 import re
 import shutil
+import yaml  # For parsing config.yaml
 
 # Use non-interactive backend to avoid hanging on headless servers
 import matplotlib
@@ -125,28 +126,80 @@ def fetch_run_data(run_path):
 # Modular helpers
 # -----------------------------------------------------------------------------
 
+def get_step_column(df):
+    """Determine which step column exists in the DataFrame."""
+    if '_step' in df.columns:
+        return '_step'
+    elif 'step' in df.columns:
+        return 'step'
+    else:
+        raise ValueError(f"Neither '_step' nor 'step' column found in the DataFrame: {df.columns}")
+
 
 def collect_run_histories(run_dirs, metric: str, *, entity: str, project: str):
-    """Return list of DataFrames containing [_step, metric] for each run directory."""
+    """Return list of DataFrames containing [step_col, metric] for each run directory."""
     histories = []
     api = wandb.Api()
 
     for rd in run_dirs:
         run_id = os.path.basename(rd).split('-')[-1]
-        run_path_guess = f"{entity}/{project}/{run_id}"
+
+        cfg_entity, cfg_project = extract_wandb_info(rd)
+        if cfg_project is not None and cfg_project != project:
+            logging.info(
+                f"Skipping run {run_id}: config project '{cfg_project}' does not match requested '{project}'"
+            )
+            continue
+        logging.info(f"processing run {run_id} cfg_entity {cfg_entity} cfg_project {cfg_project}")
+
+        effective_entity = cfg_entity or entity
+        effective_project = cfg_project or project
+
+        run_path_guess = f"{effective_entity}/{effective_project}/{run_id}"
 
         try:
             run = fetch_run_data(run_path_guess)
             logging.info(f"Loaded run from cloud: {run_path_guess}")
         except (wandb.errors.CommError, wandb.errors.Error):
-            logging.warning(f"Run {run_id} not found in cloud – syncing from {rd}")
-            sync_and_get_run_path(rd)
-            run = fetch_run_data(run_path_guess)
+            # logging.warning(f"Run {run_id} not found in cloud – syncing from {rd}")
+            # actual_run_path = sync_and_get_run_path(rd)
+            # run = fetch_run_data(actual_run_path)
+            continue
 
-        hist_df = run.history()[['_step', metric]]
-        hist_df.dropna(subset=[metric], inplace=True)
-        histories.append(hist_df)
+        try:
+            full_hist_df = run.history()
+            
+            # Check if DataFrame is empty or corrupted
+            if full_hist_df.empty or len(full_hist_df.columns) == 0:
+                logging.warning(f"Skipping run {run_id}: empty or corrupted data")
+                continue
+            
+            # Check if the metric exists
+            if metric not in full_hist_df.columns:
+                logging.warning(f"Skipping run {run_id}: metric '{metric}' not found in columns: {list(full_hist_df.columns)}")
+                continue
+            
+            step_col = get_step_column(full_hist_df)
+            logging.info(f"Using step column '{step_col}' for run {run_id}")
+            hist_df = full_hist_df[[step_col, metric]]
+            hist_df.dropna(subset=[metric], inplace=True)
+            
+            # Check if we have any data left after dropping NaNs
+            if hist_df.empty:
+                logging.warning(f"Skipping run {run_id}: no valid data points after removing NaN values")
+                continue
+                
+            # Standardize column name to '_step' for consistency
+            hist_df = hist_df.rename(columns={step_col: '_step'})
+            histories.append(hist_df)
+            
+        except Exception as e:
+            logging.warning(f"Skipping run {run_id}: error processing data - {str(e)}")
+            continue
 
+    if not histories:
+        logging.error("No valid run histories found. All runs were skipped due to corruption or missing data.")
+        
     return histories
 
 
@@ -216,6 +269,33 @@ def plot_multiple_metrics(results: list[dict], *, project: str):
         metrics_safe = "__".join([m['metric'].replace('/', '_') for m in results])[:100]
         plt.savefig(f"figures/plot_{project}_combined_{metrics_safe}.png", bbox_inches='tight', dpi=160)
         plt.close()
+
+
+def extract_wandb_info(run_dir):
+    """Extract entity and project names from the run's config.yaml (if present).
+
+    Returns (entity, project) – either may be None if not found.
+    """
+    cfg_path = os.path.join(run_dir, 'files', 'config.yaml')
+    if not os.path.isfile(cfg_path):
+        return None, None
+
+    try:
+        with open(cfg_path, 'r') as f:
+            cfg = yaml.safe_load(f)
+    except Exception as e:
+        logging.debug(f"Failed to parse {cfg_path}: {e}")
+        return None, None
+
+    # config.yaml can store primitives or dicts with a 'value' field
+    def _resolve(val):
+        if isinstance(val, dict):
+            return val.get('value')
+        return val
+
+    entity = _resolve(cfg.get('wandb_entity') or cfg.get('entity'))
+    project = _resolve(cfg.get('wandb_project') or cfg.get('project'))
+    return entity, project
 
 
 def main():

@@ -124,3 +124,5 @@ Thumbs.db
 models/
 tb_logs/
 slurm_outs/
+*.npz
+*.zip
