@@ -30,7 +30,7 @@ defaults:
   minibatch_size: 2048
 
   # Agent observation keys
-  full_keys: {mlp_keys: '.*', cnn_keys: '.*'}
+  keys: {mlp_keys: '.*', cnn_keys: '.*'}
   eval_keys:
     env1:
       mlp_keys: '.*'
@@ -125,7 +125,7 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
     num_eval_episodes: 50
     eval_envs: 4
     num_eval_configs: 4
-  full_keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
+  keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
   eval_keys:
     env1:
       mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b'
@@ -173,7 +173,7 @@ gymnasium_maze: &maze_base
     eval_envs: 4
     num_eval_configs: 6  # sets of eval keys
   
-  full_keys: {mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b', cnn_keys: '^$'}  # omit the distance key
+  keys: {mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b', cnn_keys: '^$'}  # omit the distance key
   eval_keys:  # Note that neighbors_5x5 only includes neighbors not in the 3x3 neighbors (they are disjoint)
     env1:  # Goal position, neighbors 5x5
       mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b'
@@ -220,7 +220,7 @@ gymnasium_blindpick: &blindpick_base
     eval_envs: 4
     video_log_interval: 1
     num_eval_configs: 7
-  full_keys: {mlp_keys: '.*', cnn_keys: '.*'} # robot_state, touch, camera_front, camera_side, gripper_camera_rgb
+  keys: {mlp_keys: '.*', cnn_keys: '.*'} # robot_state, touch, camera_front, camera_side, gripper_camera_rgb
   eval_keys:
     env1: # full privileged observations
       mlp_keys: '.*'

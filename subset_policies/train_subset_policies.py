@@ -183,9 +183,7 @@ def train_subset_policy(config, subset_name, eval_keys, output_dir, device, poli
         if not attr.startswith('_'):
             setattr(subset_config, attr, getattr(config, attr))
     
-    # Update keys for this subset - set full_keys to the subset keys so the agent uses the correct keys
-    subset_config.full_keys = SimpleNamespace(**eval_keys)
-    # Also set keys for compatibility
+    # Update keys for this subset - set keys to the subset keys so the agent uses the correct keys
     subset_config.keys = SimpleNamespace(**eval_keys)
     
     # Update exp_name to include subset name for distinct wandb logging
