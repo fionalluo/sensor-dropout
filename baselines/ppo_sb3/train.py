@@ -35,6 +35,7 @@ import wandb
 import re
 
 _gym_robo.register_robotics_envs()
+import trailenv 
 
 # Add project root to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -110,10 +111,6 @@ class ObservationFilterWrapper(gym.ObservationWrapper):
         if "terminal_observation" in info:
             info["terminal_observation"] = self.observation(info["terminal_observation"])
         return self.observation(obs), reward, terminated, truncated, info
-
-# -----------------------------------------------------------------------------
-# Environment Creation (using direct gymnasium approach like train_blindpick.py)
-# -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
 # Training Function
