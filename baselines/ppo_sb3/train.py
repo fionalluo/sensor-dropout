@@ -20,6 +20,11 @@ warnings.filterwarnings('ignore', '.*box bound precision lowered.*')
 warnings.filterwarnings('ignore', '.*using stateful random seeds*')
 warnings.filterwarnings('ignore', '.*is a deprecated alias for.*')
 warnings.filterwarnings('ignore', '.*truncated to dtype int32.*')
+warnings.filterwarnings('ignore', '.*The obs returned by the `reset\(\)` method was expecting numpy array dtype to be int32, actual type: int64.*')
+warnings.filterwarnings('ignore', '.*The obs returned by the `reset\(\)` method is not within the observation space.*')
+warnings.filterwarnings('ignore', '.*The obs returned by the `step\(\)` method was expecting numpy array dtype to be int32, actual type: int64.*')
+warnings.filterwarnings('ignore', '.*The obs returned by the `step\(\)` method is not within the observation space.*')
+warnings.filterwarnings('ignore', '.*Overriding environment.*')
 
 # --- Standard imports
 import numpy as np
@@ -166,14 +171,7 @@ def train_ppo_sb3(envs, config, seed, num_iterations=None):
         run = wandb.init(
             project=config.wandb_project,
             name=f"ppo_sb3-{config.task}-{config.exp_name}-seed{seed}",
-            config=dict(
-                env=config.task,
-                algo="PPO_SB3",
-                total_timesteps=config.total_timesteps,
-                policy="MultiInputPolicy",
-                seed=seed,
-                num_envs=config.num_envs,
-            ),
+            config=config,  # Pass the original config object
             sync_tensorboard=True,
         )
 

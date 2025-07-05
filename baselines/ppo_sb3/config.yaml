@@ -4,7 +4,7 @@ defaults:
   torch_deterministic: true
   cuda: true
   track: true
-  wandb_project: "sb3-ppo"
+  wandb_project: "sb3-ppo-2"
   wandb_entity: null
   capture_video: false
 
