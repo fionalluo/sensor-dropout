@@ -6,7 +6,7 @@ pick one observation-space from `ppo/config.yaml`. Default to train all obs
     - distill to a single student policy.
 
 ## Configs
-`full_keys`: all possible sensors, `keys`: what being used by the env (student sensor). 
+`keys`: all possible sensors, `keys`: what being used by the env (student sensor). 
 
 ## Eval Wandb
 `eval/mean_return` the result on the training sensor config, `full_eval_return/mean` the result on the average all possible config env combination, which is usually the key metric to track and is a superset of `eval/mean_return`.
