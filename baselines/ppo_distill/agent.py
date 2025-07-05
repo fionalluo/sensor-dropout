@@ -15,7 +15,6 @@ import os
 import time
 
 
-from baselines.shared.eval_utils import filter_observations_by_keys
 from baselines.shared.policy_utils import (
     load_policy_like_subset_policies,
     find_policy_files, 
@@ -248,9 +247,9 @@ class PPODistillAgent:
         """
         Mask observations based on eval_keys while keeping the original structure.
         This matches the exact logic from eval_utils.py.
-        The student receives full_keys, but we map them to available keys in the current subset.
+        The student receives keys, but we map them to available keys in the current subset.
         Args:
-            obs: Full observations (full_keys)
+            obs: Full observations (keys)
             eval_keys: Eval keys for current configuration (subset keys)
         Returns:
             Dict: Masked observations with same structure as input

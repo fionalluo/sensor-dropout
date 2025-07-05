@@ -30,12 +30,12 @@ class BaseAgent(nn.Module):
             if k in ['reward', 'is_first', 'is_last', 'is_terminal']:
                 continue
             if len(obs_space[k].shape) == 3 and obs_space[k].shape[-1] == 3:  # Image observations
-                if re.match(config.full_keys.cnn_keys, k):
+                if re.match(config.keys.cnn_keys, k):
                     self.teacher_cnn_keys.append(k)
                 if re.match(config.keys.cnn_keys, k):
                     self.student_cnn_keys.append(k)
             else:  # Non-image observations
-                if re.match(config.full_keys.mlp_keys, k):
+                if re.match(config.keys.mlp_keys, k):
                     self.teacher_mlp_keys.append(k)
                 if re.match(config.keys.mlp_keys, k):
                     self.student_mlp_keys.append(k)

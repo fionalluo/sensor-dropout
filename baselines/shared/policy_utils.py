@@ -192,14 +192,14 @@ def make_envs_for_distillation(config, num_envs):
 
     # 3. Create a modified config that includes all keys
     modified_config = copy.deepcopy(config)
-    if not hasattr(modified_config, 'full_keys'):
-        modified_config.full_keys = SimpleNamespace()
+    if not hasattr(modified_config, 'keys'):
+        modified_config.keys = SimpleNamespace()
 
     # 4. Create regex patterns that match all the keys we need
     all_mlp_pattern = '|'.join([f'\\b{key}\\b' for key in all_mlp_keys]) if all_mlp_keys else '^$'
     all_cnn_pattern = '|'.join([f'\\b{key}\\b' for key in all_cnn_keys]) if all_cnn_keys else '^$'
-    modified_config.full_keys.mlp_keys = all_mlp_pattern
-    modified_config.full_keys.cnn_keys = all_cnn_pattern
+    modified_config.keys.mlp_keys = all_mlp_pattern
+    modified_config.keys.cnn_keys = all_cnn_pattern
 
     # 5. Create environments with the modified config
     return make_envs(modified_config, num_envs)

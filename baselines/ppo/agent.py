@@ -20,7 +20,7 @@ class PPOAgent(BaseAgent):
             if k in ['reward', 'is_first', 'is_last', 'is_terminal']:
                 continue
             if len(envs.obs_space[k].shape) == 3 and envs.obs_space[k].shape[-1] == 3:  # Image observations
-                if re.match(config.full_keys.cnn_keys, k):
+                if re.match(config.keys.cnn_keys, k):
                     self.cnn_keys.append(k)
                     # Check if image is very small (≤ 7x7 in first two dimensions)
                     if envs.obs_space[k].shape[0] <= 7 and envs.obs_space[k].shape[1] <= 7:
@@ -28,7 +28,7 @@ class PPOAgent(BaseAgent):
                     else:
                         self.heavyweight_cnn_keys.append(k)
             else:  # Non-image observations
-                if re.match(config.full_keys.mlp_keys, k):
+                if re.match(config.keys.mlp_keys, k):
                     self.mlp_keys.append(k)
         
         # Calculate total input size for MLP

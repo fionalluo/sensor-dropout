@@ -110,10 +110,10 @@ class SubsetPolicyLoader:
             if not attr.startswith('_'):
                 setattr(subset_config, attr, getattr(config, attr))
         
-        # Update keys for this subset - keep full_keys as original, only change keys
+        # Update keys for this subset - keep keys as original, only change keys
         subset_config.keys = SimpleNamespace(**eval_keys)
-        # Keep the original full_keys for encoder building
-        # subset_config.full_keys remains unchanged from the original config
+        # Keep the original keys for encoder building
+        # subset_config.keys remains unchanged from the original config
         
         # Update exp_name to include subset name for distinct logging
         if hasattr(subset_config, 'exp_name'):
@@ -125,7 +125,7 @@ class SubsetPolicyLoader:
         envs = make_envs(config, num_envs=config.num_envs)
         
         # Create agent exactly like train_subset_policies does
-        # Use the original config (with full_keys) for agent creation, not subset_config
+        # Use the original config (with keys) for agent creation, not subset_config
         if self.policy_type == 'ppo':
             agent = PPOAgent(envs, config)  # Use original config, not subset_config
         else:
