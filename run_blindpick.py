@@ -13,7 +13,8 @@ import os
 configs = [
     "oracle_state"
 ]
-difficulties = [0.03, 0.07]
+# difficulties = [0.03, 0.07]
+difficulties = [0.07]
 num_seeds = 4
 num_envs = 32
 

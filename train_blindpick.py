@@ -315,7 +315,7 @@ def parse_args() -> argparse.Namespace:
 
     # Slurm options
     p.add_argument("--job_name", default="blindpick_ppo", help="Base Slurm job name")
-    p.add_argument("--time", default="09:00:00", help="Slurm time limit (HH:MM:SS)")
+    p.add_argument("--time", default="72:00:00", help="Slurm time limit (HH:MM:SS)")
     p.add_argument("--partition", default="eaton-compute", help="Slurm partition")
     p.add_argument("--qos", default="ee-high", help="Quality of service")
     p.add_argument("--gpus", default="1", help="GPUs per job")

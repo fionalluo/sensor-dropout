@@ -93,18 +93,19 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--num_seeds", type=int, default=1, help="Number of consecutive seeds to run per config.")
     p.add_argument("--seed", type=int, help="Initial seed. If omitted, one is generated.")
     p.add_argument("--train_script", default="baselines/ppo/train.py", help="Path to training script.")
-    p.add_argument("--timeout_hours", type=float, default=4.0, help="Per-run timeout when running locally.")
+    p.add_argument("--timeout_hours", type=float, default=72.0, help="Per-run timeout when running locally.")
     p.add_argument(
         "--base_logdir",
         default="~/logdir/baselines/ppo",
         help="Base directory for logs (informational only – train.py controls actual output).",
     )
+    p.add_argument("--wandb_project", default="sensor-dropout", help="Wandb project name.")
 
     # Slurm options (used only when --slurm is provided)
     p.add_argument("--job_name", default="ppo", help="Base Slurm job name.")
-    p.add_argument("--time", default="04:00:00", help="Slurm time limit (HH:MM:SS)")
+    p.add_argument("--time", default="72:00:00", help="Slurm time limit (HH:MM:SS)")
     p.add_argument("--partition", default="eaton-compute", help="Slurm partition")
-    p.add_argument("--qos", default="ee-med", help="Quality of service")
+    p.add_argument("--qos", default="ee-high", help="Quality of service")
     p.add_argument("--gpus", default="1", help="GPUs per job (value passed to --gpus)")
     p.add_argument("--mem", default="32G", help="Memory per job")
     p.add_argument("--cpus", default="64", help="CPUs per task")
@@ -140,7 +141,7 @@ def main() -> None:
 
             cmd = (
                 f"python -u {args.train_script} "
-                f"--configs {config} --seed {seed}"
+                f"--configs {config} --seed {seed} --wandb_project {args.wandb_project}"
             )
 
             if args.slurm:

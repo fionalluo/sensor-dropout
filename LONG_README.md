@@ -19,3 +19,8 @@ For continuous control, SB3 PPO
 ```
 python debug_blindpick.py --num_seeds 5 --slurm 2>&1 | tee error.logs
 ```
+
+
+```
+python run_ppo.py --slurm --configs gymnasium_blindpick --num_seeds 4 --wandb_project fiona-ppo-blindpick-with-oracle
+```
