@@ -467,7 +467,7 @@ class EpisodeMaskingWrapper(gym.ObservationWrapper):
 # Training Function
 # -----------------------------------------------------------------------------
 
-def train_ppo_dropout(envs, config, seed, num_iterations=None):
+def train_ppo_dropout(envs, config, seed):
     """Train PPO with episode-level observation masking."""
     
     # Global seeding for reproducibility
@@ -534,12 +534,14 @@ def train_ppo_dropout(envs, config, seed, num_iterations=None):
     # Custom eval environment (unfiltered, for masking)
     unfiltered_eval_env = _make_eval_env()
     
-    # Calculate consistent logging frequencies (using SB3 defaults)
-    eval_freq = max(10000 // config.num_envs, 1)  # Evaluate every 10000 steps (less frequent)
-    log_interval = 1  # Default log every rollout
+    # Get evaluation settings from config
+    eval_freq = getattr(config.eval, 'eval_freq', max(10000 // config.num_envs, 1))
+    n_eval_episodes = getattr(config.eval, 'n_eval_episodes', 5)
+    log_interval = getattr(config, 'log_interval', 1)
     
     print(f"Eval frequency: every {eval_freq} env.step() calls (~{eval_freq * config.num_envs} total env steps)")
     print(f"Log interval: every {log_interval} rollouts")
+    print(f"Number of eval episodes: {n_eval_episodes}")
 
     # Initialize W&B if enabled
     run = None
@@ -566,7 +568,7 @@ def train_ppo_dropout(envs, config, seed, num_iterations=None):
         best_model_save_path=f"./best_models/ppo_dropout-{config.task}-{config.exp_name}-seed{seed}",
         log_path=f"./eval_logs/ppo_dropout-{config.task}-{config.exp_name}-seed{seed}",
         eval_freq=eval_freq,
-        n_eval_episodes=5,
+        n_eval_episodes=n_eval_episodes,
         deterministic=True,
         render=False,
         verbose=1
@@ -577,7 +579,7 @@ def train_ppo_dropout(envs, config, seed, num_iterations=None):
         config,
         _make_eval_env,  # Function to create unfiltered environments
         eval_freq=eval_freq,
-        n_eval_episodes=5,
+        n_eval_episodes=n_eval_episodes,
         deterministic=True,
         verbose=1,
         debug=False  # Enable debug to see what's happening
@@ -642,18 +644,15 @@ def main(argv=None):
     torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = config.torch_deterministic
 
-    # Calculate number of iterations like in thesis
-    num_iterations = config.total_timesteps // (config.num_envs * 2048)  # SB3 default n_steps
-
     # Run training
     print(f"Starting PPO Dropout training on {config.task} with {config.num_envs} environments")
-    print(f"Training for {num_iterations} iterations")
+    print(f"Training for {config.total_timesteps} total timesteps")
     if config.use_wandb:
         print(f"Wandb logging enabled - project: {config.wandb_project}")
     else:
         print("Wandb logging disabled")
     
-    trained_agent = train_ppo_dropout(None, config, seed, num_iterations=num_iterations)
+    trained_agent = train_ppo_dropout(None, config, seed)
     
     print("Training completed!")
     return trained_agent

@@ -338,8 +338,15 @@ class CustomEvalCallback(BaseCallback):
 # Training Function
 # -----------------------------------------------------------------------------
 
-def train_ppo_sb3(envs, config, seed, num_iterations=None):
-    """Train PPO using Stable Baselines 3."""
+def train_ppo_sb3(envs, config, seed, enable_custom_eval=True):
+    """Train PPO using Stable Baselines 3.
+    
+    Args:
+        envs: Vectorized environments (unused, kept for compatibility)
+        config: Configuration object
+        seed: Random seed
+        enable_custom_eval: Whether to enable custom evaluation across subsets (default: True)
+    """
     
     # Global seeding for reproducibility
     set_random_seed(seed)
@@ -406,12 +413,14 @@ def train_ppo_sb3(envs, config, seed, num_iterations=None):
     # Custom eval environment (unfiltered, for masking)
     unfiltered_eval_env = _make_eval_env()
     
-    # Calculate consistent logging frequencies (using SB3 defaults)
-    eval_freq = max(10000 // config.num_envs, 1)  # Evaluate every 10000 steps (less frequent)
-    log_interval = 1  # Default log every rollout
+    # Get evaluation settings from config
+    eval_freq = getattr(config.eval, 'eval_freq', max(10000 // config.num_envs, 1))
+    n_eval_episodes = getattr(config.eval, 'n_eval_episodes', 5)
+    log_interval = getattr(config, 'log_interval', 1)
     
     print(f"Eval frequency: every {eval_freq} env.step() calls (~{eval_freq * config.num_envs} total env steps)")
     print(f"Log interval: every {log_interval} rollouts")
+    print(f"Number of eval episodes: {n_eval_episodes}")
 
     # Initialize W&B if enabled
     run = None
@@ -438,25 +447,31 @@ def train_ppo_sb3(envs, config, seed, num_iterations=None):
         best_model_save_path=f"./best_models/ppo_sb3-{config.task}-{config.exp_name}-seed{seed}",
         log_path=f"./eval_logs/ppo_sb3-{config.task}-{config.exp_name}-seed{seed}",
         eval_freq=eval_freq,
-        n_eval_episodes=5,
+        n_eval_episodes=n_eval_episodes,
         deterministic=True,
         render=False,
         verbose=1
     )
     
-    custom_eval_callback = CustomEvalCallback(
-        unfiltered_eval_env,  # Use unfiltered environment for masking
-        config,
-        _make_eval_env,  # Function to create unfiltered environments
-        eval_freq=eval_freq,
-        n_eval_episodes=5,
-        deterministic=True,
-        verbose=1,
-        debug=False  # Enable debug to see what's happening
-    )
-
-    # Prepare callbacks
-    callbacks = [eval_callback, custom_eval_callback]
+    # Prepare callbacks - always include standard eval callback
+    callbacks = [eval_callback]
+    
+    # Conditionally add custom evaluation callback
+    if enable_custom_eval:
+        print("Enabling custom evaluation across observation subsets")
+        custom_eval_callback = CustomEvalCallback(
+            unfiltered_eval_env,  # Use unfiltered environment for masking
+            config,
+            _make_eval_env,  # Function to create unfiltered environments
+            eval_freq=eval_freq,
+            n_eval_episodes=n_eval_episodes,
+            deterministic=True,
+            verbose=1,
+            debug=False  # Enable debug to see what's happening
+        )
+        callbacks.append(custom_eval_callback)
+    else:
+        print("Custom evaluation across subsets disabled - using standard evaluation only")
     if run is not None:
         callbacks.append(WandbCallback(
             gradient_save_freq=1_000,
@@ -514,18 +529,15 @@ def main(argv=None):
     torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = config.torch_deterministic
 
-    # Calculate number of iterations like in thesis
-    num_iterations = config.total_timesteps // (config.num_envs * 2048)  # SB3 default n_steps
-
     # Run training
     print(f"Starting SB3 PPO training on {config.task} with {config.num_envs} environments")
-    print(f"Training for {num_iterations} iterations")
+    print(f"Training for {config.total_timesteps} total timesteps")
     if config.use_wandb:
         print(f"Wandb logging enabled - project: {config.wandb_project}")
     else:
         print("Wandb logging disabled")
     
-    trained_agent = train_ppo_sb3(None, config, seed, num_iterations=num_iterations)
+    trained_agent = train_ppo_sb3(None, config, seed, enable_custom_eval=True)
     
     print("Training completed!")
     return trained_agent

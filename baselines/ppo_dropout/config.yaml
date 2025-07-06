@@ -57,11 +57,14 @@ defaults:
   
   # Evaluation settings
   eval:
-    eval_interval: 1000  # Evaluate every 1000 steps
-    num_eval_episodes: 10  # Number of episodes to evaluate
+    eval_freq: 10000  # Evaluate every 10000 steps (will be divided by num_envs)
+    n_eval_episodes: 20  # Number of episodes to evaluate
     eval_envs: 4  # Number of parallel environments for evaluation
     video_log_interval: 1  # Log videos every evaluation call
     num_eval_configs: 4
+  
+  # Training settings
+  log_interval: 1  # Log every rollout
 
 # ====================
 # Named Configs
