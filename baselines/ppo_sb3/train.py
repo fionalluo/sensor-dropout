@@ -34,7 +34,7 @@ import gymnasium_robotics as _gym_robo  # type: ignore
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 from stable_baselines3.common.utils import set_random_seed
-from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.callbacks import EvalCallback, BaseCallback
 from wandb.integration.sb3 import WandbCallback
 import wandb
 import re
@@ -52,6 +52,7 @@ from embodied import wrappers
 
 # Import shared utilities
 from baselines.shared.config_utils import load_config
+from baselines.shared.masking_utils import mask_observations_for_student
 
 # Environment registration & constants
 # -----------------------------------------------------------------------------
@@ -118,6 +119,222 @@ class ObservationFilterWrapper(gym.ObservationWrapper):
         return self.observation(obs), reward, terminated, truncated, info
 
 # -----------------------------------------------------------------------------
+# Custom Evaluation Callback for SB3
+# -----------------------------------------------------------------------------
+
+class CustomEvalCallback(BaseCallback):
+    """Custom evaluation callback that evaluates across different observation subsets."""
+    
+    def __init__(
+        self,
+        eval_env,
+        config,
+        make_eval_env_func,
+        eval_freq=1000,
+        n_eval_episodes=5,
+        deterministic=True,
+        verbose=1,
+        debug=False
+    ):
+        super().__init__(verbose)
+        self.eval_env = eval_env
+        self.config = config
+        self.make_eval_env_func = make_eval_env_func
+        self.eval_freq = eval_freq
+        self.n_eval_episodes = n_eval_episodes
+        self.deterministic = deterministic
+        self.debug = debug
+        self.last_eval = 0
+        
+        # Get the number of eval configs
+        self.num_eval_configs = getattr(config, 'num_eval_configs', 4)
+        
+        # Parse student keys from the agent's training keys
+        if hasattr(config, 'keys') and config.keys:
+            # Create a filtered environment to get the actual training keys
+            def _get_filtered_keys():
+                suite, task = config.task.split('_', 1)
+                env = gym.make(task)
+                
+                # Apply observation filtering if keys are specified (same as training)
+                if hasattr(config, 'keys') and config.keys:
+                    mlp_keys = getattr(config.keys, 'mlp_keys', '.*')
+                    cnn_keys = getattr(config.keys, 'cnn_keys', '.*')
+                    env = ObservationFilterWrapper(
+                        env, 
+                        mlp_keys=mlp_keys,
+                        cnn_keys=cnn_keys
+                    )
+                
+                obs, _ = env.reset()
+                env.close()
+                return [k for k in obs.keys() if k not in ['reward', 'is_first', 'is_last', 'is_terminal']]
+            
+            # Get the actual keys the agent was trained on
+            training_keys = _get_filtered_keys()
+            self.student_keys = training_keys
+            
+            if self.debug:
+                print(f"[EVAL CALLBACK] Training keys (student keys): {self.student_keys}")
+        else:
+            self.student_keys = []
+    
+    def _get_available_keys(self):
+        """Get available keys from the evaluation environment."""
+        obs, _ = self.eval_env.reset()
+        return [k for k in obs.keys() if k not in ['reward', 'is_first', 'is_last', 'is_terminal']]
+    
+    def _parse_keys_from_pattern(self, pattern, available_keys):
+        """Parse keys from regex pattern."""
+        if pattern == '.*':
+            return available_keys
+        elif pattern == '^$':
+            return []
+        else:
+            import re
+            try:
+                regex = re.compile(pattern)
+                matched_keys = [k for k in available_keys if regex.search(k)]
+                return matched_keys
+            except re.error as e:
+                print(f"Warning: Invalid regex pattern '{pattern}': {e}")
+                return []
+    
+    def _on_step(self):
+        """Called after each step."""
+        # Check if we should run evaluation
+        if self.num_timesteps - self.last_eval >= self.eval_freq:
+            print(f"Running custom evaluation at step {self.num_timesteps}...")
+            
+            # Run evaluation for each environment configuration
+            for subset_idx in range(1, self.num_eval_configs + 1):
+                env_name = f"env{subset_idx}"
+                if not hasattr(self.config.eval_keys, env_name):
+                    print(f"Warning: Missing eval_keys for {env_name}")
+                    continue
+                
+                eval_keys = getattr(self.config.eval_keys, env_name)
+                mlp_keys_pattern = getattr(eval_keys, 'mlp_keys', '.*')
+                cnn_keys_pattern = getattr(eval_keys, 'cnn_keys', '.*')
+                
+                # Parse teacher keys for this environment
+                available_keys = self._get_available_keys()
+                teacher_mlp_keys = self._parse_keys_from_pattern(mlp_keys_pattern, available_keys)
+                teacher_cnn_keys = self._parse_keys_from_pattern(cnn_keys_pattern, available_keys)
+                teacher_keys = teacher_mlp_keys + teacher_cnn_keys
+                
+                if self.debug:
+                    print(f"[EVAL CALLBACK] {env_name} - Teacher keys: {teacher_keys}")
+                
+                # Run evaluation for this environment
+                self._evaluate_environment(env_name, teacher_keys)
+            
+            self.last_eval = self.num_timesteps
+            
+        return True
+    
+    def _evaluate_environment(self, env_name, teacher_keys):
+        """Evaluate the agent on a specific environment configuration."""
+        # Create a fresh evaluation environment
+        eval_env = self.make_eval_env_func()
+        
+        episode_returns = []
+        episode_lengths = []
+        
+        for episode in range(self.n_eval_episodes):
+            obs, _ = eval_env.reset()
+            episode_return = 0
+            episode_length = 0
+            
+            done = False
+            truncated = False
+            
+            while not (done or truncated):
+                # Convert observations to tensors for masking
+                obs_tensors = {}
+                for key, value in obs.items():
+                    if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                        if isinstance(value, np.ndarray):
+                            obs_tensors[key] = torch.tensor(value, dtype=torch.float32)
+                        else:
+                            obs_tensors[key] = torch.tensor([value], dtype=torch.float32)
+                
+                # Mask observations for the student
+                masked_obs = mask_observations_for_student(
+                    obs_tensors, 
+                    self.student_keys, 
+                    teacher_keys, 
+                    device=None,  # Use CPU for evaluation
+                    debug=self.debug and episode == 0
+                )
+                
+                # Debug logging for first episode
+                if self.debug and episode == 0:
+                    print(f"[EVAL DEBUG] {env_name} - Original obs keys: {list(obs_tensors.keys())}")
+                    print(f"[EVAL DEBUG] {env_name} - Student keys: {self.student_keys}")
+                    print(f"[EVAL DEBUG] {env_name} - Teacher keys: {teacher_keys}")
+                    print(f"[EVAL DEBUG] {env_name} - Masked obs keys: {list(masked_obs.keys())}")
+                    # Show some values
+                    for key in list(masked_obs.keys())[:3]:  # First 3 keys
+                        val = masked_obs[key]
+                        if isinstance(val, torch.Tensor):
+                            print(f"[EVAL DEBUG] {env_name} - {key}: shape={tuple(val.shape)}, mean={val.float().mean().item():.4f}")
+                        else:
+                            print(f"[EVAL DEBUG] {env_name} - {key}: value={val}")
+                
+                # Convert masked observations to numpy for SB3
+                masked_obs_numpy = {}
+                for key, value in masked_obs.items():
+                    if isinstance(value, torch.Tensor):
+                        masked_obs_numpy[key] = value.cpu().numpy()
+                    else:
+                        masked_obs_numpy[key] = np.array(value)
+                
+                # Fix: Add batch dimension for SB3's MultiInputPolicy
+                obs_batch = {k: np.expand_dims(v, axis=0) for k, v in masked_obs_numpy.items()}
+                
+                # Debug: Print shapes for first episode
+                if self.debug and episode == 0:
+                    print(f"[EVAL DEBUG] {env_name} - Batched obs shapes: {dict((k, v.shape) for k, v in obs_batch.items())}")
+                
+                # Get action from policy
+                with torch.no_grad():
+                    action, _ = self.model.predict(obs_batch, deterministic=self.deterministic)
+                
+                # Extract scalar action if it's a numpy array
+                if isinstance(action, np.ndarray):
+                    action = action.item() if action.size == 1 else action[0]
+                
+                # Step environment
+                obs, reward, done, truncated, info = eval_env.step(action)
+                
+                episode_return += reward
+                episode_length += 1
+            
+            episode_returns.append(episode_return)
+            episode_lengths.append(episode_length)
+        
+        # Compute metrics
+        episode_returns = np.array(episode_returns)
+        episode_lengths = np.array(episode_lengths)
+        
+        mean_return = np.mean(episode_returns)
+        std_return = np.std(episode_returns)
+        mean_length = np.mean(episode_lengths)
+        std_length = np.std(episode_lengths)
+        
+        print(f"  {env_name}: mean_return={mean_return:.2f}, std_return={std_return:.2f}, mean_length={mean_length:.1f}")
+        
+        # Log to wandb if available
+        if hasattr(self, 'logger') and self.logger is not None:
+            self.logger.record(f"full_eval_return/{env_name}/mean_return", mean_return)
+            self.logger.record(f"full_eval/{env_name}/std_return", std_return)
+            self.logger.record(f"full_eval/{env_name}/mean_length", mean_length)
+            self.logger.record(f"full_eval/{env_name}/std_length", std_length)
+        
+        eval_env.close()
+
+# -----------------------------------------------------------------------------
 # Training Function
 # -----------------------------------------------------------------------------
 
@@ -146,6 +363,34 @@ def train_ppo_sb3(envs, config, seed, num_iterations=None):
         env.reset(seed=seed)
         return env
     
+    # Create evaluation environment function (without filtering)
+    def _make_eval_env():
+        # Create the base environment using gymnasium
+        suite, task = config.task.split('_', 1)
+        env = gym.make(task)
+        # No observation filtering for evaluation - keep all keys
+        env.reset(seed=seed)
+        return env
+    
+    # Create filtered evaluation environment function (same as training)
+    def _make_filtered_eval_env():
+        # Create the base environment using gymnasium
+        suite, task = config.task.split('_', 1)
+        env = gym.make(task)
+        
+        # Apply observation filtering if keys are specified (same as training)
+        if hasattr(config, 'keys') and config.keys:
+            mlp_keys = getattr(config.keys, 'mlp_keys', '.*')
+            cnn_keys = getattr(config.keys, 'cnn_keys', '.*')
+            env = ObservationFilterWrapper(
+                env, 
+                mlp_keys=mlp_keys,
+                cnn_keys=cnn_keys
+            )
+        
+        env.reset(seed=seed)
+        return env
+
     # Create vectorized environment for SB3 (identical to train_blindpick.py)
     if config.num_envs > 1:
         env_fns = [lambda i=i: _make_env() for i in range(config.num_envs)]
@@ -155,11 +400,14 @@ def train_ppo_sb3(envs, config, seed, num_iterations=None):
 
     vec_env = VecMonitor(vec_env)
 
-    # Create separate eval environment
-    eval_env = _make_env()
+    # Create separate eval environments
+    # Standard eval environment (filtered, same as training)
+    filtered_eval_env = _make_filtered_eval_env()
+    # Custom eval environment (unfiltered, for masking)
+    unfiltered_eval_env = _make_eval_env()
     
     # Calculate consistent logging frequencies (using SB3 defaults)
-    eval_freq = max(1000 // config.num_envs, 1)  # Default eval every 1000 steps
+    eval_freq = max(10000 // config.num_envs, 1)  # Evaluate every 10000 steps (less frequent)
     log_interval = 1  # Default log every rollout
     
     print(f"Eval frequency: every {eval_freq} env.step() calls (~{eval_freq * config.num_envs} total env steps)")
@@ -184,9 +432,9 @@ def train_ppo_sb3(envs, config, seed, num_iterations=None):
         tensorboard_log=f"./tb_logs/ppo_sb3-{config.task}-{config.exp_name}-seed{seed}",
     )
 
-    # Create evaluation callback
+    # Create evaluation callbacks
     eval_callback = EvalCallback(
-        eval_env,
+        filtered_eval_env,  # Use filtered environment (same as training)
         best_model_save_path=f"./best_models/ppo_sb3-{config.task}-{config.exp_name}-seed{seed}",
         log_path=f"./eval_logs/ppo_sb3-{config.task}-{config.exp_name}-seed{seed}",
         eval_freq=eval_freq,
@@ -195,9 +443,20 @@ def train_ppo_sb3(envs, config, seed, num_iterations=None):
         render=False,
         verbose=1
     )
+    
+    custom_eval_callback = CustomEvalCallback(
+        unfiltered_eval_env,  # Use unfiltered environment for masking
+        config,
+        _make_eval_env,  # Function to create unfiltered environments
+        eval_freq=eval_freq,
+        n_eval_episodes=5,
+        deterministic=True,
+        verbose=1,
+        debug=True  # Enable debug to see what's happening
+    )
 
     # Prepare callbacks
-    callbacks = [eval_callback]
+    callbacks = [eval_callback, custom_eval_callback]
     if run is not None:
         callbacks.append(WandbCallback(
             gradient_save_freq=1_000,
@@ -213,7 +472,8 @@ def train_ppo_sb3(envs, config, seed, num_iterations=None):
     )
 
     vec_env.close()
-    eval_env.close()
+    filtered_eval_env.close()
+    unfiltered_eval_env.close()
     
     if run is not None:
         run.finish()
