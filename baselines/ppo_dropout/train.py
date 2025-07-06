@@ -186,19 +186,10 @@ class CustomEvalCallback(BaseCallback):
     
     def _parse_keys_from_pattern(self, pattern, available_keys):
         """Parse keys from regex pattern."""
-        if pattern == '.*':
-            return available_keys
-        elif pattern == '^$':
-            return []
-        else:
-            import re
-            try:
-                regex = re.compile(pattern)
-                matched_keys = [k for k in available_keys if regex.search(k)]
-                return matched_keys
-            except re.error as e:
-                print(f"Warning: Invalid regex pattern '{pattern}': {e}")
-                return []
+        import re
+        regex = re.compile(pattern)
+        matched_keys = [k for k in available_keys if regex.search(k)]
+        return matched_keys
     
     def _on_step(self):
         """Called after each step."""
@@ -335,32 +326,169 @@ class CustomEvalCallback(BaseCallback):
         eval_env.close()
 
 # -----------------------------------------------------------------------------
+# Training-time Episode Masking Wrapper
+# -----------------------------------------------------------------------------
+
+class EpisodeMaskingWrapper(gym.ObservationWrapper):
+    """Wrapper that randomly selects an environment subset for each episode and masks observations accordingly.
+    The observation space remains unchanged - only the observations are masked."""
+    
+    def __init__(self, env, config):
+        super().__init__(env)
+        self.config = config
+        self.num_eval_configs = getattr(config, 'num_eval_configs', 4)
+        
+        # Get all available keys from the environment once
+        obs, _ = self.env.reset()
+        self.available_keys = [k for k in obs.keys() if k not in ['reward', 'is_first', 'is_last', 'is_terminal']]
+        
+        # Get student keys directly from the environment using config.keys patterns
+        if hasattr(config, 'keys') and config.keys:
+            # Parse student keys using config.keys patterns
+            mlp_keys = getattr(config.keys, 'mlp_keys', '.*')
+            cnn_keys = getattr(config.keys, 'cnn_keys', '.*')
+            
+            # Get keys that match the patterns
+            student_mlp_keys = self._parse_keys_from_pattern(mlp_keys, self.available_keys)
+            student_cnn_keys = self._parse_keys_from_pattern(cnn_keys, self.available_keys)
+            self.student_keys = student_mlp_keys + student_cnn_keys
+            
+            # Set the observation space to match the student keys
+            self._set_observation_space()
+        else:
+            print("No keys specified in config.")
+            self.student_keys = []
+        
+        # Current episode's teacher keys (will be set at episode start)
+        self.current_teacher_keys = None
+        self.current_env_name = None
+        
+        # Track episode boundaries
+        self.episode_start = True
+    
+    def _set_observation_space(self):
+        """Set the observation space to match the student keys."""
+        # Create observation space with only the student keys
+        student_spaces = {}
+        for key in self.student_keys:
+            if key in self.env.observation_space.spaces:
+                student_spaces[key] = self.env.observation_space.spaces[key]
+        
+        self.observation_space = gym.spaces.Dict(student_spaces)
+    
+    def _parse_keys_from_pattern(self, pattern, available_keys):
+        """Parse keys from regex pattern."""
+        import re
+        regex = re.compile(pattern)
+        matched_keys = [k for k in available_keys if regex.search(k)]
+        return matched_keys
+    
+    def _select_env_subset(self):
+        """Cycle through environment subsets for each episode."""
+        # Use episode counter to cycle through environments
+        if not hasattr(self, 'episode_counter'):
+            self.episode_counter = 0
+        
+        subset_idx = (self.episode_counter % self.num_eval_configs) + 1
+        env_name = f"env{subset_idx}"
+        
+        if not hasattr(self.config.eval_keys, env_name):
+            print(f"Warning: Missing eval_keys for {env_name}, using env1")
+            env_name = "env1"
+        
+        eval_keys = getattr(self.config.eval_keys, env_name)
+        mlp_keys_pattern = getattr(eval_keys, 'mlp_keys', '.*')
+        cnn_keys_pattern = getattr(eval_keys, 'cnn_keys', '.*')
+        
+        # Parse teacher keys for this environment
+        available_keys = self.available_keys
+        teacher_mlp_keys = self._parse_keys_from_pattern(mlp_keys_pattern, available_keys)
+        teacher_cnn_keys = self._parse_keys_from_pattern(cnn_keys_pattern, available_keys)
+        teacher_keys = teacher_mlp_keys + teacher_cnn_keys
+        
+        return env_name, teacher_keys
+    
+    def observation(self, obs):
+        """Mask observations based on the current episode's environment subset."""
+        if self.episode_start:
+            # Select environment subset for this episode (cycle through them)
+            self.current_env_name, self.current_teacher_keys = self._select_env_subset()
+            self.episode_start = False
+            # print(f"[TRAINING] Episode using {self.current_env_name} with {len(self.current_teacher_keys)} teacher keys")
+            # print(f"[TRAINING] Student keys: {self.student_keys}")
+            # print(f"[TRAINING] Observation space keys: {list(self.observation_space.spaces.keys())}")
+        
+        # Convert observations to tensors for masking
+        obs_tensors = {}
+        for key, value in obs.items():
+            if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                if isinstance(value, np.ndarray):
+                    obs_tensors[key] = torch.tensor(value, dtype=torch.float32)
+                else:
+                    obs_tensors[key] = torch.tensor([value], dtype=torch.float32)
+        
+        # Mask observations for the student using the guaranteed correct method
+        masked_obs = mask_observations_for_student(
+            obs_tensors, 
+            self.student_keys, 
+            self.current_teacher_keys, 
+            device=None,  # Use CPU for training
+            debug=False
+        )
+        
+        # Convert back to numpy for the environment
+        masked_obs_numpy = {}
+        for key, value in masked_obs.items():
+            if isinstance(value, torch.Tensor):
+                masked_obs_numpy[key] = value.cpu().numpy()
+            else:
+                masked_obs_numpy[key] = np.array(value)
+        
+        return masked_obs_numpy
+    
+    def reset(self, **kwargs):
+        """Reset the environment and select a new environment subset for the new episode."""
+        obs, info = self.env.reset(**kwargs)
+        self.episode_start = True  # Mark that we're starting a new episode
+        self.episode_counter = getattr(self, 'episode_counter', 0) + 1  # Increment episode counter
+        return self.observation(obs), info
+    
+    def step(self, action):
+        """Step the environment and mask the observation."""
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        
+        # If episode is done, mark for new episode
+        if terminated or truncated:
+            self.episode_start = True
+        
+        return self.observation(obs), reward, terminated, truncated, info
+
+# -----------------------------------------------------------------------------
 # Training Function
 # -----------------------------------------------------------------------------
 
-def train_ppo_sb3(envs, config, seed, num_iterations=None):
-    """Train PPO using Stable Baselines 3."""
+def train_ppo_dropout(envs, config, seed, num_iterations=None):
+    """Train PPO with episode-level observation masking."""
     
     # Global seeding for reproducibility
     set_random_seed(seed)
     
-    # Create environment function (identical to train_blindpick.py)
-    def _make_env():
-        # Create the base environment using gymnasium
+    # Create base environment function (unfiltered - contains all keys)
+    def _make_base_env():
         suite, task = config.task.split('_', 1)
         env = gym.make(task)
-        
-        # Apply observation filtering if keys are specified
-        if hasattr(config, 'keys') and config.keys:
-            mlp_keys = getattr(config.keys, 'mlp_keys', '.*')
-            cnn_keys = getattr(config.keys, 'cnn_keys', '.*')
-            env = ObservationFilterWrapper(
-                env, 
-                mlp_keys=mlp_keys,
-                cnn_keys=cnn_keys
-            )
-        
         env.reset(seed=seed)
+        return env
+    
+    # Create environment function with episode-level masking
+    def _make_env():
+        # Create the base environment using gymnasium (unfiltered - contains all keys)
+        base_env = _make_base_env()
+        
+        # Apply episode-level masking wrapper that randomly selects environment subsets
+        # This wrapper will mask observations but keep the observation space unchanged
+        env = EpisodeMaskingWrapper(base_env, config)
+        
         return env
     
     # Create evaluation environment function (without filtering)
@@ -418,7 +546,7 @@ def train_ppo_sb3(envs, config, seed, num_iterations=None):
     if config.use_wandb:
         run = wandb.init(
             project=config.wandb_project,
-            name=f"ppo_sb3-{config.task}-{config.exp_name}-seed{seed}",
+            name=f"ppo_dropout-{config.task}-{config.exp_name}-seed{seed}",
             config=config,  # Pass the original config object
             sync_tensorboard=True,
         )
@@ -429,14 +557,14 @@ def train_ppo_sb3(envs, config, seed, num_iterations=None):
         vec_env,
         verbose=1,
         seed=seed,
-        tensorboard_log=f"./tb_logs/ppo_sb3-{config.task}-{config.exp_name}-seed{seed}",
+        tensorboard_log=f"./tb_logs/ppo_dropout-{config.task}-{config.exp_name}-seed{seed}",
     )
 
     # Create evaluation callbacks
     eval_callback = EvalCallback(
         filtered_eval_env,  # Use filtered environment (same as training)
-        best_model_save_path=f"./best_models/ppo_sb3-{config.task}-{config.exp_name}-seed{seed}",
-        log_path=f"./eval_logs/ppo_sb3-{config.task}-{config.exp_name}-seed{seed}",
+        best_model_save_path=f"./best_models/ppo_dropout-{config.task}-{config.exp_name}-seed{seed}",
+        log_path=f"./eval_logs/ppo_dropout-{config.task}-{config.exp_name}-seed{seed}",
         eval_freq=eval_freq,
         n_eval_episodes=5,
         deterministic=True,
@@ -518,14 +646,14 @@ def main(argv=None):
     num_iterations = config.total_timesteps // (config.num_envs * 2048)  # SB3 default n_steps
 
     # Run training
-    print(f"Starting SB3 PPO training on {config.task} with {config.num_envs} environments")
+    print(f"Starting PPO Dropout training on {config.task} with {config.num_envs} environments")
     print(f"Training for {num_iterations} iterations")
     if config.use_wandb:
         print(f"Wandb logging enabled - project: {config.wandb_project}")
     else:
         print("Wandb logging disabled")
     
-    trained_agent = train_ppo_sb3(None, config, seed, num_iterations=num_iterations)
+    trained_agent = train_ppo_dropout(None, config, seed, num_iterations=num_iterations)
     
     print("Training completed!")
     return trained_agent
