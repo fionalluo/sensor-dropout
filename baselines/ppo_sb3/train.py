@@ -118,6 +118,10 @@ class ObservationFilterWrapper(gym.ObservationWrapper):
             info["terminal_observation"] = self.observation(info["terminal_observation"])
         return self.observation(obs), reward, terminated, truncated, info
 
+    def get_wrapper_attr(self, name):
+        """Support SB3's get_attr by forwarding to the underlying env."""
+        return getattr(self.env, name)
+
 # -----------------------------------------------------------------------------
 # Custom Evaluation Callback for SB3
 # -----------------------------------------------------------------------------
