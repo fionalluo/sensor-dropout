@@ -342,7 +342,7 @@ class CustomEvalCallback(BaseCallback):
 # Training Function
 # -----------------------------------------------------------------------------
 
-def train_ppo_sb3(envs, config, seed, enable_custom_eval=True):
+def train_ppo(envs, config, seed, enable_custom_eval=True):
     """Train PPO using Stable Baselines 3.
     
     Args:
@@ -431,7 +431,7 @@ def train_ppo_sb3(envs, config, seed, enable_custom_eval=True):
     if config.use_wandb:
         run = wandb.init(
             project=config.wandb_project,
-            name=f"ppo_sb3-{config.task}-{config.exp_name}-seed{seed}",
+            name=f"ppo-{config.task}-{config.exp_name}-seed{seed}",
             config=config,  # Pass the original config object
             sync_tensorboard=True,
         )
@@ -442,14 +442,14 @@ def train_ppo_sb3(envs, config, seed, enable_custom_eval=True):
         vec_env,
         verbose=1,
         seed=seed,
-        tensorboard_log=f"./tb_logs/ppo_sb3-{config.task}-{config.exp_name}-seed{seed}",
+        tensorboard_log=f"./tb_logs/ppo-{config.task}-{config.exp_name}-seed{seed}",
     )
     
     # Create evaluation callbacks
     eval_callback = EvalCallback(
         filtered_eval_env,  # Use filtered environment (same as training)
-        best_model_save_path=f"./best_models/ppo_sb3-{config.task}-{config.exp_name}-seed{seed}",
-        log_path=f"./eval_logs/ppo_sb3-{config.task}-{config.exp_name}-seed{seed}",
+        best_model_save_path=f"./best_models/ppo-{config.task}-{config.exp_name}-seed{seed}",
+        log_path=f"./eval_logs/ppo-{config.task}-{config.exp_name}-seed{seed}",
         eval_freq=eval_freq,
         n_eval_episodes=n_eval_episodes,
         deterministic=True,
@@ -541,7 +541,7 @@ def main(argv=None):
     else:
         print("Wandb logging disabled")
     
-    trained_agent = train_ppo_sb3(None, config, seed, enable_custom_eval=True)
+    trained_agent = train_ppo(None, config, seed, enable_custom_eval=True)
     
     print("Training completed!")
     return trained_agent

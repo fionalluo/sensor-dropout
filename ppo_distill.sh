@@ -6,7 +6,7 @@ generate_unique_seed() {
 }
 
 # Base log directory
-BASE_LOGDIR=~/logdir/baselines/multi_teacher_distill
+BASE_LOGDIR=~/logdir/baselines/simple_imitation
 
 # Policy types for distillation
 EXPERT_POLICY_TYPE="ppo"      # Type of expert policies to distill from
@@ -33,9 +33,9 @@ done
 
 export MUJOCO_GL=egl;
 
-echo "Multi-Teacher Distillation Configuration:"
+echo "Simple Imitation Learning Configuration:"
 echo "  Expert policies: ${EXPERT_POLICY_TYPE} (from ${BASE_POLICY_DIR})"
-echo "  Method: Multi-teacher to single student distillation"
+echo "  Method: Direct PyTorch imitation learning"
 
 # Iterate through configs
 for CONFIG in "${CONFIGS[@]}"; do
@@ -48,13 +48,13 @@ for CONFIG in "${CONFIGS[@]}"; do
     # Check if expert policies exist
     if [ ! -d "$EXPERT_POLICY_DIR" ]; then
       echo "Error: Expert policy directory not found: $EXPERT_POLICY_DIR"
-      echo "Please run train_subset_policies_sb3.sh first to create ${EXPERT_POLICY_TYPE} expert policies for $TASK_NAME."
+      echo "Please run train_subset_policies.sh first to create ${EXPERT_POLICY_TYPE} expert policies for $TASK_NAME."
       echo "Skipping config ${CONFIG} with seed ${SEED}."
       echo "-----------------------"
       continue
     fi
 
-    echo "Running Multi-Teacher Distillation with config ${CONFIG} and seed ${SEED}"
+    echo "Running Simple Imitation Learning with config ${CONFIG} and seed ${SEED}"
     echo "Expert policy directory: ${EXPERT_POLICY_DIR}"
     echo "Logging to: ${LOGDIR}"
 
@@ -67,12 +67,12 @@ for CONFIG in "${CONFIGS[@]}"; do
       echo "Using CPU for training"
     fi
 
-    timeout 8h python3 -u baselines/ppo_distill_sb3_2/train.py \
+    timeout 4h python3 -u baselines/ppo_distill/train.py \
       --configs ${CONFIG} \
       --expert_policy_dir "$EXPERT_POLICY_DIR" \
       --seed "$SEED" \
       --device "$DEVICE" \
-      --config_file "baselines/ppo_distill_sb3_2/config.yaml"
+      --debug
 
     if [ $? -eq 124 ]; then
       echo "Command timed out for config ${CONFIG} and seed ${SEED}."
@@ -84,4 +84,4 @@ for CONFIG in "${CONFIGS[@]}"; do
   done
 done
 
-echo "All Multi-Teacher Distillation tasks complete." 
+echo "All Simple Imitation Learning tasks complete." 

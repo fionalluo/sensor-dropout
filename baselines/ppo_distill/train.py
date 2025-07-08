@@ -13,7 +13,7 @@ import yaml
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
-from baselines.ppo_distill_sb3_2.simple_imitation import train_simple_imitation
+from baselines.ppo_distill.simple_imitation import train_simple_imitation
 from baselines.shared.config_utils import load_config
 
 
@@ -58,7 +58,7 @@ def parse_args():
     parser.add_argument(
         "--config_file", 
         type=str, 
-        default="baselines/ppo_distill_sb3_2/config.yaml",
+        default="baselines/ppo_distill/config.yaml",
         help="Path to config file"
     )
     
@@ -127,7 +127,7 @@ def main():
     # Check if expert policy directory exists
     if not os.path.exists(args.expert_policy_dir):
         print(f"Error: Expert policy directory not found: {args.expert_policy_dir}")
-        print("Please run train_subset_policies_sb3.sh first to create expert policies.")
+        print("Please run train_subset_policies.sh first to create expert policies.")
         sys.exit(1)
     
     # Train

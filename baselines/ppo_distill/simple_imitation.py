@@ -16,7 +16,7 @@ import sys
 from typing import Dict, List, Tuple
 from stable_baselines3 import PPO
 from baselines.shared.masking_utils import mask_observations_for_student
-from subset_policies_sb3.load_subset_policy_sb3 import SubsetPolicyLoader
+from subset_policies.load_subset_policy import SubsetPolicyLoader
 
 
 class SimpleImitationTrainer:
@@ -356,9 +356,14 @@ class SimpleImitationTrainer:
         observations = []
         teacher_logits = []
         
+        # Track teacher usage for verification
+        teacher_usage = {teacher: 0 for teacher in self.teacher_configs}
+        
         for episode in range(num_episodes):
             # Cycle to next teacher for each episode to ensure we use all teachers
             current_teacher = self.get_current_teacher_config()
+            teacher_usage[current_teacher] += 1
+            
             print(f"  Rolling out episode {episode + 1}/{num_episodes} with teacher {current_teacher}")
             
             # Start episode
@@ -408,6 +413,11 @@ class SimpleImitationTrainer:
             
             # Cycle to next teacher for the next episode
             self.cycle_to_next_teacher()
+        
+        # Log teacher usage statistics
+        print(f"  Teacher usage in this collection round:")
+        for teacher, count in teacher_usage.items():
+            print(f"    {teacher}: {count} episodes")
         
         print(f"  Collected {len(observations)} state-action pairs from {num_episodes} episodes using all teachers")
         return observations, teacher_logits

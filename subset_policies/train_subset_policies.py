@@ -34,7 +34,7 @@ import embodied
 from embodied import wrappers
 
 # Import SB3 PPO training function
-from baselines.ppo_sb3.train import train_ppo_sb3
+from baselines.ppo.train import train_ppo
 from baselines.shared.config_utils import dict_to_namespace
 from stable_baselines3 import PPO
 
@@ -69,8 +69,8 @@ def parse_args():
 
 def load_config(configs_names=None, policy_type='ppo'):
     """Load configuration from YAML file with support for named configs."""
-    # Choose config file based on policy type (SB3 uses ppo_sb3 config)
-    config_path = embodied.Path(__file__).parent.parent / 'baselines/ppo_sb3/config.yaml'
+    # Choose config file based on policy type (SB3 uses ppo config)
+    config_path = embodied.Path(__file__).parent.parent / 'baselines/ppo/config.yaml'
     
     configs = ruamel.yaml.YAML(typ='safe').load(config_path.read())
     
@@ -126,11 +126,11 @@ def train_subset_policy(config, subset_name, eval_keys, output_dir, device, poli
     # Train the policy using vanilla SB3 PPO (no dropout)
     print(f"Starting training for {subset_name}...")
     # Disable custom evaluation for subset policies since each policy is trained on a specific subset
-    trained_agent = train_ppo_sb3(None, subset_config, config.seed, enable_custom_eval=False)
+    trained_agent = train_ppo(None, subset_config, config.seed, enable_custom_eval=False)
     
     # Load the best model instead of the final model
-    # Each subset has a unique exp_name (e.g., "maze_ppo_sb3_env1", "maze_ppo_sb3_env2")
-    best_model_path = f"./best_models/ppo_sb3-{subset_config.task}-{subset_config.exp_name}-seed{config.seed}/best_model.zip"
+    # Each subset has a unique exp_name (e.g., "maze_ppo_env1", "maze_ppo_env2")
+    best_model_path = f"./best_models/ppo-{subset_config.task}-{subset_config.exp_name}-seed{config.seed}/best_model.zip"
     print(f"Looking for best model at: {best_model_path}")
     if os.path.exists(best_model_path):
         print(f"✓ Loading best model from {best_model_path}")
@@ -162,7 +162,7 @@ def train_subset_policy(config, subset_name, eval_keys, output_dir, device, poli
     print(f"  Subset: {subset_name}")
     
     # Clean up temporary best model files
-    best_model_dir = f"./best_models/ppo_sb3-{subset_config.task}-{subset_config.exp_name}-seed{config.seed}"
+    best_model_dir = f"./best_models/ppo-{subset_config.task}-{subset_config.exp_name}-seed{config.seed}"
     if os.path.exists(best_model_dir):
         print(f"Cleaning up temporary best model directory: {best_model_dir}")
         shutil.rmtree(best_model_dir)
@@ -242,7 +242,7 @@ def main():
     
     print(f"\nEach policy is the best performing version for its subset.")
     print(f"To load a specific subset policy, use:")
-    print(f"  python subset_policies_sb3/load_subset_policy_sb3.py --policy_dir {output_dir} --subset env1")
+    print(f"  python subset_policies/load_subset_policy.py --policy_dir {output_dir} --subset env1")
 
 if __name__ == "__main__":
     # Use 'spawn' for multiprocessing to avoid issues with libraries like wandb

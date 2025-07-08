@@ -6,7 +6,7 @@ generate_unique_seed() {
 }
 
 # Base log directory
-BASE_LOGDIR=~/logdir/baselines/ppo_sb3
+BASE_LOGDIR=~/logdir/baselines/ppo
 
 # List of configs to run
 CONFIGS=(
@@ -34,7 +34,7 @@ for CONFIG in "${CONFIGS[@]}"; do
 
     echo "Running SB3 PPO baseline with config ${CONFIG} and seed ${SEED}, logging to ${LOGDIR}"
 
-    timeout 4h python3 -u baselines/ppo_sb3/train.py \
+    timeout 4h python3 -u baselines/ppo/train.py \
       --configs ${CONFIG} \
       --seed "$SEED"
 

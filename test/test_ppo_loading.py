@@ -13,9 +13,9 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from subset_policies_sb3.load_subset_policy_sb3 import SubsetPolicyLoader
+from subset_policies.load_subset_policy import SubsetPolicyLoader
 
-def test_ppo_sb3_loading():
+def test_ppo_loading():
     """Test loading SB3 PPO policies from the policies/ppo/tigerdoorkey directory."""
     
     # Set device to CPU to avoid CUDA issues
@@ -30,7 +30,7 @@ def test_ppo_sb3_loading():
     # Check if policy directory exists
     if not os.path.exists(policy_dir):
         print(f"❌ Policy directory not found: {policy_dir}")
-        print("Please run train_subset_policies_sb3.sh first to generate policies")
+        print("Please run train_subset_policies.sh first to generate policies")
         return False
     
     # Create policy loader
@@ -69,7 +69,7 @@ def test_ppo_sb3_loading():
     
     return True
 
-def test_ppo_sb3_specific_policy():
+def test_ppo_specific_policy():
     """Test loading a specific SB3 PPO policy."""
     
     device = 'cpu'
@@ -110,10 +110,10 @@ if __name__ == "__main__":
     print("Testing SB3 PPO policy loading...")
     
     # Test 1: Load all policies
-    success1 = test_ppo_sb3_loading()
+    success1 = test_ppo_loading()
     
     # Test 2: Load specific policy
-    success2 = test_ppo_sb3_specific_policy()
+    success2 = test_ppo_specific_policy()
     
     if success1 and success2:
         print("\n🎉 All SB3 PPO tests passed!")
