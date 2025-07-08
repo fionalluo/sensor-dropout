@@ -4,7 +4,7 @@ defaults:
   torch_deterministic: true
   cuda: true
   track: true
-  wandb_project: "sb3-ppo-2"
+  wandb_project: "ppo-baseline"
   wandb_entity: null
   capture_video: false
 
@@ -12,6 +12,20 @@ defaults:
   total_timesteps: 500000
   num_envs: 8
   use_wandb: true
+
+  # PPO Hyperparameters (Stable Baselines 3 defaults with some stability improvements)
+  ppo:
+    learning_rate: 3e-4      # Default SB3 learning rate
+    n_steps: 2048           # Number of steps to run for each environment per update
+    batch_size: 64          # Minibatch size
+    n_epochs: 10            # Number of epoch when optimizing the surrogate loss
+    gamma: 0.99             # Discount factor
+    gae_lambda: 0.95        # Factor for trade-off of bias vs variance for GAE
+    clip_range: 0.2         # Clipping parameter for PPO
+    clip_range_vf: null     # Clipping parameter for value function (null = no clipping)
+    ent_coef: 0.0           # Entropy coefficient for the loss calculation
+    vf_coef: 0.5            # Value function coefficient for the loss calculation
+    max_grad_norm: 0.5      # Maximum value for the gradient clipping
 
   # Teacher and student observation keys
   keys: {mlp_keys: '.*', cnn_keys: '.*'}
@@ -57,8 +71,8 @@ defaults:
   
   # Evaluation settings
   eval:
-    eval_freq: 10000  # Evaluate every 10000 steps (will be divided by num_envs)
-    n_eval_episodes: 20  # Number of episodes to evaluate
+    eval_freq: 2048  # Evaluate every 2048 callback calls (matches rollout frequency)
+    n_eval_episodes: 5  # Reduced episodes since we're evaluating much more frequently
     eval_envs: 4  # Number of parallel environments for evaluation
     video_log_interval: 1  # Log videos every evaluation call
     num_eval_configs: 4
@@ -75,6 +89,9 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
   task: gymnasium_TigerDoorKey-v0
   total_timesteps: 400000
   keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
+  # Reduced learning rate for stability in simple grid environment
+  ppo:
+    learning_rate: 1e-4      # Reduced from 3e-4 for more stable learning -- this grid environment tends to be unstable
   num_eval_configs: 4
   eval_keys:
     env1:
@@ -94,8 +111,8 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
       cnn_keys: '^$'
     
   eval:
-    eval_freq: 10000
-    n_eval_episodes: 20
+    eval_freq: 2048
+    n_eval_episodes: 5
     eval_envs: 4
     video_log_interval: 1
     num_eval_configs: 4
@@ -112,6 +129,12 @@ gymnasium_maze: &maze_base
   task: gymnasium_Maze7x7-v0
   total_timesteps: 400000
   keys: {mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b', cnn_keys: '^$'}  # omit the distance key
+  # Reduced learning rate for stability in simple grid environment
+  ppo:
+    learning_rate: 1e-4      # Reduced from 3e-4 for more stable learning
+  eval:
+    eval_freq: 2048
+    n_eval_episodes: 5
   num_eval_configs: 6
   eval_keys:  # Note that neighbors_5x5 only includes neighbors not in the 3x3 neighbors (they are disjoint)
     env1:  # Goal position, neighbors 5x5

@@ -148,7 +148,6 @@ class CustomEvalCallback(BaseCallback):
         self.n_eval_episodes = n_eval_episodes
         self.deterministic = deterministic
         self.debug = debug
-        self.last_eval = 0
         
         # Get the number of eval configs
         self.num_eval_configs = getattr(config, 'num_eval_configs', 4)
@@ -206,8 +205,8 @@ class CustomEvalCallback(BaseCallback):
         
     def _on_step(self):
         """Called after each step."""
-        # Check if we should run evaluation
-        if self.num_timesteps - self.last_eval >= self.eval_freq:
+        # Check if we should run evaluation (same logic as standard EvalCallback)
+        if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
             print(f"Running custom evaluation at step {self.num_timesteps}...")
             
             # Run evaluation for each environment configuration
@@ -232,8 +231,6 @@ class CustomEvalCallback(BaseCallback):
                 
                 # Run evaluation for this environment
                 self._evaluate_environment(env_name, teacher_keys)
-            
-            self.last_eval = self.num_timesteps
             
         return True
 
@@ -436,10 +433,45 @@ def train_ppo(envs, config, seed, enable_custom_eval=True):
             sync_tensorboard=True,
         )
 
-    # Create PPO model with SB3 defaults
+    # Get PPO hyperparameters from config, with fallbacks to SB3 defaults
+    ppo_config = getattr(config, 'ppo', {})
+    
+    # Extract hyperparameters with defaults
+    learning_rate = getattr(ppo_config, 'learning_rate', 3e-4)
+    n_steps = getattr(ppo_config, 'n_steps', 2048)
+    batch_size = getattr(ppo_config, 'batch_size', 64)
+    n_epochs = getattr(ppo_config, 'n_epochs', 10)
+    gamma = getattr(ppo_config, 'gamma', 0.99)
+    gae_lambda = getattr(ppo_config, 'gae_lambda', 0.95)
+    clip_range = getattr(ppo_config, 'clip_range', 0.2)
+    clip_range_vf = getattr(ppo_config, 'clip_range_vf', None)
+    ent_coef = getattr(ppo_config, 'ent_coef', 0.0)
+    vf_coef = getattr(ppo_config, 'vf_coef', 0.5)
+    max_grad_norm = getattr(ppo_config, 'max_grad_norm', 0.5)
+    
+    print(f"PPO Hyperparameters:")
+    print(f"  learning_rate: {learning_rate}")
+    print(f"  n_steps: {n_steps}")
+    print(f"  batch_size: {batch_size}")
+    print(f"  n_epochs: {n_epochs}")
+    print(f"  clip_range_vf: {clip_range_vf}")
+    print(f"  ent_coef: {ent_coef}")
+    
+    # Create PPO model with configurable hyperparameters
     model = PPO(
         "MultiInputPolicy",
         vec_env,
+        learning_rate=learning_rate,
+        n_steps=n_steps,
+        batch_size=batch_size,
+        n_epochs=n_epochs,
+        gamma=gamma,
+        gae_lambda=gae_lambda,
+        clip_range=clip_range,
+        clip_range_vf=clip_range_vf,
+        ent_coef=ent_coef,
+        vf_coef=vf_coef,
+        max_grad_norm=max_grad_norm,
         verbose=1,
         seed=seed,
         tensorboard_log=f"./tb_logs/ppo-{config.task}-{config.exp_name}-seed{seed}",
@@ -482,6 +514,13 @@ def train_ppo(envs, config, seed, enable_custom_eval=True):
             model_save_path=f"models/{run.id}",
             verbose=2,
         ))
+
+    # Perform initial evaluation at step 0
+    print("Performing initial evaluation at step 0...")
+    for callback in callbacks:
+        if hasattr(callback, '_on_step'):
+            callback.init_callback(model)
+            callback._on_step()
 
     # Train the model
     model.learn(

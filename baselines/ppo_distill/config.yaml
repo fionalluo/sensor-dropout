@@ -4,7 +4,7 @@ defaults:
   torch_deterministic: true
   cuda: false
   track: true
-  wandb_project: "simple-imitation-learning"
+  wandb_project: "ppo-distill-baseline"
   wandb_entity: null
 
   task: gymnasium_TigerDoorKey-v0
@@ -12,17 +12,20 @@ defaults:
   num_envs: 8
 
   # Multi-teacher distillation specific parameters
-  learning_rate: 3e-4
-  batch_size: 64
-  steps_per_rollout: 128
-  num_minibatches: 4
-  update_epochs: 4
-  temperature: 1.0
-  distillation_loss_weight: 1.0
+  distillation:
+    learning_rate: 3e-4              # Learning rate for PyTorch optimizer
+    batch_size: 64                   # Batch size for distillation training
+    steps_per_rollout: 128           # Steps per data collection rollout
+    num_minibatches: 4               # Number of minibatches per update
+    update_epochs: 4                 # Number of training epochs per iteration
+    temperature: 1.0                 # Temperature for distillation
+    distillation_loss_weight: 1.0    # Weight for distillation loss
+    episodes_per_iteration: 5        # Episodes to collect per training iteration
   
   # Evaluation settings
-  eval_freq: 2000  # Reduced from 10000 to ensure evaluation happens
-  n_eval_episodes: 5
+  eval:
+    eval_freq: 2048  # Evaluate every 2048 steps (matches rollout frequency)
+    n_eval_episodes: 5  # Reduced episodes since we're evaluating much more frequently
 
   # Student observation keys (what the student policy can see)
   keys: {mlp_keys: '.*', cnn_keys: '.*'}
@@ -62,10 +65,17 @@ defaults:
 # Tiger Door Key
 gymnasium_tigerdoorkey: &tigerdoorkey_base
   task: gymnasium_TigerDoorKey-v0
-  total_timesteps: 50000  # Reduced for testing
+  total_timesteps: 400000  # Reduced for testing
   # Student sees all privileged observations
   keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
-  eval_freq: 40  # Evaluate more frequently
+  # Reduced learning rate for stability in simple grid environment
+  distillation:
+    learning_rate: 5e-5    # Further reduced for more stable learning
+    gradient_clip_norm: 0.5  # Add gradient clipping for stability
+    l2_regularization: 1e-5  # Add L2 regularization to prevent overfitting
+  eval:
+    eval_freq: 2048        # Evaluate every 2048 steps (matches rollout frequency)
+    n_eval_episodes: 20     # Increased episodes for more stable evaluation metrics
   num_eval_configs: 4
   eval_keys:
     env1:  # Full privileged teacher

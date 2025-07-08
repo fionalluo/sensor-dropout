@@ -79,16 +79,23 @@ def create_config_from_args(args):
     # Add multi-teacher specific config
     config.expert_policy_dir = args.expert_policy_dir
     
-    # Set distillation-specific parameters
-    config.learning_rate = getattr(config, 'learning_rate', 3e-4)
-    config.batch_size = getattr(config, 'batch_size', 64)
-    config.steps_per_rollout = getattr(config, 'steps_per_rollout', 128)
-    config.num_minibatches = getattr(config, 'num_minibatches', 4)
-    config.update_epochs = getattr(config, 'update_epochs', 4)
-    config.temperature = getattr(config, 'temperature', 1.0)
-    config.distillation_loss_weight = getattr(config, 'distillation_loss_weight', 1.0)
-    config.eval_freq = getattr(config, 'eval_freq', 10000)
-    config.n_eval_episodes = getattr(config, 'n_eval_episodes', 5)
+    # Get distillation-specific parameters from config
+    distillation_config = getattr(config, 'distillation', {})
+    eval_config = getattr(config, 'eval', {})
+    
+    # Set distillation parameters with fallbacks
+    config.learning_rate = getattr(distillation_config, 'learning_rate', 3e-4)
+    config.batch_size = getattr(distillation_config, 'batch_size', 64)
+    config.steps_per_rollout = getattr(distillation_config, 'steps_per_rollout', 128)
+    config.num_minibatches = getattr(distillation_config, 'num_minibatches', 4)
+    config.update_epochs = getattr(distillation_config, 'update_epochs', 4)
+    config.temperature = getattr(distillation_config, 'temperature', 1.0)
+    config.distillation_loss_weight = getattr(distillation_config, 'distillation_loss_weight', 1.0)
+    config.episodes_per_iteration = getattr(distillation_config, 'episodes_per_iteration', 5)
+    
+    # Set evaluation parameters with fallbacks
+    config.eval_freq = getattr(eval_config, 'eval_freq', 2048)
+    config.n_eval_episodes = getattr(eval_config, 'n_eval_episodes', 5)
     
     # Ensure wandb config
     if not hasattr(config, 'wandb_project'):
@@ -119,9 +126,15 @@ def main():
     print(f"Device: {args.device}")
     print(f"Debug: {args.debug}")
     print(f"Total timesteps: {config.total_timesteps}")
-    print(f"Learning rate: {config.learning_rate}")
-    print(f"Batch size: {config.batch_size}")
-    print(f"Steps per rollout: {config.steps_per_rollout}")
+    print(f"Distillation Configuration:")
+    print(f"  Learning rate: {config.learning_rate}")
+    print(f"  Batch size: {config.batch_size}")
+    print(f"  Steps per rollout: {config.steps_per_rollout}")
+    print(f"  Episodes per iteration: {config.episodes_per_iteration}")
+    print(f"  Temperature: {config.temperature}")
+    print(f"Evaluation Configuration:")
+    print(f"  Eval frequency: {config.eval_freq}")
+    print(f"  Eval episodes: {config.n_eval_episodes}")
     print("=" * 50)
     
     # Check if expert policy directory exists

@@ -43,8 +43,17 @@ class SimpleImitationTrainer:
         self.env = self._create_environment()
         self.student_model, self.action_space = self._create_student_model()
         
-        # Initialize optimizer
-        self.optimizer = torch.optim.Adam(self.student_model.parameters(), lr=config.learning_rate)
+        # Get training hyperparameters
+        distillation_config = getattr(config, 'distillation', {})
+        self.gradient_clip_norm = getattr(distillation_config, 'gradient_clip_norm', None)
+        self.l2_regularization = getattr(distillation_config, 'l2_regularization', 0.0)
+        
+        # Initialize optimizer with weight decay for L2 regularization
+        self.optimizer = torch.optim.Adam(
+            self.student_model.parameters(), 
+            lr=config.learning_rate,
+            weight_decay=self.l2_regularization
+        )
         
         print(f"Simple Imitation Learning initialized")
         print(f"Student keys: {self.student_keys}")
@@ -91,7 +100,6 @@ class SimpleImitationTrainer:
     def cycle_to_next_teacher(self):
         """Cycle to the next teacher."""
         self.current_teacher_idx = (self.current_teacher_idx + 1) % len(self.teacher_configs)
-        print(f"Switched to teacher: {self.get_current_teacher_config()}")
     
     def _create_environment(self):
         """Create simple environment."""
@@ -144,11 +152,6 @@ class SimpleImitationTrainer:
         )
         all_teacher_keys = teacher_mlp_keys + teacher_cnn_keys
         
-        print(f"Available obs keys: {list(obs_tensors.keys())}")
-        print(f"Student key patterns: {self.config.keys}")
-        print(f"First teacher key patterns: {first_teacher_keys}")
-        print(f"Parsed teacher keys: {all_teacher_keys}")
-        
         # Apply masking to get what student will actually see
         masked_obs = mask_observations_for_student(
             obs_tensors,
@@ -157,9 +160,6 @@ class SimpleImitationTrainer:
             device=None,
             debug=self.debug
         )
-        
-        print(f"Final masked obs keys: {list(masked_obs.keys())}")
-        print(f"Masked obs shapes: {dict((k, v.shape) for k, v in masked_obs.items())}")
         
         # Create observation space from masked observation
         masked_obs_spaces = {}
@@ -347,6 +347,11 @@ class SimpleImitationTrainer:
             # Backward pass
             self.optimizer.zero_grad()
             loss.backward()
+            
+            # Apply gradient clipping if specified
+            if self.gradient_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(self.student_model.parameters(), self.gradient_clip_norm)
+            
             self.optimizer.step()
         
         return total_loss / len(obs_batch)
@@ -363,9 +368,7 @@ class SimpleImitationTrainer:
             # Cycle to next teacher for each episode to ensure we use all teachers
             current_teacher = self.get_current_teacher_config()
             teacher_usage[current_teacher] += 1
-            
-            print(f"  Rolling out episode {episode + 1}/{num_episodes} with teacher {current_teacher}")
-            
+                        
             # Start episode
             obs, _ = self.env.reset()
             episode_length = 0
@@ -400,26 +403,10 @@ class SimpleImitationTrainer:
                 # Step environment with student action
                 obs, reward, done, truncated, info = self.env.step(action)
                 episode_length += 1
-                
-                # Debug info for first episode
-                if episode == 0 and episode_length == 1 and self.debug:
-                    teacher_probs = F.softmax(teacher_logits_sample, dim=-1)
-                    student_probs = action_probs
-                    print(f"    First step - Teacher {current_teacher} probs: {teacher_probs.cpu().numpy()}")
-                    print(f"    First step - Student probs: {student_probs.cpu().numpy()}")
-                    print(f"    Student action: {action}, Episode length so far: {episode_length}")
-            
-            print(f"    Episode {episode + 1} completed with {episode_length} steps using teacher {current_teacher}")
-            
+                        
             # Cycle to next teacher for the next episode
             self.cycle_to_next_teacher()
-        
-        # Log teacher usage statistics
-        print(f"  Teacher usage in this collection round:")
-        for teacher, count in teacher_usage.items():
-            print(f"    {teacher}: {count} episodes")
-        
-        print(f"  Collected {len(observations)} state-action pairs from {num_episodes} episodes using all teachers")
+                
         return observations, teacher_logits
     
     def train(self):
@@ -429,6 +416,15 @@ class SimpleImitationTrainer:
         step = 0
         iteration = 0
         episodes_per_iteration = getattr(self.config, 'episodes_per_iteration', 5)
+        last_eval_step = -1  # Track last evaluation step to handle irregular increments
+        
+        # Set current step for evaluation logging
+        self.current_step = step
+        
+        # Evaluate at step 0 (before training)
+        print(f"\nInitial evaluation at step {step}")
+        self.evaluate()
+        last_eval_step = step
         
         while step < self.config.total_timesteps:
             iteration += 1
@@ -442,26 +438,41 @@ class SimpleImitationTrainer:
             print(f"  Training loss: {loss:.6f}")
             
             # Update step count (approximate based on data collected)
+            prev_step = step
             step += len(observations)
+            self.current_step = step  # Update current step for evaluation logging
             
             # Log to wandb
             if self.config.track and wandb.run is not None:
                 wandb.log({
                     'train/imitation_loss': loss,
-                    'train/step': step,
                     'train/iteration': iteration,
                     'train/samples_collected': len(observations)
-                })
+                }, step=step)
             
-            # Evaluate
-            if step % self.config.eval_freq == 0 and step > 0:
+            # Check if we've crossed an evaluation boundary
+            # Calculate how many eval_freq intervals we've passed since last evaluation
+            prev_eval_count = last_eval_step // self.config.eval_freq
+            current_eval_count = step // self.config.eval_freq
+            
+            if current_eval_count > prev_eval_count:
+                # We've crossed at least one evaluation boundary
+                next_eval_step = (prev_eval_count + 1) * self.config.eval_freq
+                print(f"\nEvaluation triggered: step {step} crossed boundary at {next_eval_step} (eval_freq={self.config.eval_freq})")
+                print(f"  Previous eval at step {last_eval_step}, current step {step}")
                 self.evaluate()
+                last_eval_step = step
         
         print("Simple imitation training completed!")
     
-    def evaluate(self, n_episodes: int = 5):
+    def evaluate(self, n_episodes: int = None):
         """Comprehensive evaluation: default + cross-subset evaluations."""
-        print("Starting comprehensive evaluation...")
+        # Use config value if n_episodes not specified
+        if n_episodes is None:
+            n_episodes = getattr(self.config, 'n_eval_episodes', 5)
+        
+        print(f"Starting comprehensive evaluation with {n_episodes} episodes...")
+        print(f"Number of eval configs: {self.config.num_eval_configs}")
         
         # 1. Evaluate student on default training environment (student keys only, no teacher masking)
         print("📚 Evaluating student on default training environment...")
@@ -471,9 +482,13 @@ class SimpleImitationTrainer:
         print("🎓 Evaluating student on teacher subsets...")
         for i in range(1, self.config.num_eval_configs + 1):
             env_name = f'env{i}'
+            print(f"  Checking for {env_name} in eval_keys...")
             if hasattr(self.config.eval_keys, env_name):
                 teacher_keys = getattr(self.config.eval_keys, env_name)
+                print(f"  Found {env_name}, running evaluation...")
                 self._evaluate_environment(env_name, teacher_keys, n_episodes)
+            else:
+                print(f"  Warning: {env_name} not found in eval_keys!")
         
         print("Evaluation complete!")
     
@@ -547,11 +562,20 @@ class SimpleImitationTrainer:
         
         # Log to wandb - this is the main student performance metric
         if self.config.track and wandb.run is not None:
-            wandb.log({
+            metrics_to_log = {
                 "eval/mean_return": mean_return,
                 "eval/std_return": std_return,
                 "eval/mean_length": mean_length
-            })
+            }
+            # Use current step if available, otherwise let wandb use its internal counter
+            step_to_use = getattr(self, 'current_step', None)
+            print(f"    Logging to wandb: {list(metrics_to_log.keys())} at step {step_to_use}")
+            if step_to_use is not None:
+                wandb.log(metrics_to_log, step=step_to_use)
+            else:
+                wandb.log(metrics_to_log)
+        else:
+            print(f"    Wandb logging skipped: track={self.config.track}, wandb.run={wandb.run is not None}")
     
     def _evaluate_environment(self, env_name: str, teacher_keys, n_episodes: int):
         """Evaluate student policy on a specific teacher configuration."""
@@ -635,11 +659,20 @@ class SimpleImitationTrainer:
         
         # Log to wandb following ppo_dropout pattern
         if self.config.track and wandb.run is not None:
-            wandb.log({
+            metrics_to_log = {
                 f"full_eval_return/{env_name}/mean_return": mean_return,
                 f"full_eval/{env_name}/std_return": std_return,
                 f"full_eval/{env_name}/mean_length": mean_length
-            })
+            }
+            # Use current step if available, otherwise let wandb use its internal counter
+            step_to_use = getattr(self, 'current_step', None)
+            print(f"    Logging to wandb: {list(metrics_to_log.keys())} at step {step_to_use}")
+            if step_to_use is not None:
+                wandb.log(metrics_to_log, step=step_to_use)
+            else:
+                wandb.log(metrics_to_log)
+        else:
+            print(f"    Wandb logging skipped: track={self.config.track}, wandb.run={wandb.run is not None}")
 
 
 def train_simple_imitation(config, expert_policy_dir: str, device: str = 'cpu', debug: bool = False):
