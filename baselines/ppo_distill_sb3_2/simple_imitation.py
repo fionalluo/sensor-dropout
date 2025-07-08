@@ -1,0 +1,612 @@
+#!/usr/bin/env python3
+"""
+Simplified imitation learning for multi-teacher distillation.
+Uses SB3 ONLY for model initialization, then pure PyTorch training.
+"""
+
+import torch
+import torch.nn.functional as F
+import numpy as np
+import gymnasium as gym
+import wandb
+import os
+import re
+import trailenv
+import sys
+from typing import Dict, List, Tuple
+from stable_baselines3 import PPO
+from baselines.shared.masking_utils import mask_observations_for_student
+from subset_policies_sb3.load_subset_policy_sb3 import SubsetPolicyLoader
+
+
+class SimpleImitationTrainer:
+    """Simple imitation learning trainer using only PyTorch."""
+    
+    def __init__(self, config, expert_policy_dir: str, device: str = 'cpu', debug: bool = False):
+        self.config = config
+        self.expert_policy_dir = expert_policy_dir
+        self.device = device
+        self.debug = debug
+        
+        # Parse student keys
+        self.student_keys = self._parse_student_keys(config)
+        
+        # Parse teacher keys (simplified - just take the first teacher)
+        self.teacher_keys = self._get_teacher_keys(config)
+        
+        # Initialize teacher manager
+        self.policy_loader = SubsetPolicyLoader(expert_policy_dir, device)
+        
+        # Create environment and model
+        self.env = self._create_environment()
+        self.student_model, self.action_space = self._create_student_model()
+        
+        # Initialize optimizer
+        self.optimizer = torch.optim.Adam(self.student_model.parameters(), lr=config.learning_rate)
+        
+        print(f"Simple Imitation Learning initialized")
+        print(f"Student keys: {self.student_keys}")
+        print(f"Teacher keys: {self.teacher_keys}")
+        print(f"Action space: {self.action_space}")
+    
+    def _parse_student_keys(self, config) -> List[str]:
+        """Parse student keys from config."""
+        suite, task = config.task.split('_', 1)
+        temp_env = gym.make(task)
+        sample_obs, _ = temp_env.reset()
+        temp_env.close()
+        
+        available_keys = [k for k in sample_obs.keys() if k not in ['reward', 'is_first', 'is_last', 'is_terminal']]
+        
+        student_keys = []
+        if hasattr(config.keys, 'mlp_keys'):
+            mlp_pattern = re.compile(config.keys.mlp_keys)
+            student_keys.extend([k for k in available_keys if mlp_pattern.search(k)])
+        if hasattr(config.keys, 'cnn_keys'):
+            cnn_pattern = re.compile(config.keys.cnn_keys)
+            student_keys.extend([k for k in available_keys if cnn_pattern.search(k)])
+        
+        return student_keys
+    
+    def _get_teacher_keys(self, config):
+        """Get teacher keys (simplified - just first teacher)."""
+        teacher_config = getattr(config.eval_keys, 'env1')
+        return teacher_config
+    
+    def _create_environment(self):
+        """Create simple environment."""
+        suite, task = self.config.task.split('_', 1)
+        env = gym.make(task)
+        return env
+    
+    def _parse_keys_from_patterns(self, key_patterns, available_keys: List[str]) -> Tuple[List[str], List[str]]:
+        """Parse keys from regex patterns."""
+        mlp_keys = []
+        cnn_keys = []
+        
+        # Handle both dict and SimpleNamespace objects
+        if hasattr(key_patterns, 'mlp_keys'):
+            mlp_pattern = re.compile(key_patterns.mlp_keys)
+            mlp_keys = [k for k in available_keys if k not in ['reward', 'is_first', 'is_last', 'is_terminal'] and mlp_pattern.search(k)]
+        elif isinstance(key_patterns, dict) and 'mlp_keys' in key_patterns:
+            mlp_pattern = re.compile(key_patterns['mlp_keys'])
+            mlp_keys = [k for k in available_keys if k not in ['reward', 'is_first', 'is_last', 'is_terminal'] and mlp_pattern.search(k)]
+        
+        if hasattr(key_patterns, 'cnn_keys'):
+            cnn_pattern = re.compile(key_patterns.cnn_keys)
+            cnn_keys = [k for k in available_keys if k not in ['reward', 'is_first', 'is_last', 'is_terminal'] and cnn_pattern.search(k)]
+        elif isinstance(key_patterns, dict) and 'cnn_keys' in key_patterns:
+            cnn_pattern = re.compile(key_patterns['cnn_keys'])
+            cnn_keys = [k for k in available_keys if k not in ['reward', 'is_first', 'is_last', 'is_terminal'] and cnn_pattern.search(k)]
+        
+        return mlp_keys, cnn_keys
+    
+    def _create_student_model(self):
+        """Initialize student model using SB3, then extract PyTorch model."""
+        # Get a sample observation and simulate the masking process
+        sample_obs, _ = self.env.reset()
+        
+        # Convert to tensors
+        obs_tensors = {}
+        for key, value in sample_obs.items():
+            if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                if isinstance(value, np.ndarray):
+                    obs_tensors[key] = torch.tensor(value, dtype=torch.float32)
+                else:
+                    obs_tensors[key] = torch.tensor([value], dtype=torch.float32)
+        
+        # Parse teacher keys to actual key names
+        teacher_mlp_keys, teacher_cnn_keys = self._parse_keys_from_patterns(
+            self.teacher_keys, list(obs_tensors.keys())
+        )
+        all_teacher_keys = teacher_mlp_keys + teacher_cnn_keys
+        
+        print(f"Available obs keys: {list(obs_tensors.keys())}")
+        print(f"Student key patterns: {self.config.keys}")
+        print(f"Teacher key patterns: {self.teacher_keys}")
+        print(f"Parsed teacher keys: {all_teacher_keys}")
+        
+        # Apply masking to get what student will actually see
+        masked_obs = mask_observations_for_student(
+            obs_tensors,
+            self.student_keys,
+            all_teacher_keys,
+            device=None,
+            debug=self.debug
+        )
+        
+        print(f"Final masked obs keys: {list(masked_obs.keys())}")
+        print(f"Masked obs shapes: {dict((k, v.shape) for k, v in masked_obs.items())}")
+        
+        # Create observation space from masked observation
+        masked_obs_spaces = {}
+        for key, value in masked_obs.items():
+            if isinstance(value, torch.Tensor):
+                value_np = value.cpu().numpy()
+            else:
+                value_np = np.array(value)
+            
+            # Create appropriate gym space
+            if len(value_np.shape) == 1:
+                # MLP observation
+                masked_obs_spaces[key] = gym.spaces.Box(
+                    low=-np.inf, high=np.inf, shape=value_np.shape, dtype=np.float32
+                )
+            else:
+                # CNN observation - check if it's valid
+                if len(value_np.shape) >= 2 and value_np.shape[0] > 4 and value_np.shape[1] > 4:
+                    masked_obs_spaces[key] = gym.spaces.Box(
+                        low=0.0, high=1.0, shape=value_np.shape, dtype=np.float32
+                    )
+                else:
+                    print(f"Warning: CNN key '{key}' has too small dimensions {value_np.shape}, converting to MLP")
+                    # Convert small "CNN" to MLP by flattening
+                    flat_shape = (np.prod(value_np.shape),)
+                    masked_obs_spaces[key] = gym.spaces.Box(
+                        low=-np.inf, high=np.inf, shape=flat_shape, dtype=np.float32
+                    )
+        
+        # Create a temporary environment with the correct observation space
+        student_obs_space = gym.spaces.Dict(masked_obs_spaces)
+        print(f"Student observation space: {student_obs_space}")
+        
+        # Create a temporary environment with student observation space
+        class TempEnv(gym.Env):
+            def __init__(self, obs_space, action_space):
+                self.observation_space = obs_space
+                self.action_space = action_space
+            
+            def reset(self):
+                # Return a dummy observation
+                dummy_obs = {}
+                for key, space in self.observation_space.spaces.items():
+                    dummy_obs[key] = np.zeros(space.shape, dtype=space.dtype)
+                return dummy_obs, {}
+            
+            def step(self, action):
+                return self.reset()[0], 0.0, False, False, {}
+        
+        temp_env = TempEnv(student_obs_space, self.env.action_space)
+        
+        # Create SB3 policy with correct observation space
+        temp_policy = PPO("MultiInputPolicy", temp_env, device=self.device, verbose=0)
+        
+        # Extract the actual PyTorch model
+        student_model = temp_policy.policy
+        action_space = self.env.action_space
+        
+        print(f"Extracted student model: {type(student_model)}")
+        return student_model, action_space
+    
+    def get_teacher_action(self, full_obs: Dict) -> torch.Tensor:
+        """Get teacher action logits for given observation."""
+        # Load teacher policy (using first teacher config)
+        teacher_agent, _, _ = self.policy_loader.load_policy('env1')
+        
+        # Get the exact keys the teacher policy expects (from its observation space)
+        expected_teacher_keys = list(teacher_agent.policy.observation_space.spaces.keys())
+        
+        # if self.debug:
+        #     print(f"Teacher expects keys: {expected_teacher_keys}")
+        #     print(f"Available obs keys: {list(full_obs.keys())}")
+        
+        # Filter observations to only include keys the teacher expects
+        teacher_obs = {}
+        for expected_key in expected_teacher_keys:
+            if expected_key in full_obs:
+                # Direct match - use this observation
+                teacher_obs[expected_key] = full_obs[expected_key]
+            else:
+                # Key not found - create dummy observation
+                expected_space = teacher_agent.policy.observation_space.spaces[expected_key]
+                if isinstance(list(full_obs.values())[0], torch.Tensor):
+                    teacher_obs[expected_key] = torch.zeros(expected_space.shape, dtype=torch.float32)
+                else:
+                    teacher_obs[expected_key] = np.zeros(expected_space.shape, dtype=expected_space.dtype)
+                
+                if self.debug:
+                    print(f"Created dummy observation for missing teacher key: {expected_key}")
+        
+        # Convert to numpy for SB3
+        obs_numpy = {}
+        for key, value in teacher_obs.items():
+            if isinstance(value, torch.Tensor):
+                obs_numpy[key] = value.cpu().numpy()
+            else:
+                obs_numpy[key] = np.array(value)
+        
+        # Add batch dimension
+        obs_batch = {k: np.expand_dims(v, axis=0) for k, v in obs_numpy.items()}
+        
+        if self.debug:
+            print(f"Teacher obs batch keys: {list(obs_batch.keys())}")
+        
+        # Get teacher logits
+        with torch.no_grad():
+            obs_tensor = teacher_agent.policy.obs_to_tensor(obs_batch)[0]
+            distribution = teacher_agent.policy.get_distribution(obs_tensor)
+            if hasattr(distribution.distribution, 'logits'):
+                teacher_logits = distribution.distribution.logits.squeeze(0)
+            else:
+                # Fallback for continuous actions
+                teacher_logits = torch.zeros(self.action_space.n, device=self.device)
+        
+        return teacher_logits.to(self.device)
+    
+    def get_student_logits(self, full_obs: Dict) -> torch.Tensor:
+        """Get student action logits for given observation (after masking)."""
+        # Parse teacher keys for masking
+        teacher_mlp_keys, teacher_cnn_keys = self._parse_keys_from_patterns(
+            self.teacher_keys, list(full_obs.keys())
+        )
+        all_teacher_keys = teacher_mlp_keys + teacher_cnn_keys
+        
+        # Apply masking to get what student should see
+        masked_obs = mask_observations_for_student(
+            full_obs,
+            self.student_keys,
+            all_teacher_keys,
+            device=None,
+            debug=False
+        )
+        
+        # Convert to numpy for SB3 model
+        obs_numpy = {}
+        for key, value in masked_obs.items():
+            if isinstance(value, torch.Tensor):
+                value_np = value.cpu().numpy()
+            else:
+                value_np = np.array(value)
+            
+            # Handle potential shape issues from masking
+            if len(value_np.shape) > 1 and (value_np.shape[0] <= 4 or value_np.shape[1] <= 4):
+                # Flatten small "CNN" observations
+                value_np = value_np.flatten()
+            
+            obs_numpy[key] = value_np
+        
+        # Add batch dimension
+        obs_batch = {k: np.expand_dims(v, axis=0) for k, v in obs_numpy.items()}
+        
+        # Get student logits
+        obs_tensor = self.student_model.obs_to_tensor(obs_batch)[0]
+        distribution = self.student_model.get_distribution(obs_tensor)
+        student_logits = distribution.distribution.logits.squeeze(0)
+        
+        return student_logits
+    
+    def train_step(self, obs_batch: List[Dict], teacher_logits_batch: List[torch.Tensor]) -> float:
+        """Single training step with batch of observations and teacher logits."""
+        total_loss = 0.0
+        
+        for obs, teacher_logits in zip(obs_batch, teacher_logits_batch):
+            # Get student logits
+            student_logits = self.get_student_logits(obs)
+            
+            # Compute KL divergence loss
+            student_log_probs = F.log_softmax(student_logits, dim=-1)
+            teacher_probs = F.softmax(teacher_logits, dim=-1)
+            
+            loss = F.kl_div(student_log_probs, teacher_probs, reduction='batchmean')
+            total_loss += loss.item()
+            
+            # Backward pass
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+        
+        return total_loss / len(obs_batch)
+    
+    def collect_data(self, num_episodes: int = 10):
+        """Collect observation-teacher action pairs by rolling out episodes with student."""
+        observations = []
+        teacher_logits = []
+        
+        for episode in range(num_episodes):
+            print(f"  Rolling out episode {episode + 1}/{num_episodes}")
+            
+            # Start episode
+            obs, _ = self.env.reset()
+            episode_length = 0
+            
+            done = False
+            truncated = False
+            
+            while not (done or truncated) and episode_length < 100:  # Max 100 steps per episode
+                # Convert observation to tensors
+                obs_tensors = {}
+                for key, value in obs.items():
+                    if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                        if isinstance(value, np.ndarray):
+                            obs_tensors[key] = torch.tensor(value, dtype=torch.float32)
+                        else:
+                            obs_tensors[key] = torch.tensor([value], dtype=torch.float32)
+                
+                # Get teacher action for this state
+                teacher_logits_sample = self.get_teacher_action(obs_tensors)
+                
+                # Store the observation and teacher action
+                observations.append(obs_tensors.copy())
+                teacher_logits.append(teacher_logits_sample)
+                
+                # Get student action to continue episode
+                with torch.no_grad():
+                    student_logits = self.get_student_logits(obs_tensors)
+                    action_probs = F.softmax(student_logits, dim=-1)
+                    # Use some exploration - not just greedy
+                    action = torch.multinomial(action_probs, 1).item()
+                
+                # Step environment with student action
+                obs, reward, done, truncated, info = self.env.step(action)
+                episode_length += 1
+                
+                # Debug info for first episode
+                if episode == 0 and episode_length == 1 and self.debug:
+                    teacher_probs = F.softmax(teacher_logits_sample, dim=-1)
+                    student_probs = action_probs
+                    print(f"    First step - Teacher probs: {teacher_probs.cpu().numpy()}")
+                    print(f"    First step - Student probs: {student_probs.cpu().numpy()}")
+                    print(f"    Student action: {action}, Episode length so far: {episode_length}")
+            
+            print(f"    Episode {episode + 1} completed with {episode_length} steps")
+        
+        print(f"  Collected {len(observations)} state-action pairs from {num_episodes} episodes")
+        return observations, teacher_logits
+    
+    def train(self):
+        """Main training loop."""
+        print(f"Starting simple imitation learning for {self.config.total_timesteps} steps")
+        
+        step = 0
+        iteration = 0
+        episodes_per_iteration = getattr(self.config, 'episodes_per_iteration', 5)
+        
+        while step < self.config.total_timesteps:
+            iteration += 1
+            print(f"\nIteration {iteration} (Step {step}/{self.config.total_timesteps})")
+            
+            # Collect data from episode rollouts
+            observations, teacher_logits = self.collect_data(episodes_per_iteration)
+            
+            # Train on collected data
+            loss = self.train_step(observations, teacher_logits)
+            print(f"  Training loss: {loss:.6f}")
+            
+            # Update step count (approximate based on data collected)
+            step += len(observations)
+            
+            # Log to wandb
+            if self.config.track and wandb.run is not None:
+                wandb.log({
+                    'train/imitation_loss': loss,
+                    'train/step': step,
+                    'train/iteration': iteration,
+                    'train/samples_collected': len(observations)
+                })
+            
+            # Evaluate
+            if step % self.config.eval_freq == 0 and step > 0:
+                self.evaluate()
+        
+        print("Simple imitation training completed!")
+    
+    def evaluate(self, n_episodes: int = 5):
+        """Comprehensive evaluation: default + cross-subset evaluations."""
+        print("Starting comprehensive evaluation...")
+        
+        # 1. Evaluate student on default training environment (student keys only, no teacher masking)
+        print("📚 Evaluating student on default training environment...")
+        self._evaluate_student_default(n_episodes)
+        
+        # 2. Evaluate student on each teacher configuration (with proper masking)
+        print("🎓 Evaluating student on teacher subsets...")
+        for i in range(1, self.config.num_eval_configs + 1):
+            env_name = f'env{i}'
+            if hasattr(self.config.eval_keys, env_name):
+                teacher_keys = getattr(self.config.eval_keys, env_name)
+                self._evaluate_environment(env_name, teacher_keys, n_episodes)
+        
+        print("Evaluation complete!")
+    
+    def _evaluate_student_default(self, n_episodes: int):
+        """Evaluate student on training environment with student keys only."""
+        print(f"  Evaluating student default (training environment)...")
+        
+        episode_returns = []
+        episode_lengths = []
+        
+        for episode in range(n_episodes):
+            obs, _ = self.env.reset()
+            episode_return = 0
+            episode_length = 0
+            
+            done = False
+            truncated = False
+            
+            while not (done or truncated):
+                # Convert obs to tensors
+                obs_tensors = {}
+                for key, value in obs.items():
+                    if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                        if isinstance(value, np.ndarray):
+                            obs_tensors[key] = torch.tensor(value, dtype=torch.float32)
+                        else:
+                            obs_tensors[key] = torch.tensor([value], dtype=torch.float32)
+                
+                # Filter to student keys only (no teacher masking for default eval)
+                student_obs = {}
+                for key in self.student_keys:
+                    if key in obs_tensors:
+                        student_obs[key] = obs_tensors[key]
+                
+                # Convert to numpy for SB3 model
+                obs_numpy = {}
+                for key, value in student_obs.items():
+                    if isinstance(value, torch.Tensor):
+                        value_np = value.cpu().numpy()
+                    else:
+                        value_np = np.array(value)
+                    obs_numpy[key] = value_np
+                
+                # Add batch dimension
+                obs_batch = {k: np.expand_dims(v, axis=0) for k, v in obs_numpy.items()}
+                
+                # Get student action
+                with torch.no_grad():
+                    obs_tensor = self.student_model.obs_to_tensor(obs_batch)[0]
+                    distribution = self.student_model.get_distribution(obs_tensor)
+                    action_probs = F.softmax(distribution.distribution.logits, dim=-1)
+                    action = torch.argmax(action_probs).item()
+                
+                # Step environment
+                obs, reward, done, truncated, info = self.env.step(action)
+                episode_return += reward
+                episode_length += 1
+            
+            episode_returns.append(episode_return)
+            episode_lengths.append(episode_length)
+        
+        # Compute metrics
+        episode_returns = np.array(episode_returns)
+        episode_lengths = np.array(episode_lengths)
+        
+        mean_return = np.mean(episode_returns)
+        std_return = np.std(episode_returns)
+        mean_length = np.mean(episode_lengths)
+        
+        print(f"    Student Default: mean_return={mean_return:.2f}, std_return={std_return:.2f}, mean_length={mean_length:.1f}")
+        
+        # Log to wandb - this is the main student performance metric
+        if self.config.track and wandb.run is not None:
+            wandb.log({
+                "eval/mean_return": mean_return,
+                "eval/std_return": std_return,
+                "eval/mean_length": mean_length
+            })
+    
+    def _evaluate_environment(self, env_name: str, teacher_keys, n_episodes: int):
+        """Evaluate student policy on a specific teacher configuration."""
+        print(f"  Evaluating {env_name}...")
+        
+        episode_returns = []
+        episode_lengths = []
+        
+        for episode in range(n_episodes):
+            obs, _ = self.env.reset()
+            episode_return = 0
+            episode_length = 0
+            
+            done = False
+            truncated = False
+            
+            while not (done or truncated):
+                # Convert observations to tensors for masking
+                obs_tensors = {}
+                for key, value in obs.items():
+                    if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
+                        if isinstance(value, np.ndarray):
+                            obs_tensors[key] = torch.tensor(value, dtype=torch.float32)
+                        else:
+                            obs_tensors[key] = torch.tensor([value], dtype=torch.float32)
+                
+                # Parse teacher keys from patterns to get actual key list
+                teacher_mlp_keys, teacher_cnn_keys = self._parse_keys_from_patterns(teacher_keys, obs_tensors.keys())
+                all_teacher_keys = teacher_mlp_keys + teacher_cnn_keys
+                
+                # Mask observations for the student using shared helper
+                masked_obs = mask_observations_for_student(
+                    obs_tensors, 
+                    self.student_keys, 
+                    all_teacher_keys, 
+                    device=None,  # Use CPU for evaluation
+                    debug=False
+                )
+                
+                # Convert masked observations to numpy for SB3
+                masked_obs_numpy = {}
+                for key, value in masked_obs.items():
+                    if isinstance(value, torch.Tensor):
+                        value_np = value.cpu().numpy()
+                    else:
+                        value_np = np.array(value)
+                    
+                    # Handle potential shape issues from masking
+                    if len(value_np.shape) > 1 and (value_np.shape[0] <= 4 or value_np.shape[1] <= 4):
+                        value_np = value_np.flatten()
+                    
+                    masked_obs_numpy[key] = value_np
+                
+                # Add batch dimension
+                obs_batch = {k: np.expand_dims(v, axis=0) for k, v in masked_obs_numpy.items()}
+                
+                # Get action from student policy
+                with torch.no_grad():
+                    obs_tensor = self.student_model.obs_to_tensor(obs_batch)[0]
+                    distribution = self.student_model.get_distribution(obs_tensor)
+                    action_probs = F.softmax(distribution.distribution.logits, dim=-1)
+                    action = torch.argmax(action_probs).item()
+                
+                # Step environment
+                obs, reward, done, truncated, info = self.env.step(action)
+                episode_return += reward
+                episode_length += 1
+            
+            episode_returns.append(episode_return)
+            episode_lengths.append(episode_length)
+        
+        # Compute metrics
+        episode_returns = np.array(episode_returns)
+        episode_lengths = np.array(episode_lengths)
+        
+        mean_return = np.mean(episode_returns)
+        std_return = np.std(episode_returns)
+        mean_length = np.mean(episode_lengths)
+        
+        print(f"    {env_name}: mean_return={mean_return:.2f}, std_return={std_return:.2f}, mean_length={mean_length:.1f}")
+        
+        # Log to wandb following ppo_dropout pattern
+        if self.config.track and wandb.run is not None:
+            wandb.log({
+                f"full_eval_return/{env_name}/mean_return": mean_return,
+                f"full_eval/{env_name}/std_return": std_return,
+                f"full_eval/{env_name}/mean_length": mean_length
+            })
+
+
+def train_simple_imitation(config, expert_policy_dir: str, device: str = 'cpu', debug: bool = False):
+    """Main training function for simple imitation learning."""
+    # Initialize wandb
+    if hasattr(config, 'track') and config.track:
+        wandb.init(
+            project=config.wandb_project,
+            entity=config.wandb_entity,
+            name=f"simple_imitation_{config.exp_name}_{config.seed}",
+            config=vars(config)
+        )
+    
+    # Create trainer and train
+    trainer = SimpleImitationTrainer(config, expert_policy_dir, device, debug)
+    trainer.train()
+    
+    if config.track and wandb.run is not None:
+        wandb.finish() 
