@@ -203,7 +203,7 @@ class CustomEvalCallback(BaseCallback):
             except re.error as e:
                 print(f"Warning: Invalid regex pattern '{pattern}': {e}")
                 return []
-    
+        
     def _on_step(self):
         """Called after each step."""
         # Check if we should run evaluation
@@ -220,7 +220,7 @@ class CustomEvalCallback(BaseCallback):
                 eval_keys = getattr(self.config.eval_keys, env_name)
                 mlp_keys_pattern = getattr(eval_keys, 'mlp_keys', '.*')
                 cnn_keys_pattern = getattr(eval_keys, 'cnn_keys', '.*')
-                
+            
                 # Parse teacher keys for this environment
                 available_keys = self._get_available_keys()
                 teacher_mlp_keys = self._parse_keys_from_pattern(mlp_keys_pattern, available_keys)
@@ -236,7 +236,7 @@ class CustomEvalCallback(BaseCallback):
             self.last_eval = self.num_timesteps
             
         return True
-    
+
     def _evaluate_environment(self, env_name, teacher_keys):
         """Evaluate the agent on a specific environment configuration."""
         # Create a fresh evaluation environment
@@ -401,7 +401,7 @@ def train_ppo_sb3(envs, config, seed, enable_custom_eval=True):
         
         env.reset(seed=seed)
         return env
-
+    
     # Create vectorized environment for SB3 (identical to train_blindpick.py)
     if config.num_envs > 1:
         env_fns = [lambda i=i: _make_env() for i in range(config.num_envs)]
@@ -444,7 +444,7 @@ def train_ppo_sb3(envs, config, seed, enable_custom_eval=True):
         seed=seed,
         tensorboard_log=f"./tb_logs/ppo_sb3-{config.task}-{config.exp_name}-seed{seed}",
     )
-
+    
     # Create evaluation callbacks
     eval_callback = EvalCallback(
         filtered_eval_env,  # Use filtered environment (same as training)
@@ -456,7 +456,7 @@ def train_ppo_sb3(envs, config, seed, enable_custom_eval=True):
         render=False,
         verbose=1
     )
-    
+
     # Prepare callbacks - always include standard eval callback
     callbacks = [eval_callback]
     

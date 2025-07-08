@@ -414,9 +414,6 @@ class EpisodeMaskingWrapper(gym.ObservationWrapper):
             # Select environment subset for this episode (cycle through them)
             self.current_env_name, self.current_teacher_keys = self._select_env_subset()
             self.episode_start = False
-            # print(f"[TRAINING] Episode using {self.current_env_name} with {len(self.current_teacher_keys)} teacher keys")
-            # print(f"[TRAINING] Student keys: {self.student_keys}")
-            # print(f"[TRAINING] Observation space keys: {list(self.observation_space.spaces.keys())}")
         
         # Convert observations to tensors for masking
         obs_tensors = {}

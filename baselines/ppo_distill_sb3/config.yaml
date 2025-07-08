@@ -15,7 +15,6 @@ defaults:
   use_wandb: true
 
   # Distillation settings
-  cycle_mode: "episode"  # How to cycle configurations: "episode" or "batch"
 
   # Student and expert observation keys
   keys: {mlp_keys: '.*', cnn_keys: '.*'}
@@ -98,7 +97,6 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
       cnn_keys: '^$'
 
   # Distillation settings for tiger door key
-  cycle_mode: "episode"
 
   exp_name: "tigerdoorkey_ppo_distill_sb3"
 
@@ -139,7 +137,6 @@ gymnasium_maze: &maze_base
       cnn_keys: '^$'
 
   # Distillation settings for maze
-  cycle_mode: "episode"
 
   exp_name: "maze_ppo_distill_sb3"
 
@@ -181,7 +178,6 @@ gymnasium_blindpick: &blindpick_base
       cnn_keys: 'camera_side'
 
   # Distillation settings for blind pick
-  cycle_mode: "episode"
 
   exp_name: "blindpick_ppo_distill_sb3"
 

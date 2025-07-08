@@ -78,7 +78,7 @@ def test_configuration_scheduler():
     
     try:
         # Create configuration scheduler
-        scheduler = ConfigurationScheduler(eval_keys, cycle_mode='episode')
+        scheduler = ConfigurationScheduler(eval_keys)
         
         print(f"✓ Successfully created ConfigurationScheduler")
         print(f"  Configurations: {list(eval_keys.keys())}")

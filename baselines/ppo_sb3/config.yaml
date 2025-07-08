@@ -73,7 +73,7 @@ defaults:
 # Tiger Door Key
 gymnasium_tigerdoorkey: &tigerdoorkey_base
   task: gymnasium_TigerDoorKey-v0
-  total_timesteps: 20000
+  total_timesteps: 400000
   keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
   num_eval_configs: 4
   eval_keys:

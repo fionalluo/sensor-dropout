@@ -55,7 +55,7 @@ class SubsetPolicyLoader:
 
     
     def _find_policy_files(self, policy_dir):
-        """Find all policy files in the directory."""
+        """Find all policy files in the directory, selecting the most recent one for each subset."""
         policies = {}
         if not os.path.exists(policy_dir):
             return policies
@@ -64,12 +64,23 @@ class SubsetPolicyLoader:
         for item in os.listdir(policy_dir):
             item_path = os.path.join(policy_dir, item)
             if os.path.isdir(item_path):
-                # Look for .zip files in the subdirectory
+                # Find all .zip files in the subdirectory that start with 'policy_'
+                policy_files = []
                 for file in os.listdir(item_path):
                     if file.endswith('.zip') and file.startswith('policy_'):
-                        # Extract subset name from directory name (remove _policy suffix)
-                        subset_name = item.replace('_policy', '')
-                        policies[subset_name] = os.path.join(item_path, file)
+                        policy_files.append(file)
+                
+                if policy_files:
+                    # Sort files to get chronological order (names are increasing chronologically)
+                    policy_files.sort()
+                    # Select the most recent (last) policy file
+                    most_recent_file = policy_files[-1]
+                    
+                    # Extract subset name from directory name (remove _policy suffix)
+                    subset_name = item.replace('_policy', '')
+                    policies[subset_name] = os.path.join(item_path, most_recent_file)
+                    
+                    print(f"Found {len(policy_files)} policy files for {subset_name}, selected most recent: {most_recent_file}")
         
         return policies
     
