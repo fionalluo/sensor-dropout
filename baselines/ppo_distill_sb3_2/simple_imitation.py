@@ -31,8 +31,10 @@ class SimpleImitationTrainer:
         # Parse student keys
         self.student_keys = self._parse_student_keys(config)
         
-        # Parse teacher keys (simplified - just take the first teacher)
-        self.teacher_keys = self._get_teacher_keys(config)
+        # Parse all teacher keys  
+        self.teacher_keys_by_config = self._get_all_teacher_keys(config)
+        self.teacher_configs = list(self.teacher_keys_by_config.keys())
+        self.current_teacher_idx = 0  # For cycling through teachers
         
         # Initialize teacher manager
         self.policy_loader = SubsetPolicyLoader(expert_policy_dir, device)
@@ -46,7 +48,8 @@ class SimpleImitationTrainer:
         
         print(f"Simple Imitation Learning initialized")
         print(f"Student keys: {self.student_keys}")
-        print(f"Teacher keys: {self.teacher_keys}")
+        print(f"Teacher configs: {self.teacher_configs}")
+        print(f"Current teacher: {self.get_current_teacher_config()}")
         print(f"Action space: {self.action_space}")
     
     def _parse_student_keys(self, config) -> List[str]:
@@ -68,10 +71,27 @@ class SimpleImitationTrainer:
         
         return student_keys
     
-    def _get_teacher_keys(self, config):
-        """Get teacher keys (simplified - just first teacher)."""
-        teacher_config = getattr(config.eval_keys, 'env1')
-        return teacher_config
+    def _get_all_teacher_keys(self, config):
+        """Get all teacher keys from config."""
+        teacher_keys_by_config = {}
+        for i in range(1, config.num_eval_configs + 1):
+            config_name = f'env{i}'
+            if hasattr(config.eval_keys, config_name):
+                teacher_keys_by_config[config_name] = getattr(config.eval_keys, config_name)
+        
+        if not teacher_keys_by_config:
+            raise ValueError(f"No teacher configurations found! Expected env1 to env{config.num_eval_configs}")
+        
+        return teacher_keys_by_config
+    
+    def get_current_teacher_config(self):
+        """Get the current teacher configuration name."""
+        return self.teacher_configs[self.current_teacher_idx]
+    
+    def cycle_to_next_teacher(self):
+        """Cycle to the next teacher."""
+        self.current_teacher_idx = (self.current_teacher_idx + 1) % len(self.teacher_configs)
+        print(f"Switched to teacher: {self.get_current_teacher_config()}")
     
     def _create_environment(self):
         """Create simple environment."""
@@ -115,15 +135,18 @@ class SimpleImitationTrainer:
                 else:
                     obs_tensors[key] = torch.tensor([value], dtype=torch.float32)
         
+        # Use the first teacher for initial model setup
+        first_teacher_keys = self.teacher_keys_by_config[self.teacher_configs[0]]
+        
         # Parse teacher keys to actual key names
         teacher_mlp_keys, teacher_cnn_keys = self._parse_keys_from_patterns(
-            self.teacher_keys, list(obs_tensors.keys())
+            first_teacher_keys, list(obs_tensors.keys())
         )
         all_teacher_keys = teacher_mlp_keys + teacher_cnn_keys
         
         print(f"Available obs keys: {list(obs_tensors.keys())}")
         print(f"Student key patterns: {self.config.keys}")
-        print(f"Teacher key patterns: {self.teacher_keys}")
+        print(f"First teacher key patterns: {first_teacher_keys}")
         print(f"Parsed teacher keys: {all_teacher_keys}")
         
         # Apply masking to get what student will actually see
@@ -198,10 +221,14 @@ class SimpleImitationTrainer:
         print(f"Extracted student model: {type(student_model)}")
         return student_model, action_space
     
-    def get_teacher_action(self, full_obs: Dict) -> torch.Tensor:
+    def get_teacher_action(self, full_obs: Dict, teacher_config: str = None) -> torch.Tensor:
         """Get teacher action logits for given observation."""
-        # Load teacher policy (using first teacher config)
-        teacher_agent, _, _ = self.policy_loader.load_policy('env1')
+        # Use current teacher if none specified
+        if teacher_config is None:
+            teacher_config = self.get_current_teacher_config()
+        
+        # Load teacher policy
+        teacher_agent, _, _ = self.policy_loader.load_policy(teacher_config)
         
         # Get the exact keys the teacher policy expects (from its observation space)
         expected_teacher_keys = list(teacher_agent.policy.observation_space.spaces.keys())
@@ -238,8 +265,8 @@ class SimpleImitationTrainer:
         # Add batch dimension
         obs_batch = {k: np.expand_dims(v, axis=0) for k, v in obs_numpy.items()}
         
-        if self.debug:
-            print(f"Teacher obs batch keys: {list(obs_batch.keys())}")
+        # if self.debug:
+        #     print(f"Teacher obs batch keys: {list(obs_batch.keys())}")
         
         # Get teacher logits
         with torch.no_grad():
@@ -253,11 +280,18 @@ class SimpleImitationTrainer:
         
         return teacher_logits.to(self.device)
     
-    def get_student_logits(self, full_obs: Dict) -> torch.Tensor:
+    def get_student_logits(self, full_obs: Dict, teacher_config: str = None) -> torch.Tensor:
         """Get student action logits for given observation (after masking)."""
+        # Use current teacher if none specified
+        if teacher_config is None:
+            teacher_config = self.get_current_teacher_config()
+        
+        # Get teacher keys for this configuration
+        teacher_keys = self.teacher_keys_by_config[teacher_config]
+        
         # Parse teacher keys for masking
         teacher_mlp_keys, teacher_cnn_keys = self._parse_keys_from_patterns(
-            self.teacher_keys, list(full_obs.keys())
+            teacher_keys, list(full_obs.keys())
         )
         all_teacher_keys = teacher_mlp_keys + teacher_cnn_keys
         
@@ -323,7 +357,9 @@ class SimpleImitationTrainer:
         teacher_logits = []
         
         for episode in range(num_episodes):
-            print(f"  Rolling out episode {episode + 1}/{num_episodes}")
+            # Cycle to next teacher for each episode to ensure we use all teachers
+            current_teacher = self.get_current_teacher_config()
+            print(f"  Rolling out episode {episode + 1}/{num_episodes} with teacher {current_teacher}")
             
             # Start episode
             obs, _ = self.env.reset()
@@ -342,16 +378,16 @@ class SimpleImitationTrainer:
                         else:
                             obs_tensors[key] = torch.tensor([value], dtype=torch.float32)
                 
-                # Get teacher action for this state
-                teacher_logits_sample = self.get_teacher_action(obs_tensors)
+                # Get teacher action for this state (using current teacher)
+                teacher_logits_sample = self.get_teacher_action(obs_tensors, current_teacher)
                 
                 # Store the observation and teacher action
                 observations.append(obs_tensors.copy())
                 teacher_logits.append(teacher_logits_sample)
                 
-                # Get student action to continue episode
+                # Get student action to continue episode (using same teacher for consistency)
                 with torch.no_grad():
-                    student_logits = self.get_student_logits(obs_tensors)
+                    student_logits = self.get_student_logits(obs_tensors, current_teacher)
                     action_probs = F.softmax(student_logits, dim=-1)
                     # Use some exploration - not just greedy
                     action = torch.multinomial(action_probs, 1).item()
@@ -364,13 +400,16 @@ class SimpleImitationTrainer:
                 if episode == 0 and episode_length == 1 and self.debug:
                     teacher_probs = F.softmax(teacher_logits_sample, dim=-1)
                     student_probs = action_probs
-                    print(f"    First step - Teacher probs: {teacher_probs.cpu().numpy()}")
+                    print(f"    First step - Teacher {current_teacher} probs: {teacher_probs.cpu().numpy()}")
                     print(f"    First step - Student probs: {student_probs.cpu().numpy()}")
                     print(f"    Student action: {action}, Episode length so far: {episode_length}")
             
-            print(f"    Episode {episode + 1} completed with {episode_length} steps")
+            print(f"    Episode {episode + 1} completed with {episode_length} steps using teacher {current_teacher}")
+            
+            # Cycle to next teacher for the next episode
+            self.cycle_to_next_teacher()
         
-        print(f"  Collected {len(observations)} state-action pairs from {num_episodes} episodes")
+        print(f"  Collected {len(observations)} state-action pairs from {num_episodes} episodes using all teachers")
         return observations, teacher_logits
     
     def train(self):
