@@ -147,38 +147,60 @@ class DistillationRolloutBuffer(DictRolloutBuffer):
         - rollout_buffer.full_observations: Unmasked observations from environment (for expert targets)
         - rollout_buffer.expert_configs: Which expert config was active for each step
         """
-        # Call parent add method with filtered observations
-        super().add(*args, **kwargs)
+        # CRITICAL FIX: Get the current buffer position BEFORE calling super().add()
+        current_pos = self.pos
         
-        # Store full observations if wrapper is available
-        if self.env_wrapper is not None and hasattr(self.env_wrapper, 'get_last_full_observations'):
-            full_obs_list = self.env_wrapper.get_last_full_observations()
+        # Store full observations and expert configs BEFORE calling super().add()
+        # This ensures we capture the data that corresponds to the transition being stored
+        if self.env_wrapper is not None:
+            if hasattr(self.env_wrapper, 'get_last_full_observations'):
+                full_obs_list = self.env_wrapper.get_last_full_observations()
+                
+                if self.full_observations is None:
+                    # Initialize storage on first add
+                    self._init_full_observation_storage(full_obs_list[0])
+                    self._init_expert_config_storage()
+                
+                # Store full observations at current position
+                for env_idx, full_obs in enumerate(full_obs_list):
+                    for key, value in full_obs.items():
+                        if key in self.full_observations:
+                            # Convert to numpy if needed
+                            if isinstance(value, torch.Tensor):
+                                value = value.cpu().numpy()
+                            self.full_observations[key][current_pos, env_idx] = value
             
-            if self.full_observations is None:
-                # Initialize full observation storage on first add
-                self._init_full_observation_storage(full_obs_list[0])
-                # Also initialize expert config storage
-                self._init_expert_config_storage()
-            
-            # Store full observations for this step
-            for env_idx, full_obs in enumerate(full_obs_list):
-                for key, value in full_obs.items():
-                    if key in self.full_observations:
-                        # Convert to numpy if needed
-                        if isinstance(value, torch.Tensor):
-                            value = value.cpu().numpy()
-                        self.full_observations[key][self.pos - 1, env_idx] = value
-            
-            # Store expert configs directly from environment wrapper
+            # Store expert configs that were USED for this step (not next step)
             if hasattr(self.env_wrapper, 'get_current_teacher_config_names'):
                 current_configs = self.env_wrapper.get_current_teacher_config_names()
                 
-                # Store configs for each environment
-                step_config_summary = {}
-                for env_idx, config_name in enumerate(current_configs):
-                    if config_name and self.expert_configs is not None:
-                        self.expert_configs[self.pos - 1, env_idx] = config_name
-                        step_config_summary[config_name] = step_config_summary.get(config_name, 0) + 1
+                if self.expert_configs is not None:
+                    for env_idx, config_name in enumerate(current_configs):
+                        if config_name:
+                            self.expert_configs[current_pos, env_idx] = config_name
+                        else:
+                            self.expert_configs[current_pos, env_idx] = ''
+                
+                # Debug logging to validate alignment (first few steps only)
+                if current_pos < 5:
+                    print(f"🔍 [Buffer Step {current_pos}] Expert configs: {current_configs[:min(4, len(current_configs))]}")
+        
+        # Call parent add method with filtered observations AFTER storing our data
+        super().add(*args, **kwargs)
+        
+        # Validate that positions align correctly
+        if current_pos < 5:  # Only debug first few steps
+            stored_pos = self.pos - 1  # This should equal current_pos after super().add()
+            if stored_pos != current_pos:
+                print(f"⚠️  WARNING: Position mismatch! Expected {current_pos}, got {stored_pos}")
+            
+            # Verify we can retrieve what we just stored
+            if self.expert_configs is not None and self.env_wrapper is not None:
+                stored_configs = []
+                for env_idx in range(min(4, self.n_envs)):
+                    stored_config = self.expert_configs[current_pos, env_idx]
+                    stored_configs.append(stored_config if stored_config != '' else 'empty')
+                print(f"✅ [Buffer Step {current_pos}] Stored configs: {stored_configs}")
     
     def add_expert_config(self, expert_config_name):
         """Store which expert configuration was active for the current step."""
@@ -221,6 +243,7 @@ class DistillationRolloutBuffer(DictRolloutBuffer):
     
     def get_full_observations(self, indices=None):
         if self.full_observations is None:
+            print("⚠️  WARNING: No full observations stored in buffer!")
             return {}
             
         if indices is None:
@@ -231,17 +254,38 @@ class DistillationRolloutBuffer(DictRolloutBuffer):
         for key, value in self.full_observations.items():
             full_obs[key] = value[step_indices, env_indices]
         
+        # Debug: Validate that we have non-zero observations
+        if len(full_obs) > 0:
+            sample_key = list(full_obs.keys())[0]
+            sample_values = full_obs[sample_key]
+            if hasattr(sample_values, 'shape') and sample_values.size > 0:
+                zero_count = np.sum(sample_values == 0.0)
+                total_count = sample_values.size
+                if zero_count == total_count:
+                    print(f"⚠️  WARNING: All values for '{sample_key}' are zero! (Potential timing bug)")
+        
         return full_obs
     
     def get_expert_configs(self, indices=None):
         if self.expert_configs is None:
+            print("⚠️  WARNING: No expert configs stored in buffer!")
             return np.array([])
             
         if indices is None:
-            return self.expert_configs
+            # Return all expert configs
+            configs = self.expert_configs
+        else:
+            step_indices, env_indices = indices
+            configs = self.expert_configs[step_indices, env_indices]
         
-        step_indices, env_indices = indices
-        return self.expert_configs[step_indices, env_indices]
+        # Debug: Check for empty configs (sign of timing issues)
+        if isinstance(configs, np.ndarray) and configs.size > 0:
+            empty_count = np.sum(configs == '')
+            total_count = configs.size
+            if empty_count > 0:
+                print(f"⚠️  WARNING: {empty_count}/{total_count} expert configs are empty!")
+                
+        return configs
     
     def get_filtered_observations(self, indices=None):
         if indices is None:
@@ -626,12 +670,15 @@ class VectorizedDistillationWrapper(VecEnvWrapper):
     
     def get_current_teacher_config_names(self):
         """Get the teacher configuration names that were active DURING the last step."""
-        # Return the configs that were used to generate the last observations
+        # CRITICAL FIX: Return the configs that were used to generate the last observations
+        # These should be the configs that were active when the action was taken
         if hasattr(self, 'last_teacher_configs'):
             return self.last_teacher_configs
         else:
             # Fallback to current configs (shouldn't happen after first step)
-            return [config[0] if config else None for config in self.current_teacher_configs]
+            fallback_configs = [config[0] if config else None for config in self.current_teacher_configs]
+            print(f"⚠️  WARNING: Using fallback teacher configs: {fallback_configs[:4]}")
+            return fallback_configs
 
 
 class ExpertPolicyManager:
@@ -827,48 +874,60 @@ class DistillationTrainer:
         # Get expert configurations for each step
         expert_configs = rollout_buffer.get_expert_configs()
         if expert_configs is None or expert_configs.size == 0:
-            print("Warning: No expert configurations stored in buffer")
+            print("❌ ERROR: No expert configurations stored in buffer!")
             return 0.0
 
         # Debug: Check what expert configs are stored and their distribution
         config_counts = {}
         total_valid_configs = 0
+        empty_configs = 0
         for step in range(num_steps):
             for env in range(num_envs):
                 config = expert_configs[step, env]
                 if config and config != '':
                     config_counts[config] = config_counts.get(config, 0) + 1
                     total_valid_configs += 1
+                else:
+                    empty_configs += 1
+        
+        print(f"🔍 Buffer Analysis: {total_valid_configs} valid configs, {empty_configs} empty configs")
+        print(f"📊 Config distribution: {config_counts}")
         
         # Verify config distribution matches expected number of eval configs
         expected_num_configs = len(self.teacher_keys_by_config)
         actual_num_configs = len([c for c in config_counts.keys() if c])
         
-        # CRITICAL FIX: Store training data (observations and configs) for recomputation
-        training_data = []  # Store (student_obs, expert_obs_masked, expert_config) tuples
+        if actual_num_configs == 0:
+            print("❌ ERROR: No valid expert configurations found in buffer!")
+            return 0.0
+        elif actual_num_configs != expected_num_configs:
+            print(f"⚠️  WARNING: Expected {expected_num_configs} configs but found {actual_num_configs}")
+            # Continue anyway, but with warning
         
-        # Track training step count
-        if not hasattr(self, '_training_step_count'):
-            self._training_step_count = 0
+        if total_valid_configs == 0:
+            print("❌ ERROR: No valid training samples found!")
+            return 0.0
         
-        # Process each step and environment to collect training data
+        # Get all valid transitions from the buffer
+        training_data = []
+        
+        # Get all observations from buffer
+        full_obs_keys = list(rollout_buffer.full_observations.keys())
+        
+        # Process each step and environment
         for step in range(num_steps):
             for env in range(num_envs):
-                # Get the expert configuration that was active for this specific step
+                # Get the expert config that was active during this step
                 step_expert_config = expert_configs[step, env]
-                
-                # Validate expert config
                 if not step_expert_config or step_expert_config == '':
                     continue
                 
-                if step_expert_config not in self.teacher_keys_by_config:
-                    print(f"❌ ERROR: Unknown expert config '{step_expert_config}' at step {step}, env {env}")
-                    print(f"Available configs: {list(self.teacher_keys_by_config.keys())}")
+                # Get the teacher keys for this expert config
+                step_teacher_keys = self.teacher_keys_by_config.get(step_expert_config, [])
+                if not step_teacher_keys:
                     continue
                 
-                step_teacher_keys = self.teacher_keys_by_config[step_expert_config]
-                
-                # Get the full observation for this step and environment  
+                # Get full observation for this step and environment
                 full_obs = {}
                 for key in full_obs_keys:
                     value = rollout_buffer.full_observations[key][step, env]
@@ -992,10 +1051,6 @@ class DistillationTrainer:
             
             avg_epoch_loss = epoch_loss / num_batches if num_batches > 0 else 0.0
             
-            # Debug gradient info
-            if epoch == 0 or self._training_step_count % 10 == 0:
-                print(f"🔧 Epoch {epoch}: Avg_loss={avg_epoch_loss:.4f}, Grad_norm={total_grad_norm:.4f}, Batches={num_batches}")
-            
             # Store final loss for return (use the average epoch loss)
             distillation_loss = avg_epoch_loss
         
@@ -1005,7 +1060,6 @@ class DistillationTrainer:
         # Store loss for logging and update scheduler
         self.distillation_losses.append(final_loss)
         self.scheduler.step(final_loss)  # Reduce LR on plateau
-        self._training_step_count += 1
         
         # Compute accuracy metric: how often student agrees with expert (sample a few for efficiency)
         accuracy = 0.0
@@ -1030,42 +1084,6 @@ class DistillationTrainer:
                             total_predictions += student_action.numel()
             
             accuracy = correct_predictions / total_predictions if total_predictions > 0 else 0.0
-        
-        # Enhanced debugging every 10 steps
-        current_lr = self.optimizer.param_groups[0]['lr']
-        if self._training_step_count % 10 == 0:
-            print(f"🎯 Training Step {self._training_step_count}: Initial_loss={initial_loss:.4f}, Final_loss={final_loss:.4f}, Improvement={improvement:.4f}, Accuracy={accuracy:.3f}, LR={current_lr:.5f}")
-            
-            # Check if student predictions are becoming less random
-            if len(training_data) > 0:
-                # Use first training sample for debugging
-                test_student_obs, test_teacher_obs_filtered, test_expert_config = training_data[0]
-                
-                with torch.no_grad():
-                    test_logits = self._get_student_action_logits(test_student_obs)
-                    test_probs = F.softmax(test_logits, dim=-1)
-                    test_entropy = -(test_probs * torch.log(test_probs + 1e-8)).sum()
-                    
-                    # Also check max probability (confidence)
-                    max_prob = torch.max(test_probs).item()
-                    print(f"🎯 Student entropy={test_entropy.item():.4f} (lower=better, max=1.386), max_prob={max_prob:.4f} (higher=more confident)")
-                    
-                    # Compare with expert for same observation
-                    sample_expert_logits = self.expert_manager.get_expert_action_logits(test_expert_config, test_teacher_obs_filtered)
-                    sample_expert_probs = F.softmax(sample_expert_logits, dim=-1)
-                    expert_entropy = -(sample_expert_probs * torch.log(sample_expert_probs + 1e-8)).sum()
-                    expert_max_prob = torch.max(sample_expert_probs).item()
-                    print(f"🧑‍🏫 Expert entropy={expert_entropy.item():.4f}, max_prob={expert_max_prob:.4f} (target for student)")
-        
-        # Track recent loss trend for debugging
-        if self._training_step_count % 50 == 0 and len(self.distillation_losses) >= 10:
-            recent_losses = self.distillation_losses[-10:]
-            loss_trend = recent_losses[-1] - recent_losses[0]  # Negative = decreasing
-            avg_recent_loss = sum(recent_losses) / len(recent_losses)
-            print(f"📈 Loss Trend (last 10 steps): {loss_trend:.4f} (negative=improving), Avg={avg_recent_loss:.4f}")
-            
-            if abs(loss_trend) < 0.01:  # Very small change
-                print(f"⚠️  Warning: Loss plateau detected. Consider increasing LR or checking data diversity.")
         
         return final_loss
 
