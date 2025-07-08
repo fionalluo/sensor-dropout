@@ -65,7 +65,7 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
   total_timesteps: 50000  # Reduced for testing
   # Student sees all privileged observations
   keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
-  eval_freq: 1000  # Evaluate more frequently
+  eval_freq: 40  # Evaluate more frequently
   num_eval_configs: 4
   eval_keys:
     env1:  # Full privileged teacher
