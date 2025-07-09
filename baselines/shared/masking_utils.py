@@ -58,10 +58,4 @@ def mask_observations_for_student(obs, student_keys, teacher_keys, device=None, 
         
         masked_obs[key] = v
     
-    if debug:
-        total_features = sum(v.numel() for v in masked_obs.values())
-        print(f"[MASKING DEBUG] Total features in masked_obs: {total_features}")
-        for k, v in masked_obs.items():
-            print(f"[MASKING DEBUG] Final '{k}': shape {tuple(v.shape)}, numel {v.numel()}")
-    
     return masked_obs 
