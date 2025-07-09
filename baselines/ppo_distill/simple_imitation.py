@@ -288,16 +288,24 @@ class SimpleImitationTrainer:
         
         return student_probs
     
-    def train_step(self, obs_batch: List[Dict], teacher_probs_batch: List[torch.Tensor]) -> float:
-        """Single training step with batch of observations and teacher probabilities."""
+    def train_step(self, obs_batch: List[Dict], teacher_probs_batch: List[torch.Tensor], teacher_labels: List[str]):
+        """Single training step with batch of observations, teacher probabilities and labels.
+
+        Returns
+        -------
+        total_loss : float
+        loss_per_teacher : dict[str, float]
+        """
         total_loss = 0.0
-        
-        for obs, teacher_probs in zip(obs_batch, teacher_probs_batch):
+        loss_sums: Dict[str, float] = {}
+        count_per_teacher: Dict[str, int] = {}
+
+        for obs, teacher_probs, label in zip(obs_batch, teacher_probs_batch, teacher_labels):
             # Get student probabilities directly
             student_probs = self.get_student_probs(obs)
             
-            print(f"Student probs: {student_probs}")
-            print(f"Teacher probs: {teacher_probs}")
+            # print(f"Student probs: {student_probs}")
+            # print(f"Teacher probs: {teacher_probs}")
             
             # Compute KL divergence loss: KL(teacher || student)
             # This measures how much the student distribution differs from teacher distribution
@@ -308,6 +316,8 @@ class SimpleImitationTrainer:
             )
             
             total_loss += loss.item()
+            loss_sums[label] = loss_sums.get(label, 0.0) + loss.item()
+            count_per_teacher[label] = count_per_teacher.get(label, 0) + 1
             
             # Backward pass
             self.optimizer.zero_grad()
@@ -318,13 +328,23 @@ class SimpleImitationTrainer:
                 torch.nn.utils.clip_grad_norm_(self.student_model.parameters(), self.gradient_clip_norm)
             
             self.optimizer.step()
-        
-        return total_loss / len(obs_batch)
+        # Compute averages per teacher
+        loss_per_teacher = {k: loss_sums[k] / count_per_teacher[k] for k in loss_sums}
+        return total_loss / len(obs_batch), loss_per_teacher
     
     def collect_data(self, num_episodes: int = 10):
-        """Collect observation-teacher action pairs by rolling out episodes with student."""
+        """Collect observation-teacher action pairs by rolling out episodes with student.
+
+        Returns
+        -------
+        observations : list[dict]
+        teacher_probs : list[Tensor]
+        teacher_labels : list[str]
+            Label (env1, env2, …) for each sample so we can compute per-teacher loss.
+        """
         observations = []
         teacher_probs = []
+        teacher_labels = []
         
         # Track teacher usage for verification
         teacher_usage = {teacher: 0 for teacher in self.teacher_configs}
@@ -351,6 +371,7 @@ class SimpleImitationTrainer:
                 # Store the observation and teacher probabilities
                 observations.append(obs_tensors.copy())
                 teacher_probs.append(teacher_probs_sample)
+                teacher_labels.append(current_teacher)
                 
                 # Get student action to continue episode (using same teacher for consistency)
                 with torch.no_grad():
@@ -366,7 +387,7 @@ class SimpleImitationTrainer:
             self.cycle_to_next_teacher()
         
         print(f"  Training data collected using teachers: {teacher_usage}")
-        return observations, teacher_probs
+        return observations, teacher_probs, teacher_labels
     
     def train(self):
         """Main training loop."""
@@ -391,11 +412,12 @@ class SimpleImitationTrainer:
             print(f"\nIteration {iteration} (Step {step}/{self.config.total_timesteps})")
             
             # Collect data from episode rollouts
-            observations, teacher_probs = self.collect_data(episodes_per_iteration)
+            observations, teacher_probs, teacher_labels = self.collect_data(episodes_per_iteration)
             
             # Train on collected data
-            loss = self.train_step(observations, teacher_probs)
+            loss, loss_per_teacher = self.train_step(observations, teacher_probs, teacher_labels)
             print(f"  Training loss: {loss:.6f}")
+            print(f"  Loss per teacher: {loss_per_teacher}")
             
             # Update step count (approximate based on data collected)
             prev_step = step
@@ -404,11 +426,15 @@ class SimpleImitationTrainer:
             
             # Log to wandb
             if self.config.track and wandb.run is not None:
-                wandb.log({
+                log_dict = {
                     'train/imitation_loss': loss,
                     'train/iteration': iteration,
                     'train/samples_collected': len(observations)
-                }, step=step)
+                }
+                # Add per-teacher losses
+                for teacher_label, teacher_loss in loss_per_teacher.items():
+                    log_dict[f'train/imitation_loss_{teacher_label}'] = teacher_loss
+                wandb.log(log_dict, step=step)
             
             # Check if we've crossed an evaluation boundary
             # Calculate how many eval_freq intervals we've passed since last evaluation
@@ -440,10 +466,26 @@ class SimpleImitationTrainer:
         
         # 2. Evaluate student on each teacher configuration (with proper masking)
         print("🎓 Evaluating student on teacher subsets...")
+        env_means, env_stds, env_lengths = [], [], []
         for i in range(1, self.config.num_eval_configs + 1):
             env_name = f'env{i}'
             teacher_keys = getattr(self.config.eval_keys, env_name)
-            self._evaluate_environment(env_name, teacher_keys, n_episodes)
+            env_mean_return, env_mean_std, env_mean_length = self._evaluate_environment(env_name, teacher_keys, n_episodes)
+            env_means.append(env_mean_return)
+            env_stds.append(env_mean_std)
+            env_lengths.append(env_mean_length)
+        
+        if self.config.track and wandb.run is not None:
+            agg_log = {
+                "full_eval_return/mean_return": np.mean(env_means),
+                "full_eval/std_return": np.mean(env_stds),
+                "full_eval/mean_length": np.mean(env_lengths)
+            }
+            step_to_use = getattr(self, 'current_step', None)
+            if step_to_use is not None:
+                wandb.log(agg_log, step=step_to_use)
+            else:
+                wandb.log(agg_log)
         
         # 3. Evaluate each teacher on their specific environment configuration
         self._evaluate_teachers(n_episodes)
@@ -590,6 +632,8 @@ class SimpleImitationTrainer:
                 wandb.log(metrics_to_log)
         else:
             print(f"    Wandb logging skipped: track={self.config.track}, wandb.run={wandb.run is not None}")
+        
+        return mean_return, std_return, mean_length
 
     def _evaluate_teachers(self, n_episodes: int):
         """Evaluate each teacher on their specific environment configuration."""
