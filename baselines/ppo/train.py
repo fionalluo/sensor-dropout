@@ -457,7 +457,8 @@ def train_ppo(envs, config, seed, enable_custom_eval=True):
     print(f"  clip_range_vf: {clip_range_vf}")
     print(f"  ent_coef: {ent_coef}")
     
-    # Create PPO model with configurable hyperparameters
+    tb_log = f"./tb_logs/ppo-{config.task}-{config.exp_name}-seed{seed}"
+
     model = PPO(
         "MultiInputPolicy",
         vec_env,
@@ -474,9 +475,20 @@ def train_ppo(envs, config, seed, enable_custom_eval=True):
         max_grad_norm=max_grad_norm,
         verbose=1,
         seed=seed,
-        tensorboard_log=f"./tb_logs/ppo-{config.task}-{config.exp_name}-seed{seed}",
+        tensorboard_log=tb_log,
     )
-    
+
+    # ------------------------------------------------------------------
+    # SB3 v2.6+ no longer creates a default logger inside BaseAlgorithm.
+    # We must explicitly configure one before any callbacks access it
+    # (e.g., during the initial evaluation below).
+    # ------------------------------------------------------------------
+    from stable_baselines3.common.logger import configure  # local import to avoid circular issues
+
+    # Use the same directory as tensorboard so W&B can sync it easily
+    new_logger = configure(folder=tb_log, format_strings=["stdout", "csv", "tensorboard"])
+    model.set_logger(new_logger)
+
     # Create evaluation callbacks
     eval_callback = EvalCallback(
         filtered_eval_env,  # Use filtered environment (same as training)
@@ -551,7 +563,6 @@ def parse_args():
     parser.add_argument('--num_envs', type=int, default=8, help="Number of parallel environments.")
     parser.add_argument('--total_timesteps', type=int, default=500000, help="Total timesteps for training.")
     parser.add_argument('--use_wandb', action='store_true', help="Enable wandb logging.")
-    parser.add_argument('--no_wandb', action='store_true', help="Disable wandb logging.")
     parser.add_argument('--wandb_project', type=str, default="sensor-dropout", help="Wandb project name.")
     return parser.parse_args()
 

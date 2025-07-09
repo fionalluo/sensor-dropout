@@ -20,6 +20,8 @@ CONFIGS=(
   # "gymnasium_blindpick"
 )
 
+USE_SLURM=true
+
 NUM_SEEDS=1
 INITIAL_SEED=$(generate_unique_seed)
 
@@ -43,13 +45,23 @@ for CONFIG in "${CONFIGS[@]}"; do
     echo "Training subset policies for config ${CONFIG} with seed ${SEED}"
     echo "Output directory: ${OUTPUT_DIR}"
 
-    timeout 8h python3 -u subset_policies/train_subset_policies.py \
-      --configs ${CONFIG} \
-      --seed "$SEED" \
-      --output_dir "$OUTPUT_DIR" \
-      --policy_type "$POLICY_TYPE" \
-      --cuda \
-      --debug
+    # Build base command
+    CMD=(python3 -u subset_policies/train_subset_policies.py
+      --configs ${CONFIG}
+      --seed "$SEED"
+      --output_dir "$OUTPUT_DIR"
+      --policy_type "$POLICY_TYPE"
+      --cuda
+      --debug)
+
+    # Append Slurm flag if requested
+    if [ "$USE_SLURM" = true ]; then
+      CMD+=(--slurm)
+      CMD+=(--job_name "subset_policy_${CONFIG}_${SEED}")
+    fi
+
+    echo "Running: ${CMD[@]}"
+    timeout 8h "${CMD[@]}"
 
     if [ $? -eq 124 ]; then
       echo "Command timed out for config ${CONFIG} and seed ${SEED}."

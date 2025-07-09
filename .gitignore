@@ -127,3 +127,4 @@ slurm_outs/
 *.npz
 *.zip
 *.logs
+*logs/

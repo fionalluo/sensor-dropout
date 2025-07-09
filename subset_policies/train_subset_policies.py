@@ -38,6 +38,9 @@ from baselines.ppo.train import train_ppo
 from baselines.shared.config_utils import dict_to_namespace
 from stable_baselines3 import PPO
 
+# Slurm helper
+from slurm_utils import submit_to_slurm, add_slurm_args, slurm_kwargs_from_args
+
 def set_seed(seed):
     """Set random seed for reproducibility."""
     random.seed(seed)
@@ -65,6 +68,13 @@ def parse_args():
                        help='Type of policy to train (only ppo supported for SB3)')
     parser.add_argument('--debug', action='store_true',
                        help='Enable debug mode')
+
+    # Subset selection
+    parser.add_argument('--subset', nargs='+', default=None,
+                       help="Which subset(s) to train (e.g. env1 env2). If omitted trains all.")
+
+    # Add standard Slurm flags (re-usable across scripts)
+    add_slurm_args(parser)
     return parser.parse_args()
 
 def load_config(configs_names=None, policy_type='ppo'):
@@ -169,6 +179,39 @@ def train_subset_policy(config, subset_name, eval_keys, output_dir, device, poli
     
     return policy_path
 
+def dispatch_subsets_via_slurm(args, subset_names, output_dir, seed):
+    """Submit each *subset_name* as a separate Slurm job then return."""
+    from pathlib import Path
+
+    slurm_common = slurm_kwargs_from_args(args) | {"out_dir": "slurm_outs/subset_policies"}
+
+    for idx, subset_name in enumerate(subset_names):
+        cmd = build_subset_cmd(Path(__file__).resolve(), args, subset_name, output_dir, seed)
+        submit_to_slurm(cmd, idx=idx, **slurm_common)
+
+    print("✅ All subset training jobs submitted to Slurm.")
+
+def build_subset_cmd(script_path, args, subset_name, output_dir, seed):
+    """Return the shell command string that trains *subset_name*."""
+    parts = [
+        "python -u", str(script_path),
+        "--configs", " ".join(args.configs) if args.configs else "",
+        "--seed", str(seed),
+        "--output_dir", output_dir,
+        "--policy_type", args.policy_type,
+        "--subset", subset_name,
+    ]
+
+    # Preserve relevant boolean flags
+    if args.cuda:
+        parts.append("--cuda")
+    if args.track:
+        parts.append("--track")
+    if args.debug:
+        parts.append("--debug")
+
+    # Remove empty strings and join
+    return " ".join(filter(None, parts)) 
 def main():
     """Main entry point for training subset policies."""
     args = parse_args()
@@ -205,12 +248,26 @@ def main():
     
     num_eval_configs = config.num_eval_configs
     print(f"Number of eval configs: {num_eval_configs}")
-    
-    # Train policies for each subset in reverse order
+
+    # Determine which subsets to process
+    subset_names = (args.subset if args.subset is not None
+                    else [f"env{i}" for i in range(num_eval_configs, 0, -1)])
+
+    # Prepare common Slurm kwargs once if needed
+    slurm_common = slurm_kwargs_from_args(args) | {"out_dir": "slurm_outs/subset_policies"}
+
     trained_policies = {}
-    
-    for subset_idx in range(num_eval_configs, 0, -1):  # Start from highest, go down to 1
-        subset_name = f"env{subset_idx}"
+
+    for idx, subset_name in enumerate(subset_names):
+
+        # --- Slurm path --------------------------------------------------
+        if args.slurm:
+            from pathlib import Path
+            cmd = build_subset_cmd(Path(__file__).resolve(), args, subset_name, output_dir, config.seed)
+            submit_to_slurm(cmd, idx=idx, **slurm_common)
+            continue  # Skip local training
+
+        # --- Local path --------------------------------------------------
         
         # Get eval keys for this subset
         if hasattr(config, 'eval_keys') and hasattr(config.eval_keys, subset_name):
@@ -229,6 +286,11 @@ def main():
             policy_type=args.policy_type, debug=args.debug
         )
         trained_policies[subset_name] = policy_path
+
+    # If we only dispatched to Slurm, nothing else to report
+    if args.slurm:
+        print("✅ All subset training jobs submitted to Slurm.")
+        return
     
     print(f"\n{'='*60}")
     print("Training completed!")
@@ -248,3 +310,4 @@ if __name__ == "__main__":
     # Use 'spawn' for multiprocessing to avoid issues with libraries like wandb
     mp.set_start_method("spawn", force=True)
     main() 
+
