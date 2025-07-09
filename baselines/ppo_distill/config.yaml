@@ -70,6 +70,9 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
   total_timesteps: 400000  # Reduced for testing
   # Student sees all privileged observations
   keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
+  # keys: 
+  #   mlp_keys: '\b(neighbors_unprivileged|door_unprivileged|doors_unlocked_unprivileged|position|has_key)\b'
+  #   cnn_keys: '^$'
   # Reduced learning rate for stability in simple grid environment
   distillation:
     learning_rate: 1e-4    # Increased since we removed L2 reg and use cross entropy

@@ -58,7 +58,6 @@ class SimpleImitationTrainer:
         print(f"Simple Imitation Learning initialized")
         print(f"Student keys: {self.student_keys}")
         print(f"Teacher configs: {self.teacher_configs}")
-        print(f"Current teacher: {self.get_current_teacher_config()}")
         print(f"Action space: {self.action_space}")
     
     def _obs_to_tensors(self, obs: Dict, device: str = None) -> Dict[str, torch.Tensor]:
@@ -210,8 +209,8 @@ class SimpleImitationTrainer:
         print(f"Extracted student model: {type(student_model)}")
         return student_model, action_space
     
-    def get_teacher_action(self, full_obs: Dict, teacher_config: str = None) -> torch.Tensor:
-        """Get teacher action logits for given observation."""
+    def get_teacher_probs(self, full_obs: Dict, teacher_config: str = None) -> torch.Tensor:
+        """Get teacher action probabilities for given observation."""
         # Use current teacher if none specified
         if teacher_config is None:
             teacher_config = self.get_current_teacher_config()
@@ -233,27 +232,29 @@ class SimpleImitationTrainer:
                 print(f"ERROR: Teacher {teacher_config} expects key '{expected_key}' but it's not in observation!")
                 import sys
                 sys.exit(1)
-        
-        print(f"Teacher obs keys: {list(teacher_obs.keys())}")
-        
+                
         # Convert to numpy for SB3 and add batch dimension
         obs_numpy = self._obs_to_numpy(teacher_obs)
         obs_batch = self._add_batch_dim(obs_numpy)
         
-        # Get teacher logits
+        # Get teacher probabilities directly
         with torch.no_grad():
             obs_tensor = teacher_agent.policy.obs_to_tensor(obs_batch)[0]
             distribution = teacher_agent.policy.get_distribution(obs_tensor)
-            if hasattr(distribution.distribution, 'logits'):
-                teacher_logits = distribution.distribution.logits.squeeze(0)
+            if hasattr(distribution.distribution, 'probs'):
+                teacher_probs = distribution.distribution.probs.squeeze(0)
             else:
-                # Fallback for continuous actions
-                teacher_logits = torch.zeros(self.action_space.n, device=self.device)
+                # Fallback: compute probabilities from logits
+                if hasattr(distribution.distribution, 'logits'):
+                    teacher_probs = F.softmax(distribution.distribution.logits.squeeze(0), dim=-1)
+                else:
+                    # Fallback for continuous actions - uniform distribution
+                    teacher_probs = torch.ones(self.action_space.n, device=self.device) / self.action_space.n
         
-        return teacher_logits.to(self.device)
+        return teacher_probs.to(self.device)
     
-    def get_student_logits(self, full_obs: Dict, teacher_config: str = None) -> torch.Tensor:
-        """Get student action logits for given observation (after masking)."""
+    def get_student_probs(self, full_obs: Dict, teacher_config: str = None) -> torch.Tensor:
+        """Get student action probabilities for given observation (after masking)."""
         # Use current teacher if none specified
         if teacher_config is None:
             teacher_config = self.get_current_teacher_config()
@@ -273,40 +274,40 @@ class SimpleImitationTrainer:
             self.student_keys,
             all_teacher_keys,
             device=None,
-            debug=True
+            debug=False
         )
                 
         # Convert to numpy for SB3 model and add batch dimension
         obs_numpy = self._obs_to_numpy(masked_obs)
         obs_batch = self._add_batch_dim(obs_numpy)
         
-        # Get student logits
+        # Get student probabilities directly
         obs_tensor = self.student_model.obs_to_tensor(obs_batch)[0]
         distribution = self.student_model.get_distribution(obs_tensor)
-        student_logits = distribution.distribution.logits.squeeze(0)
+        student_probs = distribution.distribution.probs.squeeze(0)
         
-        return student_logits
+        return student_probs
     
-    def train_step(self, obs_batch: List[Dict], teacher_logits_batch: List[torch.Tensor]) -> float:
-        """Single training step with batch of observations and teacher logits."""
+    def train_step(self, obs_batch: List[Dict], teacher_probs_batch: List[torch.Tensor]) -> float:
+        """Single training step with batch of observations and teacher probabilities."""
         total_loss = 0.0
         
-        for obs, teacher_logits in zip(obs_batch, teacher_logits_batch):
-            # Get student logits
-            student_logits = self.get_student_logits(obs)
+        for obs, teacher_probs in zip(obs_batch, teacher_probs_batch):
+            # Get student probabilities directly
+            student_probs = self.get_student_probs(obs)
             
-            print(f"Student logits, Teacher logits: {student_logits}, {teacher_logits}")
+            print(f"Student probs: {student_probs}")
+            print(f"Teacher probs: {teacher_probs}")
             
-            # Compute cross entropy loss with teacher distribution as soft targets
-            teacher_probs = F.softmax(teacher_logits, dim=-1)
+            # Compute KL divergence loss: KL(teacher || student)
+            # This measures how much the student distribution differs from teacher distribution
+            loss = F.kl_div(
+                torch.log(student_probs + 1e-8),  # log probabilities of student (add small epsilon for stability)
+                teacher_probs,                    # target probabilities from teacher
+                reduction='batchmean'
+            )
             
-            loss = F.cross_entropy(student_logits.unsqueeze(0), teacher_probs.unsqueeze(0))
             total_loss += loss.item()
-            
-            if self.debug and torch.isnan(loss):
-                print(f"Student logits: {student_logits}")
-                print(f"Teacher logits: {teacher_logits}")
-                print(f"Teacher probs: {teacher_probs}")
             
             # Backward pass
             self.optimizer.zero_grad()
@@ -323,19 +324,14 @@ class SimpleImitationTrainer:
     def collect_data(self, num_episodes: int = 10):
         """Collect observation-teacher action pairs by rolling out episodes with student."""
         observations = []
-        teacher_logits = []
-        
-        # 🧪 DEBUGGING: Only use env4 for training (most limited teacher)
-        # This will help us test if the student can learn from a single teacher
-        debug_single_teacher = 'env4'
-        print(f"  🧪 DEBUG MODE: Training ONLY with {debug_single_teacher} (most limited teacher)")
+        teacher_probs = []
         
         # Track teacher usage for verification
         teacher_usage = {teacher: 0 for teacher in self.teacher_configs}
         
         for episode in range(num_episodes):
-            # 🧪 DEBUGGING: Use only env4 instead of cycling through all teachers
-            current_teacher = debug_single_teacher  # Always use env4
+            # Get current teacher and cycle through all teachers
+            current_teacher = self.get_current_teacher_config()
             teacher_usage[current_teacher] += 1
                         
             # Start episode
@@ -349,39 +345,33 @@ class SimpleImitationTrainer:
                 # Convert observation to tensors
                 obs_tensors = self._obs_to_tensors(obs)
                 
-                # Get teacher action for this state (using current teacher)
-                teacher_logits_sample = self.get_teacher_action(obs_tensors, current_teacher)
+                # Get teacher probabilities for this state (using current teacher)
+                teacher_probs_sample = self.get_teacher_probs(obs_tensors, current_teacher)
                 
-                # Store the observation and teacher action
+                # Store the observation and teacher probabilities
                 observations.append(obs_tensors.copy())
-                teacher_logits.append(teacher_logits_sample)
+                teacher_probs.append(teacher_probs_sample)
                 
                 # Get student action to continue episode (using same teacher for consistency)
                 with torch.no_grad():
-                    student_logits = self.get_student_logits(obs_tensors, current_teacher)
-                    action_probs = F.softmax(student_logits, dim=-1)
+                    student_probs = self.get_student_probs(obs_tensors, current_teacher)
                     # Use some exploration - not just greedy
-                    action = torch.multinomial(action_probs, 1).item()
+                    action = torch.multinomial(student_probs, 1).item()
                 
                 # Step environment with student action
                 obs, reward, done, truncated, info = self.env.step(action)
                 episode_length += 1
                         
-            # 🧪 DEBUGGING: Skip teacher cycling - we're only using env4
-            # self.cycle_to_next_teacher()  # Commented out for debugging
+            # Cycle to next teacher for next episode
+            self.cycle_to_next_teacher()
         
-        print(f"  🧪 Training data collected using teachers: {teacher_usage}")
-        return observations, teacher_logits
+        print(f"  Training data collected using teachers: {teacher_usage}")
+        return observations, teacher_probs
     
     def train(self):
         """Main training loop."""
-        print("=" * 60)
-        print("🧪 DEBUG MODE: TRAINING ONLY ON env4 (MOST LIMITED TEACHER)")
-        print("This is a test to verify single-teacher imitation works.")
-        print("We'll still evaluate on all environments to see if the student")
-        print("can generalize from learning only the most limited teacher.")
-        print("=" * 60)
         print(f"Starting simple imitation learning for {self.config.total_timesteps} steps")
+        print(f"Training with multi-teacher distillation from: {self.teacher_configs}")
         
         step = 0
         iteration = 0
@@ -401,10 +391,10 @@ class SimpleImitationTrainer:
             print(f"\nIteration {iteration} (Step {step}/{self.config.total_timesteps})")
             
             # Collect data from episode rollouts
-            observations, teacher_logits = self.collect_data(episodes_per_iteration)
+            observations, teacher_probs = self.collect_data(episodes_per_iteration)
             
             # Train on collected data
-            loss = self.train_step(observations, teacher_logits)
+            loss = self.train_step(observations, teacher_probs)
             print(f"  Training loss: {loss:.6f}")
             
             # Update step count (approximate based on data collected)
@@ -506,9 +496,7 @@ class SimpleImitationTrainer:
         mean_return = np.mean(episode_returns)
         std_return = np.std(episode_returns)
         mean_length = np.mean(episode_lengths)
-        
-        print(f"    Student Default: mean_return={mean_return:.2f}, std_return={std_return:.2f}, mean_length={mean_length:.1f}")
-        
+                
         # Log to wandb - this is the main student performance metric
         if self.config.track and wandb.run is not None:
             metrics_to_log = {
@@ -545,35 +533,28 @@ class SimpleImitationTrainer:
                 # Convert observations to tensors for masking
                 obs_tensors = self._obs_to_tensors(obs)
                 
-                # Parse teacher keys from patterns to get actual key list
-                teacher_mlp_keys, teacher_cnn_keys = self._parse_keys_from_patterns(teacher_keys, obs_tensors.keys())
-                all_teacher_keys = teacher_mlp_keys + teacher_cnn_keys
-                
-                # Mask observations for the student using shared helper
-                masked_obs = mask_observations_for_student(
-                    obs_tensors, 
-                    self.student_keys, 
-                    all_teacher_keys, 
-                    device=None,  # Use CPU for evaluation
-                    debug=False
-                )
-                
-                # Convert to numpy and handle shape issues from masking
-                masked_obs_numpy = self._obs_to_numpy(masked_obs)
-                for key, value_np in masked_obs_numpy.items():
-                    # Handle potential shape issues from masking
-                    if len(value_np.shape) > 1 and (value_np.shape[0] <= 4 or value_np.shape[1] <= 4):
-                        masked_obs_numpy[key] = value_np.flatten()
-                
-                # Add batch dimension
-                obs_batch = self._add_batch_dim(masked_obs_numpy)
-                
-                # Get action from student policy
+                # Get teacher probabilities for this environment configuration
                 with torch.no_grad():
-                    obs_tensor = self.student_model.obs_to_tensor(obs_batch)[0]
-                    distribution = self.student_model.get_distribution(obs_tensor)
-                    action_probs = F.softmax(distribution.distribution.logits, dim=-1)
-                    action = torch.argmax(action_probs).item()
+                    teacher_probs = self.get_teacher_probs(obs_tensors, env_name)
+                    teacher_action = torch.argmax(teacher_probs).item()
+                
+                # Get student probabilities (with masking)
+                with torch.no_grad():
+                    student_probs = self.get_student_probs(obs_tensors, env_name)
+                    student_action = torch.argmax(student_probs).item()
+                
+                # Compare teacher vs student actions for debugging
+                # if teacher_action != student_action:
+                #     print(f"    [{env_name}] Step {episode_length}: ACTION MISMATCH!")
+                #     print(f"      Teacher action: {teacher_action}, probs: {teacher_probs.detach().cpu().numpy()}")
+                #     print(f"      Student action: {student_action}, probs: {student_probs.detach().cpu().numpy()}")
+                # elif episode == 0 and episode_length < 5:  # Show first few steps of first episode
+                #     print(f"    [{env_name}] Step {episode_length}: actions match ({teacher_action})")
+                #     print(f"      Teacher probs: {teacher_probs.detach().cpu().numpy()}")
+                #     print(f"      Student probs: {student_probs.detach().cpu().numpy()}")
+                
+                # Use student action to step environment (since we're evaluating the student)
+                action = student_action
                 
                 # Step environment
                 obs, reward, done, truncated, info = self.env.step(action)
