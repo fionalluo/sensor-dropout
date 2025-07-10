@@ -120,7 +120,7 @@ gymnasium_tigerdoorkeylarge:
 
 gymnasium_maze: &maze_base
   task: gymnasium_Maze7x7-v0
-  total_timesteps: 400000
+  total_timesteps: 500000
   keys: {mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b', cnn_keys: '^$'}  # omit the distance key
   # Reduced learning rate for stability in simple grid environment
   ppo:

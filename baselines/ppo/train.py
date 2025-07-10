@@ -366,7 +366,8 @@ class CustomEvalCallback(BaseCallback):
                 for key, value in obs.items():
                     if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
                         if isinstance(value, np.ndarray):
-                            obs_tensors[key] = torch.tensor(value, dtype=torch.float32)
+                            # Make a copy to handle negative strides
+                            obs_tensors[key] = torch.tensor(value.copy(), dtype=torch.float32)
                         else:
                             obs_tensors[key] = torch.tensor([value], dtype=torch.float32)
                 
@@ -476,7 +477,7 @@ def train_ppo(envs, config, seed, enable_custom_eval=True):
     set_random_seed(seed)
     
     # Create environment function (identical to train_blindpick.py)
-    def _make_env():
+    def _make_env(env_idx=0):
         # Create the base environment using gymnasium
         suite, task = config.task.split('_', 1)
         env = gym.make(task)
@@ -491,7 +492,9 @@ def train_ppo(envs, config, seed, enable_custom_eval=True):
                 cnn_keys=cnn_keys
             )
         
-        env.reset(seed=seed)
+        # Each environment gets a different seed for proper randomization
+        env_seed = seed + env_idx
+        env.reset(seed=env_seed)
         return env
     
     # Create evaluation environment function (without filtering)
@@ -522,12 +525,12 @@ def train_ppo(envs, config, seed, enable_custom_eval=True):
         env.reset(seed=seed)
         return env
     
-    # Create vectorized environment for SB3 (identical to train_blindpick.py)
+    # Create vectorized environment for SB3 - each env gets different seed
     if config.num_envs > 1:
-        env_fns = [lambda i=i: _make_env() for i in range(config.num_envs)]
+        env_fns = [lambda i=i: _make_env(env_idx=i) for i in range(config.num_envs)]
         vec_env = SubprocVecEnv(env_fns)
     else:
-        vec_env = DummyVecEnv([_make_env])
+        vec_env = DummyVecEnv([lambda: _make_env(env_idx=0)])
 
     vec_env = VecMonitor(vec_env)
 
