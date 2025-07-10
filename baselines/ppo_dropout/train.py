@@ -608,16 +608,18 @@ def train_ppo_dropout(envs, config, seed):
     set_random_seed(seed)
     
     # Create base environment function (unfiltered - contains all keys)
-    def _make_base_env():
+    def _make_base_env(env_idx=0):
         suite, task = config.task.split('_', 1)
         env = gym.make(task)
-        env.reset(seed=seed)
+        # Each environment gets a different seed for proper randomization
+        env_seed = seed + env_idx
+        env.reset(seed=env_seed)
         return env
     
     # Create environment function with episode-level masking
-    def _make_env():
+    def _make_env(env_idx=0):
         # Create the base environment using gymnasium (unfiltered - contains all keys)
-        base_env = _make_base_env()
+        base_env = _make_base_env(env_idx=env_idx)
         
         # Apply episode-level masking wrapper that randomly selects environment subsets
         # This wrapper will mask observations but keep the observation space unchanged
@@ -653,12 +655,12 @@ def train_ppo_dropout(envs, config, seed):
         env.reset(seed=seed)
         return env
 
-    # Create vectorized environment for SB3 (identical to train_blindpick.py)
+    # Create vectorized environment for SB3 - each env gets different seed
     if config.num_envs > 1:
-        env_fns = [lambda i=i: _make_env() for i in range(config.num_envs)]
+        env_fns = [lambda i=i: _make_env(env_idx=i) for i in range(config.num_envs)]
         vec_env = SubprocVecEnv(env_fns)
     else:
-        vec_env = DummyVecEnv([_make_env])
+        vec_env = DummyVecEnv([lambda: _make_env(env_idx=0)])
 
     vec_env = VecMonitor(vec_env)
 
