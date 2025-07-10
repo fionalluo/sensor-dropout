@@ -4,7 +4,7 @@ defaults:
   torch_deterministic: true
   cuda: true
   track: true
-  wandb_project: "ppo-baseline"
+  wandb_project: "baseline-710"
   wandb_entity: null
   capture_video: false
 
@@ -109,13 +109,6 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
     env4:  # must press button and get key to reveal unlocked doors and tiger/treasure relative position. starts with nothing
       mlp_keys: '\b(neighbors_unprivileged|door_unprivileged|doors_unlocked_unprivileged|position|has_key)\b'
       cnn_keys: '^$'
-    
-  eval:
-    eval_freq: 2048
-    n_eval_episodes: 5
-    eval_envs: 4
-    video_log_interval: 1
-    num_eval_configs: 4
 
   exp_name: "tigerdoorkey_ppo"
 
@@ -132,9 +125,6 @@ gymnasium_maze: &maze_base
   # Reduced learning rate for stability in simple grid environment
   ppo:
     learning_rate: 1e-4      # Reduced from 3e-4 for more stable learning
-  eval:
-    eval_freq: 2048
-    n_eval_episodes: 5
   num_eval_configs: 6
   eval_keys:  # Note that neighbors_5x5 only includes neighbors not in the 3x3 neighbors (they are disjoint)
     env1:  # Goal position, neighbors 5x5

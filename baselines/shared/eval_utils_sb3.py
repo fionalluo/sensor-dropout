@@ -69,7 +69,7 @@ class CustomEvalCallback(BaseCallback):
     def _evaluate_teacher_policies(self):
         """Evaluate each teacher policy on their respective configuration."""
         # Import here to avoid circular imports
-        from baselines.ppo_distill_sb3.ppo_distill_sb3 import ObservationFilterWrapper
+        from baselines.ppo_distill.ppo_distill import ObservationFilterWrapper
         
         for env_name, teacher_keys in self.teacher_keys_by_config.items():
             # Check if teacher policy exists

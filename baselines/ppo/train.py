@@ -149,6 +149,7 @@ class CustomEvalCallback(BaseCallback):
         self.n_eval_episodes = n_eval_episodes
         self.deterministic = deterministic
         self.debug = debug
+        self.last_eval_step = -1  # Track last evaluation step to handle irregular increments
         
         # Get the number of eval configs
         self.num_eval_configs = getattr(config, 'num_eval_configs', 4)
@@ -206,45 +207,153 @@ class CustomEvalCallback(BaseCallback):
         
     def _on_step(self):
         """Called after each step."""
-        # Check if we should run evaluation (same logic as standard EvalCallback)
-        if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
-            print(f"Running custom evaluation at step {self.num_timesteps}...")
+        # Use interval-based evaluation logic like simple_imitation.py
+        if self.eval_freq > 0:
+            current_step = self.num_timesteps
             
-            # Run evaluation for each environment configuration
-            for subset_idx in range(1, self.num_eval_configs + 1):
-                env_name = f"env{subset_idx}"
-                if not hasattr(self.config.eval_keys, env_name):
-                    print(f"Warning: Missing eval_keys for {env_name}")
-                    continue
+            # Handle initial evaluation at step 0
+            if current_step == 0 and self.last_eval_step == -1:
+                print(f"\nInitial evaluation at step {current_step}")
+                self._run_comprehensive_evaluation()
+                self.last_eval_step = current_step
+            else:
+                # Check if we've crossed an evaluation boundary
+                prev_eval_count = self.last_eval_step // self.eval_freq
+                current_eval_count = current_step // self.eval_freq
                 
-                eval_keys = getattr(self.config.eval_keys, env_name)
-                mlp_keys_pattern = getattr(eval_keys, 'mlp_keys', '.*')
-                cnn_keys_pattern = getattr(eval_keys, 'cnn_keys', '.*')
-            
-                # Parse teacher keys for this environment
-                available_keys = self._get_available_keys()
-                teacher_mlp_keys = self._parse_keys_from_pattern(mlp_keys_pattern, available_keys)
-                teacher_cnn_keys = self._parse_keys_from_pattern(cnn_keys_pattern, available_keys)
-                teacher_keys = teacher_mlp_keys + teacher_cnn_keys
-                
-                if self.debug:
-                    print(f"[EVAL CALLBACK] {env_name} - Teacher keys: {teacher_keys}")
-                
-                # Run evaluation for this environment
-                self._evaluate_environment(env_name, teacher_keys)
+                if current_eval_count > prev_eval_count:
+                    # We've crossed at least one evaluation boundary
+                    next_eval_step = (prev_eval_count + 1) * self.eval_freq
+                    print(f"\nEvaluation triggered: step {current_step} crossed boundary at {next_eval_step} (eval_freq={self.eval_freq})")
+                    print(f"  Previous eval at step {self.last_eval_step}, current step {current_step}")
+                    
+                    # Run comprehensive evaluation like simple_imitation.py
+                    self._run_comprehensive_evaluation()
+                    self.last_eval_step = current_step
             
         return True
 
-    def _evaluate_environment(self, env_name, teacher_keys):
-        """Evaluate the agent on a specific environment configuration."""
-        # Create a fresh evaluation environment
+    def _run_comprehensive_evaluation(self):
+        """Run comprehensive evaluation like simple_imitation.py."""
+        print(f"Starting comprehensive evaluation with {self.n_eval_episodes} episodes...")
+        print(f"Number of eval configs: {self.num_eval_configs}")
+        
+        # 1. Evaluate student on default training environment (with filtered observations, same as training)
+        self._evaluate_student_default()
+        
+        # 2. Evaluate student on each teacher configuration (with proper masking)
+        env_metrics = {}  # Collect metrics from all environments
+        for i in range(1, self.num_eval_configs + 1):
+            env_name = f'env{i}'
+            if hasattr(self.config.eval_keys, env_name):
+                eval_keys = getattr(self.config.eval_keys, env_name)
+                metrics = self._evaluate_environment(env_name, eval_keys)
+                env_metrics[env_name] = metrics
+            else:
+                print(f"Warning: Missing eval_keys for {env_name}")
+        
+        # 3. Compute and log mean metrics across all environments
+        self._log_mean_metrics(env_metrics)
+        
+        print("Evaluation complete!")
+
+    def _evaluate_student_default(self):
+        """Evaluate student on training environment with student keys only (filtered, same as training)."""
+        print(f"  Evaluating student default (training environment)...")
+        
+        # Create filtered evaluation environment (same as training)
+        suite, task = self.config.task.split('_', 1)
+        eval_env = gym.make(task)
+        
+        # Apply same observation filtering as training
+        if hasattr(self.config, 'keys') and self.config.keys:
+            mlp_keys = getattr(self.config.keys, 'mlp_keys', '.*')
+            cnn_keys = getattr(self.config.keys, 'cnn_keys', '.*')
+            eval_env = ObservationFilterWrapper(
+                eval_env, 
+                mlp_keys=mlp_keys,
+                cnn_keys=cnn_keys
+            )
+        
+        episode_returns = []
+        episode_lengths = []
+        
+        for episode in range(self.n_eval_episodes):
+            # Use deterministic seed for evaluation reproducibility
+            eval_seed = self.config.seed + 20000 + episode
+            obs, _ = eval_env.reset(seed=eval_seed)
+            episode_return = 0
+            episode_length = 0
+            
+            done = False
+            truncated = False
+            
+            while not (done or truncated):
+                # Add batch dimension for SB3's MultiInputPolicy
+                obs_batch = {k: np.expand_dims(v, axis=0) for k, v in obs.items()}
+                
+                # Get student action
+                with torch.no_grad():
+                    action, _ = self.model.predict(obs_batch, deterministic=self.deterministic)
+                
+                # Extract scalar action if it's a numpy array
+                if isinstance(action, np.ndarray):
+                    action = action.item() if action.size == 1 else action[0]
+                
+                # Step environment
+                obs, reward, done, truncated, info = eval_env.step(action)
+                episode_return += reward
+                episode_length += 1
+            
+            episode_returns.append(episode_return)
+            episode_lengths.append(episode_length)
+        
+        # Compute metrics
+        episode_returns = np.array(episode_returns)
+        episode_lengths = np.array(episode_lengths)
+        
+        mean_return = np.mean(episode_returns)
+        std_return = np.std(episode_returns)
+        mean_length = np.mean(episode_lengths)
+        
+        # Log directly to wandb with explicit step, bypassing SB3 logger
+        import wandb
+        if wandb.run is not None:
+            # Use global step count for consistent x-axis scaling
+            wandb.log({
+                "eval/mean_return": mean_return,
+                "eval/std_return": std_return,
+                "eval/mean_length": mean_length,
+                "global_step": self.num_timesteps
+            }, step=self.num_timesteps)
+        
+        eval_env.close()
+
+    def _evaluate_environment(self, env_name, eval_keys):
+        """Evaluate student policy on a specific teacher configuration.
+        
+        Returns:
+            dict: Dictionary containing mean_return, std_return, mean_length
+        """
+        # Parse teacher keys for this environment
+        mlp_keys_pattern = getattr(eval_keys, 'mlp_keys', '.*')
+        cnn_keys_pattern = getattr(eval_keys, 'cnn_keys', '.*')
+        
+        available_keys = self._get_available_keys()
+        teacher_mlp_keys = self._parse_keys_from_pattern(mlp_keys_pattern, available_keys)
+        teacher_cnn_keys = self._parse_keys_from_pattern(cnn_keys_pattern, available_keys)
+        teacher_keys = teacher_mlp_keys + teacher_cnn_keys
+        
+        # Create a fresh evaluation environment (unfiltered)
         eval_env = self.make_eval_env_func()
         
         episode_returns = []
         episode_lengths = []
         
         for episode in range(self.n_eval_episodes):
-            obs, _ = eval_env.reset()
+            # Use deterministic seed for environment evaluation reproducibility
+            eval_seed = self.config.seed + 30000 + hash(env_name) % 1000 + episode
+            obs, _ = eval_env.reset(seed=eval_seed)
             episode_return = 0
             episode_length = 0
             
@@ -267,22 +376,8 @@ class CustomEvalCallback(BaseCallback):
                     self.student_keys, 
                     teacher_keys, 
                     device=None,  # Use CPU for evaluation
-                    debug=self.debug and episode == 0
+                    debug=False
                 )
-                
-                # Debug logging for first episode
-                if self.debug and episode == 0:
-                    print(f"[EVAL DEBUG] {env_name} - Original obs keys: {list(obs_tensors.keys())}")
-                    print(f"[EVAL DEBUG] {env_name} - Student keys: {self.student_keys}")
-                    print(f"[EVAL DEBUG] {env_name} - Teacher keys: {teacher_keys}")
-                    print(f"[EVAL DEBUG] {env_name} - Masked obs keys: {list(masked_obs.keys())}")
-                    # Show some values
-                    for key in list(masked_obs.keys())[:3]:  # First 3 keys
-                        val = masked_obs[key]
-                        if isinstance(val, torch.Tensor):
-                            print(f"[EVAL DEBUG] {env_name} - {key}: shape={tuple(val.shape)}, mean={val.float().mean().item():.4f}")
-                        else:
-                            print(f"[EVAL DEBUG] {env_name} - {key}: value={val}")
                 
                 # Convert masked observations to numpy for SB3
                 masked_obs_numpy = {}
@@ -292,12 +387,8 @@ class CustomEvalCallback(BaseCallback):
                     else:
                         masked_obs_numpy[key] = np.array(value)
                 
-                # Fix: Add batch dimension for SB3's MultiInputPolicy
+                # Add batch dimension for SB3's MultiInputPolicy
                 obs_batch = {k: np.expand_dims(v, axis=0) for k, v in masked_obs_numpy.items()}
-                
-                # Debug: Print shapes for first episode
-                if self.debug and episode == 0:
-                    print(f"[EVAL DEBUG] {env_name} - Batched obs shapes: {dict((k, v.shape) for k, v in obs_batch.items())}")
                 
                 # Get action from policy
                 with torch.no_grad():
@@ -323,18 +414,49 @@ class CustomEvalCallback(BaseCallback):
         mean_return = np.mean(episode_returns)
         std_return = np.std(episode_returns)
         mean_length = np.mean(episode_lengths)
-        std_length = np.std(episode_lengths)
         
-        print(f"  {env_name}: mean_return={mean_return:.2f}, std_return={std_return:.2f}, mean_length={mean_length:.1f}")
+        print(f"    {env_name}: mean_return={mean_return:.2f}, std_return={std_return:.2f}, mean_length={mean_length:.1f}")
         
-        # Log to wandb if available
-        if hasattr(self, 'logger') and self.logger is not None:
-            self.logger.record(f"full_eval_return/{env_name}/mean_return", mean_return)
-            self.logger.record(f"full_eval/{env_name}/std_return", std_return)
-            self.logger.record(f"full_eval/{env_name}/mean_length", mean_length)
-            self.logger.record(f"full_eval/{env_name}/std_length", std_length)
+        # Log individual environment metrics directly to wandb
+        import wandb
+        if wandb.run is not None:
+            wandb.log({
+                f"full_eval_return/{env_name}/mean_return": mean_return,
+                f"full_eval/{env_name}/std_return": std_return,
+                f"full_eval/{env_name}/mean_length": mean_length,
+                "global_step": self.num_timesteps
+            }, step=self.num_timesteps)
         
         eval_env.close()
+        
+        # Return metrics for aggregation
+        return {
+            'mean_return': mean_return,
+            'std_return': std_return,
+            'mean_length': mean_length
+        }
+
+    def _log_mean_metrics(self, env_metrics: dict):
+        """Compute and log mean metrics across all evaluation environments."""
+        if not env_metrics:
+            return
+        
+        # Compute means across all environments
+        mean_mean_return = sum(metrics['mean_return'] for metrics in env_metrics.values()) / len(env_metrics)
+        mean_std_return = sum(metrics['std_return'] for metrics in env_metrics.values()) / len(env_metrics)
+        mean_mean_length = sum(metrics['mean_length'] for metrics in env_metrics.values()) / len(env_metrics)
+        
+        print(f"    env_mean: mean_return={mean_mean_return:.2f}, std_return={mean_std_return:.2f}, mean_length={mean_mean_length:.1f}")
+        
+        # Log mean metrics directly to wandb with explicit step
+        import wandb
+        if wandb.run is not None:
+            wandb.log({
+                f"full_eval_return/env_mean/mean_return": mean_mean_return,
+                f"full_eval/env_mean/std_return": mean_std_return,
+                f"full_eval/env_mean/mean_length": mean_mean_length,
+                "global_step": self.num_timesteps
+            }, step=self.num_timesteps)
 
 # -----------------------------------------------------------------------------
 # Training Function
@@ -528,12 +650,16 @@ def train_ppo(envs, config, seed, enable_custom_eval=True):
             verbose=2,
         ))
 
-    # Perform initial evaluation at step 0
-    print("Performing initial evaluation at step 0...")
+    # Perform initial evaluation at step 0 like simple_imitation.py
+    print("\nInitial evaluation at step 0")
     for callback in callbacks:
-        if hasattr(callback, '_on_step'):
+        # Only run initial evaluation for CustomEvalCallback (comprehensive evaluation)
+        # Skip standard EvalCallback since model logger isn't initialized yet
+        if isinstance(callback, CustomEvalCallback):
             callback.init_callback(model)
-            callback._on_step()
+            # Set num_timesteps to 0 for initial evaluation
+            callback.num_timesteps = 0
+            callback._run_comprehensive_evaluation()
 
     # Train the model
     model.learn(

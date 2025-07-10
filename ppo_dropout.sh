@@ -12,12 +12,12 @@ BASE_LOGDIR=~/logdir/baselines/ppo_dropout
 CONFIGS=(
   "gymnasium_tigerdoorkey"
   # "gymnasium_tigerdoorkeylarge"
-  # "gymnasium_maze"
-  # "gymnasium_maze11"
-  # "gymnasium_blindpick"
+  "gymnasium_maze"
+  "gymnasium_maze11"
+  "gymnasium_blindpick"
 )
 
-NUM_SEEDS=1
+NUM_SEEDS=10
 INITIAL_SEED=$(generate_unique_seed)
 
 SEEDS=()

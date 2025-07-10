@@ -4,7 +4,7 @@ defaults:
   torch_deterministic: true
   cuda: true
   track: true
-  wandb_project: "ppo-baseline"
+  wandb_project: "baseline-710"
   wandb_entity: null
   capture_video: false
 
@@ -76,7 +76,7 @@ defaults:
   # Evaluation settings
   eval:
     eval_freq: 2048  # Evaluate every 2048 callback calls (matches rollout frequency)
-    n_eval_episodes: 5  # Reduced episodes since we're evaluating much more frequently
+    n_eval_episodes: 10  # Reduced episodes since we're evaluating much more frequently
     eval_envs: 4  # Number of parallel environments for evaluation
     video_log_interval: 1  # Log videos every evaluation call
     num_eval_configs: 4
