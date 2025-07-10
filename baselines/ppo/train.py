@@ -365,7 +365,8 @@ class CustomEvalCallback(BaseCallback):
                 for key, value in obs.items():
                     if key not in ['reward', 'is_first', 'is_last', 'is_terminal']:
                         if isinstance(value, np.ndarray):
-                            obs_tensors[key] = torch.tensor(value, dtype=torch.float32)
+                            # Make a copy to handle negative strides
+                            obs_tensors[key] = torch.tensor(value.copy(), dtype=torch.float32)
                         else:
                             obs_tensors[key] = torch.tensor([value], dtype=torch.float32)
                 
