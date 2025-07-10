@@ -41,6 +41,7 @@ import re
 
 _gym_robo.register_robotics_envs()
 import trailenv 
+import highway_env 
 
 # Add project root to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -81,22 +82,22 @@ class ObservationFilterWrapper(gym.ObservationWrapper):
         
         for key, space in original_spaces.items():
             # Determine if this is an image observation (3D with channel dimension)
-            is_image = len(space.shape) == 3 and space.shape[-1] == 3
+            is_image = (len(space.shape) == 3 or len(space.shape) == 4) and space.shape[-1] == 3
             
             if is_image:
                 # Apply CNN key filter for image observations
                 if self.cnn_pattern.search(key):
                     filtered_spaces[key] = space
-                    print(f"Including CNN key: {key}")
+                    print(f"Including CNN key: {key} with shape {space.shape}")
                 else:
-                    print(f"Excluding CNN key: {key}")
+                    print(f"Excluding CNN key: {key} with shape {space.shape}")
             else:
                 # Apply MLP key filter for non-image observations
                 if self.mlp_pattern.search(key):
                     filtered_spaces[key] = space
                     print(f"Including MLP key: {key}")
                 else:
-                    print(f"Excluding MLP key: {key}")
+                    print(f"Excluding MLP key: {key} with shape {space.shape}")
         
         self.observation_space = gym.spaces.Dict(filtered_spaces)
         print(f"Filtered observation space keys: {list(filtered_spaces.keys())}")

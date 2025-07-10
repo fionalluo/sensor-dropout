@@ -128,3 +128,4 @@ slurm_outs/
 *.zip
 *.logs
 *logs/
+*debug/

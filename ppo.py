@@ -24,6 +24,7 @@ import subprocess
 import time
 from pathlib import Path
 from typing import List
+from slurm_utils import submit_to_slurm, add_slurm_args, slurm_kwargs_from_args
 
 # -----------------------------------------------------------------------------
 # Helpers
@@ -46,28 +47,7 @@ def generate_unique_seed() -> int:
 # Slurm helper
 # -----------------------------------------------------------------------------
 
-def submit_to_slurm(cmd: str, *, idx: int, args: argparse.Namespace) -> None:
-    """Submit *cmd* to Slurm via *sbatch --wrap* with CLI-provided options."""
-    out_dir = Path("slurm_outs/ppo")
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    job_name = f"{args.job_name}_{idx}"
-    sbatch_cmd: List[str] = [
-        "sbatch",
-        f"--job-name={job_name}",
-        f"--output={out_dir}/{job_name}-%j.out",
-        f"--time={args.time}",
-        f"--partition={args.partition}",
-        f"--qos={args.qos}",
-        f"--gpus={args.gpus}",
-        f"--mem={args.mem}",
-        f"--cpus-per-task={args.cpus}",
-        "--wrap",
-        cmd,
-    ]
-
-    print("[sbatch]", " ".join(sbatch_cmd))
-    subprocess.run(sbatch_cmd, check=True)
+# (Removed the custom submit_to_slurm helper – we now rely on slurm_utils.submit_to_slurm)
 
 
 # -----------------------------------------------------------------------------
@@ -79,9 +59,6 @@ def parse_args() -> argparse.Namespace:
         description="Run PPO baselines sequentially or submit them as Slurm jobs",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-
-    # Execution mode
-    p.add_argument("--slurm", action="store_true", help="Submit each command via Slurm instead of running locally.")
 
     # Core experiment parameters
     p.add_argument(
@@ -101,14 +78,9 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--wandb_project", default="sensor-dropout", help="Wandb project name.")
 
-    # Slurm options (used only when --slurm is provided)
-    p.add_argument("--job_name", default="ppo", help="Base Slurm job name.")
-    p.add_argument("--time", default="72:00:00", help="Slurm time limit (HH:MM:SS)")
-    p.add_argument("--partition", default="eaton-compute", help="Slurm partition")
-    p.add_argument("--qos", default="ee-high", help="Quality of service")
-    p.add_argument("--gpus", default="1", help="GPUs per job (value passed to --gpus)")
-    p.add_argument("--mem", default="32G", help="Memory per job")
-    p.add_argument("--cpus", default="64", help="CPUs per task")
+    # Slurm flags (including --slurm) via shared helper
+    add_slurm_args(p)
+    p.set_defaults(job_name="ppo")  # Override default base job name
 
     return p.parse_args()
 
@@ -132,6 +104,9 @@ def main() -> None:
 
     timeout_seconds = int(args.timeout_hours * 3600)
 
+    # Prepare common Slurm kwargs once (if needed)
+    slurm_common = slurm_kwargs_from_args(args) | {"out_dir": "slurm_outs/ppo"}
+
     cmd_idx = 0
     for config in args.configs:
         for seed in seeds:
@@ -145,7 +120,7 @@ def main() -> None:
             )
 
             if args.slurm:
-                submit_to_slurm(cmd, idx=cmd_idx, args=args)
+                submit_to_slurm(cmd, idx=cmd_idx, **slurm_common)
                 cmd_idx += 1
                 continue
 

@@ -237,4 +237,73 @@ blindpick_robot_state_vision:
     env1: # robot state + vision
       mlp_keys: 'robot_state'
       cnn_keys: '.*'
-  exp_name: "blindpick_robot_state_vision_ppo" 
+#   exp_name: "blindpick_robot_state_vision_ppo" 
+
+# Highway-Parking (Highway-env)
+gymnasium_highway_parking: &highway_parking_base
+  task: "highway_parkingDict-v0"
+  total_timesteps: 1_000_000  # adjust to taste
+  num_envs: 8                 # e.g. parallel envs during training
+  # We rely solely on rendered images, so no MLP keys
+  keys: {mlp_keys: '^$', cnn_keys: '\b(overhead|left_mirror|right_mirror|rear_camera)\b'}
+
+  # How many “sensor subsets” we will evaluate on.
+  num_eval_configs: 4
+
+  # ---------- Subset definitions ----------
+  # These env1…env4 names must match what your training / evaluation code
+  # expects.  They correspond to the four camera crops you defined in
+  # train_highway.py (overhead, left_mirror, right_mirror, rear_camera).
+  eval_keys:
+    env1:   # overhead camera (full FOV)
+      mlp_keys: '^$'
+      cnn_keys: 'overhead'
+    env2:   # left mirror
+      mlp_keys: '^$'
+      cnn_keys: 'left_mirror'
+    env3:   # right mirror
+      mlp_keys: '^$'
+      cnn_keys: 'right_mirror'
+    env4:   # rear camera
+      mlp_keys: '^$'
+      cnn_keys: 'rear_camera'
+
+  # Logging / bookkeeping
+  exp_name: "highway_parking_ppo"
+  wandb_project: "sensor-dropout" 
+
+
+
+# # Highway-Parking (Highway-env)
+# gymnasium_highway_parking: &highway_parking_base
+#   task: "highway_parkingDict-v0"
+#   total_timesteps: 1_000_000  # adjust to taste
+#   num_envs: 8                 # e.g. parallel envs during training
+#   # We rely solely on rendered images, so no MLP keys
+#   keys: {cnn_keys: '^$', mlp_keys: '\b(overhead|left_mirror|right_mirror|rear_camera)\b'}
+
+#   # How many “sensor subsets” we will evaluate on.
+#   num_eval_configs: 4
+
+#   # ---------- Subset definitions ----------
+#   # These env1…env4 names must match what your training / evaluation code
+#   # expects.  They correspond to the four camera crops you defined in
+#   # train_highway.py (overhead, left_mirror, right_mirror, rear_camera).
+#   eval_keys:
+#     env1:   # overhead camera (full FOV)
+#       cnn_keys: '^$'
+#       mlp_keys: 'overhead'
+
+#     env2:   # left mirror
+#       cnn_keys: '^$'
+#       mlp_keys: 'left_mirror'
+#     env3:   # right mirror
+#       cnn_keys: '^$'
+#       mlp_keys: 'right_mirror'
+#     env4:   # rear camera
+#       cnn_keys: '^$'
+#       mlp_keys: 'rear_camera'
+
+#   # Logging / bookkeeping
+#   exp_name: "highway_parking_ppo"
+#   wandb_project: "sensor-dropout" 
