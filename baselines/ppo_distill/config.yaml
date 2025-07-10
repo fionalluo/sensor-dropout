@@ -4,7 +4,7 @@ defaults:
   torch_deterministic: true
   cuda: false
   track: true
-  wandb_project: "ppo-distill-baseline"
+  wandb_project: "baseline-710"
   wandb_entity: null
 
   task: gymnasium_TigerDoorKey-v0
@@ -27,7 +27,7 @@ defaults:
   # Evaluation settings
   eval:
     eval_freq: 2048  # Evaluate every 2048 steps (matches rollout frequency)
-    n_eval_episodes: 5  # Reduced episodes since we're evaluating much more frequently
+    n_eval_episodes: 20  # Reduced episodes since we're evaluating much more frequently
 
   # Student observation keys (what the student policy can see)
   keys: {mlp_keys: '.*', cnn_keys: '.*'}

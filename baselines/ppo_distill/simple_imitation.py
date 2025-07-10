@@ -511,7 +511,8 @@ class SimpleImitationTrainer:
                     'train/imitation_loss': loss,
                     'train/iteration': iteration,
                     'train/samples_collected': self.config.distillation.batch_size,
-                    'train/learning_rate': self.scheduler.get_last_lr()[0]  # Get current LR from scheduler
+                    'train/learning_rate': self.scheduler.get_last_lr()[0],  # Get current LR from scheduler
+                    'global_step': step
                 }, step=step)
             
             # Check if we've crossed an evaluation boundary
@@ -653,6 +654,7 @@ class SimpleImitationTrainer:
                 # Use current step if available
                 step_to_use = getattr(self, 'current_step', None)
                 if step_to_use is not None:
+                    metrics_to_log['global_step'] = step_to_use
                     wandb.log(metrics_to_log, step=step_to_use)
                 else:
                     wandb.log(metrics_to_log)
@@ -715,6 +717,8 @@ class SimpleImitationTrainer:
             }
             # Use current step if available, otherwise let wandb use its internal counter
             step_to_use = getattr(self, 'current_step', None)
+            if step_to_use is not None:
+                metrics_to_log['global_step'] = step_to_use
             print(f"    Logging to wandb: {list(metrics_to_log.keys())} at step {step_to_use}")
             if step_to_use is not None:
                 wandb.log(metrics_to_log, step=step_to_use)
@@ -786,6 +790,7 @@ class SimpleImitationTrainer:
             # Use current step if available, otherwise let wandb use its internal counter
             step_to_use = getattr(self, 'current_step', None)
             if step_to_use is not None:
+                metrics_to_log['global_step'] = step_to_use
                 wandb.log(metrics_to_log, step=step_to_use)
             else:
                 wandb.log(metrics_to_log)
@@ -821,6 +826,7 @@ class SimpleImitationTrainer:
             # Use current step if available
             step_to_use = getattr(self, 'current_step', None)
             if step_to_use is not None:
+                mean_metrics_to_log['global_step'] = step_to_use
                 wandb.log(mean_metrics_to_log, step=step_to_use)
             else:
                 wandb.log(mean_metrics_to_log)
