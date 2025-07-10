@@ -13,8 +13,8 @@ defaults:
 
   # Multi-teacher distillation specific parameters
   distillation:
-    learning_rate: 3e-4              # Learning rate for PyTorch optimizer
-    batch_size: 64                   # Batch size for distillation training
+    learning_rate: 1e-2              # Learning rate for PyTorch optimizer
+    batch_size: 512                  # Batch size for distillation training
     steps_per_rollout: 128           # Steps per data collection rollout
     num_minibatches: 4               # Number of minibatches per update
     update_epochs: 4                 # Number of training epochs per iteration
@@ -67,7 +67,7 @@ defaults:
 # Tiger Door Key
 gymnasium_tigerdoorkey: &tigerdoorkey_base
   task: gymnasium_TigerDoorKey-v0
-  total_timesteps: 400000  # Reduced for testing
+  total_timesteps: 400000
   # Student sees all privileged observations
   keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
   # keys: 
@@ -75,9 +75,8 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
   #   cnn_keys: '^$'
   # Reduced learning rate for stability in simple grid environment
   distillation:
-    learning_rate: 1e-4    # Increased since we removed L2 reg and use cross entropy
-    gradient_clip_norm: 0.5  # Add gradient clipping for stability
-    l2_regularization: 0.0  # Remove L2 regularization - we want student to match teacher exactly
+    learning_rate: 1e-2    # Increased since we removed L2 reg and use cross entropy
+    batch_size: 512
   eval:
     eval_freq: 2048        # Evaluate every 2048 steps (matches rollout frequency)
     n_eval_episodes: 20     # Increased episodes for more stable evaluation metrics
@@ -89,16 +88,14 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
     env2: # Button-limited teacher (must press button to reveal tiger/treasure relative position)
       mlp_keys: '\b(neighbors_unprivileged_nokey|door_unprivileged|doors_unlocked|position|has_key)\b'
       cnn_keys: '^$'
-
     env3:  # Key-limited teacher (must get key to reveal unlocked doors)
       mlp_keys: '\b(neighbors_unprivileged_nobutton|door|doors_unlocked_unprivileged|position|has_key)\b'
       cnn_keys: '^$'
-
     env4:  # Most limited teacher (must press button and get key)
       mlp_keys: '\b(neighbors_unprivileged|door_unprivileged|doors_unlocked_unprivileged|position|has_key)\b'
       cnn_keys: '^$'
 
-  exp_name: "tigerdoorkey_simple_imitation"
+  exp_name: "tigerdoorkey_ppo_distill"
 
 gymnasium_tigerdoorkeylarge:
   << : *tigerdoorkey_base
@@ -137,13 +134,13 @@ gymnasium_maze: &maze_base
       mlp_keys: '\b(goal_position_unprivileged|position|neighbors_3x3_unprivileged|neighbors_5x5_unprivileged)\b'
       cnn_keys: '^$'
 
-  exp_name: "maze_multi_teacher_distill"
+  exp_name: "maze_ppo_distill"
 
 gymnasium_maze11:
   << : *maze_base
   task: gymnasium_Maze11x11-v0
   total_timesteps: 1500000
-  exp_name: "maze11_multi_teacher_distill"
+  exp_name: "maze11_ppo_distill"
 
 # Blind Pick environment
 gymnasium_blindpick: &blindpick_base
@@ -176,7 +173,7 @@ gymnasium_blindpick: &blindpick_base
       mlp_keys: '.*'
       cnn_keys: 'camera_side'
 
-  exp_name: "blindpick_multi_teacher_distill"
+  exp_name: "blindpick_ppo_distill"
 
 # Specialized configurations for different sensor modalities
 blindpick_oracle_state:
@@ -186,7 +183,7 @@ blindpick_oracle_state:
     env1: # Oracle state teacher (full state information)
       mlp_keys: r'\b(robot_state|obj_state)\b'
       cnn_keys: '^$'
-  exp_name: "blindpick_oracle_state_multi_teacher_distill"
+  exp_name: "blindpick_oracle_state_ppo_distill"
 
 blindpick_vision_only:
   << : *blindpick_base
@@ -195,7 +192,7 @@ blindpick_vision_only:
     env1: # Vision only teacher
       mlp_keys: '^$'
       cnn_keys: '.*'
-  exp_name: "blindpick_vision_only_multi_teacher_distill"
+  exp_name: "blindpick_vision_only_ppo_distill"
 
 blindpick_touch_vision:
   << : *blindpick_base
@@ -204,4 +201,4 @@ blindpick_touch_vision:
     env1: # Touch + vision teacher
       mlp_keys: 'touch'
       cnn_keys: '.*'
-  exp_name: "blindpick_touch_vision_multi_teacher_distill" 
+  exp_name: "blindpick_touch_vision_ppo_distill" 

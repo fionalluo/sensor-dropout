@@ -11,12 +11,23 @@ import gymnasium as gym
 import wandb
 import os
 import re
+import random
 import trailenv
 import sys
 from typing import Dict, List, Tuple, Any
 from stable_baselines3 import PPO
 from baselines.shared.masking_utils import mask_observations_for_student
 from subset_policies.load_subset_policy import SubsetPolicyLoader
+
+
+def set_seed(seed):
+    """Set random seed for reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 class SimpleImitationTrainer:
@@ -30,11 +41,16 @@ class SimpleImitationTrainer:
         
         # Parse student keys
         self.student_keys = self._parse_student_keys(config)
+        print(f"🔍 DEBUG: Parsed student keys: {self.student_keys}")
         
         # Parse all teacher keys  
         self.teacher_keys_by_config = self._get_all_teacher_keys(config)
         self.teacher_configs = list(self.teacher_keys_by_config.keys())
         self.current_teacher_idx = 0  # For cycling through teachers
+        
+        print(f"🔍 DEBUG: Teacher configs and keys:")
+        for config_name, keys in self.teacher_keys_by_config.items():
+            print(f"  {config_name}: {keys.__dict__ if hasattr(keys, '__dict__') else keys}")
         
         # Initialize teacher manager
         self.policy_loader = SubsetPolicyLoader(expert_policy_dir, device)
@@ -43,17 +59,30 @@ class SimpleImitationTrainer:
         self.env = self._create_environment()
         self.student_model, self.action_space = self._create_student_model()
         
-        # Get training hyperparameters
-        distillation_config = getattr(config, 'distillation', {})
-        self.gradient_clip_norm = getattr(distillation_config, 'gradient_clip_norm', None)
-        self.l2_regularization = getattr(distillation_config, 'l2_regularization', 0.0)
+        # Initialize optimizer - use config directly
+        print(f"🔧 Using learning rate: {self.config.distillation.learning_rate} (with cosine annealing)")
         
-        # Initialize optimizer with weight decay for L2 regularization
         self.optimizer = torch.optim.Adam(
             self.student_model.parameters(), 
-            lr=config.learning_rate,
-            weight_decay=self.l2_regularization
+            lr=self.config.distillation.learning_rate,
+            weight_decay=getattr(self.config.distillation, 'l2_regularization', 0.0)
         )
+        
+        # Add cosine annealing learning rate scheduler
+        # T_max is the number of training iterations (total_timesteps / batch_size)
+        max_iterations = self.config.total_timesteps // self.config.distillation.batch_size
+        min_lr = self.config.distillation.learning_rate * 0.01  # Minimum LR is 1% of initial LR
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            self.optimizer, 
+            T_max=max_iterations,
+            eta_min=min_lr
+        )
+        print(f"🔧 Cosine annealing: {max_iterations} iterations, min_lr={min_lr:.6f}")
+        
+        # Evaluate teachers once at initialization (they're static, so no need to re-evaluate)
+        print("🔧 Evaluating teachers once at initialization...")
+        self.teacher_metrics = self._evaluate_teachers_once(self.config.eval.n_eval_episodes)
+        print("✅ Teacher evaluation complete!")
         
         print(f"Simple Imitation Learning initialized")
         print(f"Student keys: {self.student_keys}")
@@ -89,7 +118,7 @@ class SimpleImitationTrainer:
         """Parse student keys from config."""
         suite, task = config.task.split('_', 1)
         temp_env = gym.make(task)
-        sample_obs, _ = temp_env.reset()
+        sample_obs, _ = temp_env.reset(seed=config.seed)
         temp_env.close()
         
         available_keys = [k for k in sample_obs.keys() if k not in ['reward', 'is_first', 'is_last', 'is_terminal']]
@@ -105,7 +134,7 @@ class SimpleImitationTrainer:
         return student_keys
     
     def _get_all_teacher_keys(self, config):
-        """Get all teacher keys from config."""
+        """Get all teacher keys from config (the regex)."""
         teacher_keys_by_config = {}
         for i in range(1, config.num_eval_configs + 1):
             config_name = f'env{i}'
@@ -129,6 +158,11 @@ class SimpleImitationTrainer:
         """Create simple environment."""
         suite, task = self.config.task.split('_', 1)
         env = gym.make(task)
+        
+        # Set environment seed for reproducibility
+        env.reset(seed=self.config.seed)
+        print(f"🔧 Environment seeded with seed: {self.config.seed}")
+        
         return env
     
     def _parse_keys_from_patterns(self, key_patterns, available_keys: List[str]) -> Tuple[List[str], List[str]]:
@@ -168,8 +202,6 @@ class SimpleImitationTrainer:
         for student_key in self.student_keys:
             if student_key not in env_obs_space.spaces:
                 print(f"ERROR: Student key '{student_key}' not found in environment observation space!")
-                print(f"Available keys: {list(env_obs_space.spaces.keys())}")
-                print(f"Student keys from config: {self.student_keys}")
                 import sys
                 sys.exit(1)
             
@@ -178,7 +210,10 @@ class SimpleImitationTrainer:
         
         # Create student observation space using environment's definitions
         student_obs_space = gym.spaces.Dict(student_obs_spaces)
-        print(f"Student observation space: {student_obs_space}")
+        print(f"🔍 DEBUG: Student observation space: {student_obs_space}")
+        print(f"🔍 DEBUG: Student observation space keys: {list(student_obs_space.spaces.keys())}")
+        for key, space in student_obs_space.spaces.items():
+            print(f"  {key}: {space}")
         
         # Create a temporary environment with student observation space
         # We need to do this because self.env has the full observation space and can't be passed in
@@ -214,7 +249,6 @@ class SimpleImitationTrainer:
         # Use current teacher if none specified
         if teacher_config is None:
             teacher_config = self.get_current_teacher_config()
-        
         # Load teacher policy
         teacher_agent, _, _ = self.policy_loader.load_policy(teacher_config)
         
@@ -232,6 +266,23 @@ class SimpleImitationTrainer:
                 print(f"ERROR: Teacher {teacher_config} expects key '{expected_key}' but it's not in observation!")
                 import sys
                 sys.exit(1)
+        
+        # # Debug: Show teacher observations
+        # if self.debug and getattr(self, '_in_training', False):
+        #     print(f"=== TEACHER ({teacher_config}) ===")
+        #     print(f"Teacher observation keys: {list(teacher_obs.keys())}")
+        
+        # # Always print teacher observations for debugging
+        # if getattr(self, '_in_training', False):
+        #     print(f"=== TEACHER ({teacher_config}) OBSERVATIONS ===")
+        #     print(f"Teacher observation keys: {sorted(teacher_obs.keys())}")
+        #     for key in sorted(teacher_obs.keys()):
+        #         value = teacher_obs[key]
+        #         if isinstance(value, torch.Tensor):
+        #             print(f"  {key}: shape={value.shape}, dtype={value.dtype}")
+        #             print(f"    values: {value.flatten().tolist()}")
+        #         else:
+        #             print(f"  {key}: {type(value)} = {value}")
                 
         # Convert to numpy for SB3 and add batch dimension
         obs_numpy = self._obs_to_numpy(teacher_obs)
@@ -250,6 +301,10 @@ class SimpleImitationTrainer:
                 else:
                     # Fallback for continuous actions - uniform distribution
                     teacher_probs = torch.ones(self.action_space.n, device=self.device) / self.action_space.n
+        
+        # Debug: Show teacher action probabilities
+        # if self.debug and getattr(self, '_in_training', False):
+        #     print(f"Teacher action probs: {teacher_probs.detach().cpu().numpy()}")
         
         return teacher_probs.to(self.device)
     
@@ -274,8 +329,25 @@ class SimpleImitationTrainer:
             self.student_keys,
             all_teacher_keys,
             device=None,
-            debug=False
+            debug=False  # Enable debug for now
         )
+        
+        # # Debug: Show student observations (after masking)
+        # if self.debug and getattr(self, '_in_training', False):
+        #     print(f"\n=== STUDENT (masked for {teacher_config}) ===")
+        #     print(f"Student observation keys: {list(masked_obs.keys())}")
+        
+        # # Always print student observations for debugging
+        # if getattr(self, '_in_training', False):
+        #     print(f"=== STUDENT (masked for {teacher_config}) OBSERVATIONS ===")
+        #     print(f"Student observation keys: {sorted(masked_obs.keys())}")
+        #     for key in sorted(masked_obs.keys()):
+        #         value = masked_obs[key]
+        #         if isinstance(value, torch.Tensor):
+        #             print(f"  {key}: shape={value.shape}, dtype={value.dtype}")
+        #             print(f"    values: {value.flatten().tolist()}")
+        #         else:
+        #             print(f"  {key}: {type(value)} = {value}")
                 
         # Convert to numpy for SB3 model and add batch dimension
         obs_numpy = self._obs_to_numpy(masked_obs)
@@ -286,96 +358,130 @@ class SimpleImitationTrainer:
         distribution = self.student_model.get_distribution(obs_tensor)
         student_probs = distribution.distribution.probs.squeeze(0)
         
+        # Debug: Show student action probabilities
+        # if self.debug and getattr(self, '_in_training', False):
+        #     print(f"Student action probs: {student_probs.detach().cpu().numpy()}")
+        
         return student_probs
     
-    def train_step(self, obs_batch: List[Dict], teacher_probs_batch: List[torch.Tensor]) -> float:
-        """Single training step with batch of observations and teacher probabilities."""
-        total_loss = 0.0
-        
-        for obs, teacher_probs in zip(obs_batch, teacher_probs_batch):
-            # Get student probabilities directly
-            student_probs = self.get_student_probs(obs)
-            
-            print(f"Student probs: {student_probs}")
-            print(f"Teacher probs: {teacher_probs}")
-            
-            # Compute KL divergence loss: KL(teacher || student)
-            # This measures how much the student distribution differs from teacher distribution
-            loss = F.kl_div(
-                torch.log(student_probs + 1e-8),  # log probabilities of student (add small epsilon for stability)
-                teacher_probs,                    # target probabilities from teacher
-                reduction='batchmean'
-            )
-            
-            total_loss += loss.item()
-            
-            # Backward pass
-            self.optimizer.zero_grad()
-            loss.backward()
-            
-            # Apply gradient clipping if specified
-            if self.gradient_clip_norm is not None:
-                torch.nn.utils.clip_grad_norm_(self.student_model.parameters(), self.gradient_clip_norm)
-            
-            self.optimizer.step()
-        
-        return total_loss / len(obs_batch)
-    
-    def collect_data(self, num_episodes: int = 10):
-        """Collect observation-teacher action pairs by rolling out episodes with student."""
-        observations = []
-        teacher_probs = []
+    def collect_and_train(self, num_samples: int = 2048) -> float:
+        """Collect a fixed number of samples by rolling out episodes and train on the accumulated batch."""
+        # Set training flag for debug prints
+        self._in_training = True
         
         # Track teacher usage for verification
         teacher_usage = {teacher: 0 for teacher in self.teacher_configs}
         
-        for episode in range(num_episodes):
-            # Get current teacher and cycle through all teachers
+        # Reset gradients at the start
+        self.optimizer.zero_grad()
+        
+        # Initialize lists to collect probabilities
+        student_probs_list = []
+        teacher_probs_list = []
+        
+        # Initialize episode state if not already in progress
+        if not hasattr(self, '_current_obs') or self._current_obs is None:
+            # Start fresh episode with seed for reproducibility
+            episode_seed = self.config.seed + getattr(self, '_episode_count', 0)
+            obs, _ = self.env.reset(seed=episode_seed)
+            self._current_obs = obs
+            self._episode_length = 0
+            self._episode_count = getattr(self, '_episode_count', 0)
+            print(f"Starting new episode {self._episode_count} with seed {episode_seed}")
+        else:
+            # Resume from where we left off
+            obs = self._current_obs
+            print(f"Resuming episode {self._episode_count} from step {self._episode_length}")
+        
+        samples_collected_this_call = 0
+        
+        while samples_collected_this_call < num_samples:
+            # Cycle through teachers for each sample to get diverse training data
             current_teacher = self.get_current_teacher_config()
             teacher_usage[current_teacher] += 1
-                        
-            # Start episode
-            obs, _ = self.env.reset()
-            episode_length = 0
             
-            done = False
-            truncated = False
+            # Convert observation to tensors
+            obs_tensors = self._obs_to_tensors(obs)
             
-            while not (done or truncated) and episode_length < 100:  # Max 100 steps per episode
-                # Convert observation to tensors
-                obs_tensors = self._obs_to_tensors(obs)
-                
-                # Get teacher probabilities for this state (using current teacher)
-                teacher_probs_sample = self.get_teacher_probs(obs_tensors, current_teacher)
-                
-                # Store the observation and teacher probabilities
-                observations.append(obs_tensors.copy())
-                teacher_probs.append(teacher_probs_sample)
-                
-                # Get student action to continue episode (using same teacher for consistency)
-                with torch.no_grad():
-                    student_probs = self.get_student_probs(obs_tensors, current_teacher)
-                    # Use some exploration - not just greedy
-                    action = torch.multinomial(student_probs, 1).item()
-                
-                # Step environment with student action
-                obs, reward, done, truncated, info = self.env.step(action)
-                episode_length += 1
-                        
-            # Cycle to next teacher for next episode
+            # Get student probabilities
+            student_probs = self.get_student_probs(obs_tensors, current_teacher)
+            
+            # Calculate teacher probabilities for this observation
+            teacher_probs = self.get_teacher_probs(obs_tensors, current_teacher)
+            
+            # Collect probabilities for batch processing
+            student_probs_list.append(student_probs)
+            teacher_probs_list.append(teacher_probs)
+            
+            samples_collected_this_call += 1
+            
+            # Cycle to next teacher for next sample
             self.cycle_to_next_teacher()
+            
+            # Get student action to continue episode (reuse the student_probs we already computed)
+            with torch.no_grad():
+                action = torch.multinomial(student_probs, 1).item()
+            
+            # Step environment with student action
+            obs, reward, done, truncated, info = self.env.step(action)
+            self._episode_length += 1
+            
+            # Check if episode ended
+            if done or truncated or self._episode_length >= 100:  # Max 100 steps per episode
+                # Start new episode if we haven't collected enough samples yet
+                if samples_collected_this_call < num_samples:
+                    self._episode_count += 1
+                    episode_seed = self.config.seed + self._episode_count
+                    obs, _ = self.env.reset(seed=episode_seed)
+                    self._episode_length = 0
+                else:
+                    # We've collected enough samples and episode ended - clear state
+                    self._current_obs = None
+            
+            # Update current state
+            self._current_obs = obs
         
-        print(f"  Training data collected using teachers: {teacher_usage}")
-        return observations, teacher_probs
+        # Compute batch loss
+        student_probs_batch = torch.stack(student_probs_list)  # [2048, num_actions]
+        teacher_probs_batch = torch.stack(teacher_probs_list)
+        
+        loss = F.kl_div(torch.log(student_probs_batch + 1e-8), teacher_probs_batch, reduction='batchmean')
+        
+        loss.backward()
+        
+        # Calculate total loss for logging (maintain same logging behavior)
+        total_loss = loss.item() * num_samples
+        
+        # Apply gradient clipping if specified (on accumulated gradients)
+        if hasattr(self.config.distillation, 'gradient_clip_norm') and self.config.distillation.gradient_clip_norm is not None:
+            grad_norm = torch.nn.utils.clip_grad_norm_(self.student_model.parameters(), self.config.distillation.gradient_clip_norm)
+        
+        # Single optimizer step on accumulated gradients
+        self.optimizer.step()
+        
+        # Step the learning rate scheduler
+        self.scheduler.step()
+        
+        # Reset training flag
+        self._in_training = False
+        
+        print(f"  ✅ Collected {samples_collected_this_call} samples, trained using teachers: {teacher_usage}")
+        print(f"  📈 Current learning rate: {self.scheduler.get_last_lr()[0]:.6f}")
+        return total_loss / num_samples
     
     def train(self):
         """Main training loop."""
+        print("=" * 60)
+        print("🎓 MULTI-TEACHER IMITATION LEARNING")
+        print("Training student by cycling through all teacher configurations.")
+        print(f"Available teachers: {self.teacher_configs}")
+        print("Student will learn from diverse teacher policies to improve generalization.")
+        print("=" * 60)
         print(f"Starting simple imitation learning for {self.config.total_timesteps} steps")
-        print(f"Training with multi-teacher distillation from: {self.teacher_configs}")
         
         step = 0
         iteration = 0
-        episodes_per_iteration = getattr(self.config, 'episodes_per_iteration', 5)
+        print(f"🔧 Using batch size from config: {self.config.distillation.batch_size}")
         last_eval_step = -1  # Track last evaluation step to handle irregular increments
         
         # Set current step for evaluation logging
@@ -391,15 +497,12 @@ class SimpleImitationTrainer:
             print(f"\nIteration {iteration} (Step {step}/{self.config.total_timesteps})")
             
             # Collect data from episode rollouts
-            observations, teacher_probs = self.collect_data(episodes_per_iteration)
-            
-            # Train on collected data
-            loss = self.train_step(observations, teacher_probs)
+            loss = self.collect_and_train(self.config.distillation.batch_size)
             print(f"  Training loss: {loss:.6f}")
             
             # Update step count (approximate based on data collected)
             prev_step = step
-            step += len(observations)
+            step += self.config.distillation.batch_size # Use the actual number of samples collected
             self.current_step = step  # Update current step for evaluation logging
             
             # Log to wandb
@@ -407,18 +510,19 @@ class SimpleImitationTrainer:
                 wandb.log({
                     'train/imitation_loss': loss,
                     'train/iteration': iteration,
-                    'train/samples_collected': len(observations)
+                    'train/samples_collected': self.config.distillation.batch_size,
+                    'train/learning_rate': self.scheduler.get_last_lr()[0]  # Get current LR from scheduler
                 }, step=step)
             
             # Check if we've crossed an evaluation boundary
             # Calculate how many eval_freq intervals we've passed since last evaluation
-            prev_eval_count = last_eval_step // self.config.eval_freq
-            current_eval_count = step // self.config.eval_freq
+            prev_eval_count = last_eval_step // self.config.eval.eval_freq
+            current_eval_count = step // self.config.eval.eval_freq
             
             if current_eval_count > prev_eval_count:
                 # We've crossed at least one evaluation boundary
-                next_eval_step = (prev_eval_count + 1) * self.config.eval_freq
-                print(f"\nEvaluation triggered: step {step} crossed boundary at {next_eval_step} (eval_freq={self.config.eval_freq})")
+                next_eval_step = (prev_eval_count + 1) * self.config.eval.eval_freq
+                print(f"\nEvaluation triggered: step {step} crossed boundary at {next_eval_step} (eval_freq={self.config.eval.eval_freq})")
                 print(f"  Previous eval at step {last_eval_step}, current step {step}")
                 self.evaluate()
                 last_eval_step = step
@@ -429,27 +533,130 @@ class SimpleImitationTrainer:
         """Comprehensive evaluation: default + cross-subset evaluations."""
         # Use config value if n_episodes not specified
         if n_episodes is None:
-            n_episodes = getattr(self.config, 'n_eval_episodes', 5)
+            n_episodes = self.config.eval.n_eval_episodes
         
         print(f"Starting comprehensive evaluation with {n_episodes} episodes...")
         print(f"Number of eval configs: {self.config.num_eval_configs}")
         
         # 1. Evaluate student on default training environment (student keys only, no teacher masking)
-        print("📚 Evaluating student on default training environment...")
         self._evaluate_student_default(n_episodes)
         
         # 2. Evaluate student on each teacher configuration (with proper masking)
-        print("🎓 Evaluating student on teacher subsets...")
+        env_metrics = {}  # Collect metrics from all environments
         for i in range(1, self.config.num_eval_configs + 1):
             env_name = f'env{i}'
             teacher_keys = getattr(self.config.eval_keys, env_name)
-            self._evaluate_environment(env_name, teacher_keys, n_episodes)
+            metrics = self._evaluate_environment(env_name, teacher_keys, n_episodes)
+            env_metrics[env_name] = metrics
         
-        # 3. Evaluate each teacher on their specific environment configuration
-        self._evaluate_teachers(n_episodes)
+        # 3. Compute and log mean metrics across all environments
+        self._log_mean_metrics(env_metrics)
+        
+        # 4. Log pre-computed teacher metrics (teachers are static, so we evaluated them once at initialization)
+        self._log_teacher_metrics()
         
         print("Evaluation complete!")
-    
+
+    def _evaluate_teachers_once(self, n_episodes: int):
+        """Evaluate each teacher once and return their metrics (since teachers are static)."""
+        print(f"  Evaluating teachers on their specific configurations...")
+        teacher_metrics = {}
+        
+        for i in range(1, self.config.num_eval_configs + 1):
+            env_name = f'env{i}'
+            if hasattr(self.config.eval_keys, env_name):
+                teacher_keys = getattr(self.config.eval_keys, env_name)                
+                # Load teacher policy
+                teacher_agent, _, _ = self.policy_loader.load_policy(env_name)
+                
+                # Get the exact keys the teacher expects
+                expected_teacher_keys = list(teacher_agent.policy.observation_space.spaces.keys())
+                
+                episode_returns = []
+                episode_lengths = []
+                
+                for episode in range(n_episodes):
+                    # Use deterministic seed for teacher evaluation reproducibility
+                    eval_seed = self.config.seed + 10000 + i * 1000 + episode
+                    obs, _ = self.env.reset(seed=eval_seed)
+                    episode_return = 0
+                    episode_length = 0
+                    
+                    done = False
+                    truncated = False
+                    
+                    while not (done or truncated):
+                        # Convert observations to tensors
+                        obs_tensors = self._obs_to_tensors(obs)
+                        
+                        # Filter observations to only include keys the teacher expects
+                        teacher_obs = {}
+                        for expected_key in expected_teacher_keys:
+                            if expected_key in obs_tensors:
+                                teacher_obs[expected_key] = obs_tensors[expected_key]
+                            else:
+                                print(f"ERROR: Teacher {env_name} expects key '{expected_key}' but it's not in observation!")
+                                import sys
+                                sys.exit(1)
+                        
+                        # Convert to numpy for SB3 and add batch dimension
+                        obs_numpy = self._obs_to_numpy(teacher_obs)
+                        obs_batch = self._add_batch_dim(obs_numpy)
+                        
+                        # Get teacher action
+                        with torch.no_grad():
+                            obs_tensor = teacher_agent.policy.obs_to_tensor(obs_batch)[0]
+                            distribution = teacher_agent.policy.get_distribution(obs_tensor)
+                            action_probs = F.softmax(distribution.distribution.logits, dim=-1)
+                            action = torch.argmax(action_probs).item()
+                        
+                        # Step environment
+                        obs, reward, done, truncated, info = self.env.step(action)
+                        episode_return += reward
+                        episode_length += 1
+                    
+                    episode_returns.append(episode_return)
+                    episode_lengths.append(episode_length)
+                
+                # Compute metrics
+                episode_returns = np.array(episode_returns)
+                episode_lengths = np.array(episode_lengths)
+                
+                mean_return = np.mean(episode_returns)
+                std_return = np.std(episode_returns)
+                mean_length = np.mean(episode_lengths)
+                
+                print(f"      Teacher {env_name}: mean_return={mean_return:.2f}, std_return={std_return:.2f}, mean_length={mean_length:.1f}")
+                
+                # Store metrics instead of logging immediately
+                teacher_metrics[env_name] = {
+                    'mean_return': mean_return,
+                    'std_return': std_return,
+                    'mean_length': mean_length
+                }
+        
+        return teacher_metrics
+
+    def _log_teacher_metrics(self):
+        """Log pre-computed teacher metrics to wandb with current step."""
+        if not hasattr(self, 'teacher_metrics') or not self.teacher_metrics:
+            return
+            
+        if self.config.track and wandb.run is not None:
+            # Log all teacher metrics with current step
+            for env_name, metrics in self.teacher_metrics.items():
+                metrics_to_log = {
+                    f"teacher/{env_name}/mean_return": metrics['mean_return'],
+                    f"teacher/{env_name}/std_return": metrics['std_return'],
+                    f"teacher/{env_name}/mean_length": metrics['mean_length']
+                }
+                # Use current step if available
+                step_to_use = getattr(self, 'current_step', None)
+                if step_to_use is not None:
+                    wandb.log(metrics_to_log, step=step_to_use)
+                else:
+                    wandb.log(metrics_to_log)
+
     def _evaluate_student_default(self, n_episodes: int):
         """Evaluate student on training environment with student keys only."""
         print(f"  Evaluating student default (training environment)...")
@@ -458,7 +665,9 @@ class SimpleImitationTrainer:
         episode_lengths = []
         
         for episode in range(n_episodes):
-            obs, _ = self.env.reset()
+            # Use deterministic seed for student evaluation reproducibility  
+            eval_seed = self.config.seed + 20000 + episode
+            obs, _ = self.env.reset(seed=eval_seed)
             episode_return = 0
             episode_length = 0
             
@@ -515,14 +724,18 @@ class SimpleImitationTrainer:
             print(f"    Wandb logging skipped: track={self.config.track}, wandb.run={wandb.run is not None}")
     
     def _evaluate_environment(self, env_name: str, teacher_keys, n_episodes: int):
-        """Evaluate student policy on a specific teacher configuration."""
-        print(f"  Evaluating {env_name}...")
+        """Evaluate student policy on a specific teacher configuration.
         
+        Returns:
+            dict: Dictionary containing mean_return, std_return, mean_length
+        """        
         episode_returns = []
         episode_lengths = []
         
         for episode in range(n_episodes):
-            obs, _ = self.env.reset()
+            # Use deterministic seed for environment evaluation reproducibility
+            eval_seed = self.config.seed + 30000 + hash(env_name) % 1000 + episode
+            obs, _ = self.env.reset(seed=eval_seed)
             episode_return = 0
             episode_length = 0
             
@@ -542,17 +755,6 @@ class SimpleImitationTrainer:
                 with torch.no_grad():
                     student_probs = self.get_student_probs(obs_tensors, env_name)
                     student_action = torch.argmax(student_probs).item()
-                
-                # Compare teacher vs student actions for debugging
-                # if teacher_action != student_action:
-                #     print(f"    [{env_name}] Step {episode_length}: ACTION MISMATCH!")
-                #     print(f"      Teacher action: {teacher_action}, probs: {teacher_probs.detach().cpu().numpy()}")
-                #     print(f"      Student action: {student_action}, probs: {student_probs.detach().cpu().numpy()}")
-                # elif episode == 0 and episode_length < 5:  # Show first few steps of first episode
-                #     print(f"    [{env_name}] Step {episode_length}: actions match ({teacher_action})")
-                #     print(f"      Teacher probs: {teacher_probs.detach().cpu().numpy()}")
-                #     print(f"      Student probs: {student_probs.detach().cpu().numpy()}")
-                
                 # Use student action to step environment (since we're evaluating the student)
                 action = student_action
                 
@@ -574,7 +776,7 @@ class SimpleImitationTrainer:
         
         print(f"    {env_name}: mean_return={mean_return:.2f}, std_return={std_return:.2f}, mean_length={mean_length:.1f}")
         
-        # Log to wandb following ppo_dropout pattern
+        # Log individual environment metrics to wandb
         if self.config.track and wandb.run is not None:
             metrics_to_log = {
                 f"full_eval_return/{env_name}/mean_return": mean_return,
@@ -583,105 +785,72 @@ class SimpleImitationTrainer:
             }
             # Use current step if available, otherwise let wandb use its internal counter
             step_to_use = getattr(self, 'current_step', None)
-            print(f"    Logging to wandb: {list(metrics_to_log.keys())} at step {step_to_use}")
             if step_to_use is not None:
                 wandb.log(metrics_to_log, step=step_to_use)
             else:
                 wandb.log(metrics_to_log)
         else:
             print(f"    Wandb logging skipped: track={self.config.track}, wandb.run={wandb.run is not None}")
-
-    def _evaluate_teachers(self, n_episodes: int):
-        """Evaluate each teacher on their specific environment configuration."""
-        print(f"  Evaluating teachers on their specific configurations...")
         
-        for i in range(1, self.config.num_eval_configs + 1):
-            env_name = f'env{i}'
-            if hasattr(self.config.eval_keys, env_name):
-                teacher_keys = getattr(self.config.eval_keys, env_name)                
-                # Load teacher policy
-                teacher_agent, _, _ = self.policy_loader.load_policy(env_name)
-                
-                # Get the exact keys the teacher expects
-                expected_teacher_keys = list(teacher_agent.policy.observation_space.spaces.keys())
-                
-                episode_returns = []
-                episode_lengths = []
-                
-                for episode in range(n_episodes):
-                    obs, _ = self.env.reset()
-                    episode_return = 0
-                    episode_length = 0
-                    
-                    done = False
-                    truncated = False
-                    
-                    while not (done or truncated):
-                        # Convert observations to tensors
-                        obs_tensors = self._obs_to_tensors(obs)
-                        
-                        # Filter observations to only include keys the teacher expects
-                        teacher_obs = {}
-                        for expected_key in expected_teacher_keys:
-                            if expected_key in obs_tensors:
-                                teacher_obs[expected_key] = obs_tensors[expected_key]
-                            else:
-                                print(f"ERROR: Teacher {env_name} expects key '{expected_key}' but it's not in observation!")
-                                import sys
-                                sys.exit(1)
-                        
-                        # Convert to numpy for SB3 and add batch dimension
-                        obs_numpy = self._obs_to_numpy(teacher_obs)
-                        obs_batch = self._add_batch_dim(obs_numpy)
-                        
-                        # Get teacher action
-                        with torch.no_grad():
-                            obs_tensor = teacher_agent.policy.obs_to_tensor(obs_batch)[0]
-                            distribution = teacher_agent.policy.get_distribution(obs_tensor)
-                            action_probs = F.softmax(distribution.distribution.logits, dim=-1)
-                            action = torch.argmax(action_probs).item()
-                        
-                        # Step environment
-                        obs, reward, done, truncated, info = self.env.step(action)
-                        episode_return += reward
-                        episode_length += 1
-                    
-                    episode_returns.append(episode_return)
-                    episode_lengths.append(episode_length)
-                
-                # Compute metrics
-                episode_returns = np.array(episode_returns)
-                episode_lengths = np.array(episode_lengths)
-                
-                mean_return = np.mean(episode_returns)
-                std_return = np.std(episode_returns)
-                mean_length = np.mean(episode_lengths)
-                
-                print(f"      Teacher {env_name}: mean_return={mean_return:.2f}, std_return={std_return:.2f}, mean_length={mean_length:.1f}")
-                
-                # Log to wandb
-                if self.config.track and wandb.run is not None:
-                    metrics_to_log = {
-                        f"teacher/{env_name}/mean_return": mean_return,
-                        f"teacher/{env_name}/std_return": std_return,
-                        f"teacher/{env_name}/mean_length": mean_length
-                    }
-                    # Use current step if available
-                    step_to_use = getattr(self, 'current_step', None)
-                    if step_to_use is not None:
-                        wandb.log(metrics_to_log, step=step_to_use)
-                    else:
-                        wandb.log(metrics_to_log)
+        # Return metrics for aggregation
+        return {
+            'mean_return': mean_return,
+            'std_return': std_return,
+            'mean_length': mean_length
+        }
+
+    def _log_mean_metrics(self, env_metrics: dict):
+        """Compute and log mean metrics across all evaluation environments."""
+        if not env_metrics:
+            return
+        
+        # Compute means across all environments
+        mean_mean_return = sum(metrics['mean_return'] for metrics in env_metrics.values()) / len(env_metrics)
+        mean_std_return = sum(metrics['std_return'] for metrics in env_metrics.values()) / len(env_metrics)
+        mean_mean_length = sum(metrics['mean_length'] for metrics in env_metrics.values()) / len(env_metrics)
+        
+        print(f"    env_mean: mean_return={mean_mean_return:.2f}, std_return={mean_std_return:.2f}, mean_length={mean_mean_length:.1f}")
+        
+        # Log mean metrics to wandb
+        if self.config.track and wandb.run is not None:
+            mean_metrics_to_log = {
+                f"full_eval_return/env_mean/mean_return": mean_mean_return,
+                f"full_eval/env_mean/std_return": mean_std_return,
+                f"full_eval/env_mean/mean_length": mean_mean_length
+            }
+            # Use current step if available
+            step_to_use = getattr(self, 'current_step', None)
+            if step_to_use is not None:
+                wandb.log(mean_metrics_to_log, step=step_to_use)
+            else:
+                wandb.log(mean_metrics_to_log)
 
 
 def train_simple_imitation(config, expert_policy_dir: str, device: str = 'cpu', debug: bool = False):
     """Main training function for simple imitation learning."""
+    # Set random seed for reproducibility
+    print(f"🔧 Setting random seed: {config.seed}")
+    set_seed(config.seed)
+    
+    # Handle torch deterministic setting
+    if hasattr(config, 'torch_deterministic') and config.torch_deterministic:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        print(f"🔧 PyTorch deterministic mode enabled")
+    
+    # Debug: Check what exp_name actually is
+    print(f"🔍 DEBUG: config.exp_name = '{config.exp_name}'")
+    print(f"🔍 DEBUG: Expected exp_name = 'tigerdoorkey_simple_imitation'")
+    
     # Initialize wandb
-    if hasattr(config, 'track') and config.track:
+    if config.track:
+        wandb_run_name = f"simple_imitation_{config.exp_name}_{config.seed}"
+        print(f"🔍 DEBUG: wandb run name = '{wandb_run_name}'")
+        
         wandb.init(
             project=config.wandb_project,
             entity=config.wandb_entity,
-            name=f"simple_imitation_{config.exp_name}_{config.seed}",
+            name=wandb_run_name,
             config=vars(config)
         )
     
