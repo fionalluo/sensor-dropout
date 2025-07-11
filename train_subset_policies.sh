@@ -43,7 +43,7 @@ for CONFIG in "${CONFIGS[@]}"; do
     echo "Training subset policies for config ${CONFIG} with seed ${SEED}"
     echo "Output directory: ${OUTPUT_DIR}"
 
-    timeout 8h python3 -u subset_policies/train_subset_policies.py \
+    timeout 48h python3 -u subset_policies/train_subset_policies.py \
       --configs ${CONFIG} \
       --seed "$SEED" \
       --output_dir "$OUTPUT_DIR" \

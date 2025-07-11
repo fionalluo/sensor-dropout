@@ -34,7 +34,7 @@ for CONFIG in "${CONFIGS[@]}"; do
 
     echo "Running PPO Dropout baseline with config ${CONFIG} and seed ${SEED}, logging to ${LOGDIR}"
 
-    timeout 4h python3 -u baselines/ppo_dropout/train.py \
+    timeout 10h python3 -u baselines/ppo_dropout/train.py \
       --configs ${CONFIG} \
       --seed "$SEED"
 

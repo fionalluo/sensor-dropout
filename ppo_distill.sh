@@ -16,10 +16,10 @@ BASE_POLICY_DIR="./policies/${EXPERT_POLICY_TYPE}"
 
 # List of configs to run
 CONFIGS=(
-  "gymnasium_tigerdoorkey"
+  # "gymnasium_tigerdoorkey"
   # "gymnasium_tigerdoorkeylarge"
-  "gymnasium_maze"
-  "gymnasium_maze11"
+  # "gymnasium_maze"
+  # "gymnasium_maze11"
   "gymnasium_blindpick"
 )
 
@@ -67,7 +67,7 @@ for CONFIG in "${CONFIGS[@]}"; do
       echo "Using CPU for training"
     fi
 
-    timeout 4h python3 -u baselines/ppo_distill/train.py \
+    timeout 10h python3 -u baselines/ppo_distill/train.py \
       --configs ${CONFIG} \
       --expert_policy_dir "$EXPERT_POLICY_DIR" \
       --seed "$SEED" \
