@@ -1,0 +1,156 @@
+defaults:
+  exp_name: ppo_dropout_any_baseline
+  seed: 0
+  torch_deterministic: true
+  cuda: true
+  track: true
+  wandb_project: "baseline-710"
+  wandb_entity: null
+  capture_video: false
+
+  task: gymnasium_TigerDoorKey-v0
+  total_timesteps: 500000
+  num_envs: 8
+  use_wandb: true
+
+  # Teacher and student observation keys
+  keys: {mlp_keys: '.*', cnn_keys: '.*'}
+  
+  # Probabilistic dropout configuration (modular design)
+  dropout:
+    schedule_type: 'constant'  # Options: 'constant', 'linear', 'exponential'
+    base_probability: 0.5      # For constant schedule
+    # For linear schedule:
+    # start_probability: 0.8
+    # end_probability: 0.2
+    # total_episodes: 10000
+    # For exponential schedule:
+    # start_probability: 0.8
+    # decay_rate: 0.995
+    # min_probability: 0.1
+
+  save_model: false
+  log_keys_video: [image]
+
+  # Environment settings
+  env:
+    atari: {size: [64, 64], repeat: 4, sticky: True, gray: False, actions: all, lives: unused, noops: 0, resize: opencv}
+    dmlab: {size: [64, 64], repeat: 4, episodic: True}
+    minecraft: {size: [64, 64], break_speed: 100.0}
+    dmc: {size: [64, 64], repeat: 2, camera: -1}
+    loconav: {size: [64, 64], repeat: 2, camera: -1}
+    gym: {obs_key: state}
+    robopianist: {render_image: true}
+  
+  # PPO Hyperparameters (Stable Baselines 3 defaults)
+  ppo:
+    learning_rate: 3e-4      # Default SB3 learning rate
+    n_steps: 2048           # Number of steps to run for each environment per update
+    batch_size: 64          # Minibatch size
+    n_epochs: 10            # Number of epoch when optimizing the surrogate loss
+    gamma: 0.99             # Discount factor
+    gae_lambda: 0.95        # Factor for trade-off of bias vs variance for GAE
+    clip_range: 0.2         # Clipping parameter for PPO
+    clip_range_vf: null     # Clipping parameter for value function (None = no clipping)
+    ent_coef: 0.0           # Entropy coefficient for the loss calculation
+    vf_coef: 0.5            # Value function coefficient for the loss calculation
+    max_grad_norm: 0.5      # The maximum value for the gradient clipping
+    use_sde: false          # Whether to use generalized State Dependent Exploration (gSDE)
+    sde_sample_freq: -1     # Sample a new noise matrix every n steps when using gSDE
+    target_kl: null         # Limit the KL divergence between updates (None = no limit)
+    policy_kwargs: {}       # Additional arguments for the policy
+  
+  # Evaluation settings
+  eval:
+    eval_freq: 2048  # Evaluate every 2048 callback calls (matches rollout frequency)
+    n_eval_episodes: 10  # Number of evaluation episodes
+    eval_envs: 4  # Number of parallel environments for evaluation
+    video_log_interval: 1  # Log videos every evaluation call
+  
+  # Training settings
+  log_interval: 1  # Log every rollout
+
+# ====================
+# Named Configs
+# ====================
+
+# Tiger Door Key with probabilistic dropout
+gymnasium_tigerdoorkey: &tigerdoorkey_base
+  task: gymnasium_TigerDoorKey-v0
+  total_timesteps: 400000
+  keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
+  dropout:
+    schedule_type: 'constant'
+    base_probability: 0.3  # Higher chance of keeping keys (70% inclusion rate)
+  # Reduced learning rate for stability in simple grid environment
+  ppo:
+    learning_rate: 1e-4
+  exp_name: "tigerdoorkey_ppo_dropout_any"
+
+gymnasium_tigerdoorkeylarge:
+  << : *tigerdoorkey_base
+  task: "gymnasium_tigerdoorkeylarge"
+  total_timesteps: 500000
+  exp_name: "tigerdoorkeylarge_ppo_dropout_any"
+
+gymnasium_maze: &maze_base
+  task: gymnasium_Maze7x7-v0
+  total_timesteps: 400000
+  keys: {mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b', cnn_keys: '^$'}
+  dropout:
+    schedule_type: 'linear'
+    start_probability: 0.7  # Start with higher dropout
+    end_probability: 0.2    # End with lower dropout
+    total_episodes: 5000    # Reduce dropout over 5000 episodes
+  exp_name: "maze_ppo_dropout_any"
+
+gymnasium_maze11:
+  << : *maze_base
+  task: gymnasium_Maze11x11-v0
+  total_timesteps: 1500000
+  dropout:
+    schedule_type: 'linear'
+    start_probability: 0.7
+    end_probability: 0.2
+    total_episodes: 10000  # Longer schedule for more complex environment
+  exp_name: "maze11_ppo_dropout_any"
+
+# Blind Pick environment with exponential dropout schedule
+gymnasium_blindpick: &blindpick_base
+  task: gymnasium_FOFixedGripper2DBlind7cmPick-v0
+  total_timesteps: 5000000
+  num_envs: 32
+  log_keys_video: [camera_front]
+  keys: {mlp_keys: '.*', cnn_keys: '.*'} # robot_state, touch, camera_front, camera_side, gripper_camera_rgb
+  dropout:
+    schedule_type: 'exponential'
+    start_probability: 0.6   # Start with moderate dropout
+    decay_rate: 0.9995      # Slow decay
+    min_probability: 0.1    # Maintain some dropout throughout
+  exp_name: "blindpick_ppo_dropout_any"
+
+# Blind Pick with different dropout schedules for experimentation
+blindpick_constant_dropout:
+  << : *blindpick_base
+  dropout:
+    schedule_type: 'constant'
+    base_probability: 0.4  # 60% inclusion rate
+  exp_name: "blindpick_constant_dropout"
+
+blindpick_linear_dropout:
+  << : *blindpick_base
+  dropout:
+    schedule_type: 'linear'
+    start_probability: 0.8  # High dropout initially
+    end_probability: 0.2   # Low dropout later
+    total_episodes: 15000  # Long schedule for complex task
+  exp_name: "blindpick_linear_dropout"
+
+# Blind Pick with Oracle State (simplified observations)
+blindpick_oracle_state:
+  << : *blindpick_base
+  keys: {mlp_keys: r'\b(robot_state|obj_state)\b', cnn_keys: '^$'}
+  dropout:
+    schedule_type: 'constant'
+    base_probability: 0.5  # 50% dropout for simplified observations
+  exp_name: "blindpick_oracle_state_dropout_any" 
