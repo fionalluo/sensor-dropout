@@ -4,7 +4,7 @@ defaults:
   torch_deterministic: true
   cuda: false
   track: true
-  wandb_project: "baseline-710"
+  wandb_project: "baseline-712"
   wandb_entity: null
 
   task: gymnasium_TigerDoorKey-v0
