@@ -232,11 +232,15 @@ class CustomEvalCallback(BaseCallback):
         if self.debug:
             print(f"\n[EVAL] Running comprehensive evaluation at step {self.num_timesteps}")
         
-        # Get all available keys
-        available_keys = self._get_available_keys()
+        # Use student keys (keys from config.keys) instead of all available keys
+        # This ensures evaluation uses the same key space the agent was trained on
+        student_keys = self.student_keys
+        
+        if self.debug:
+            print(f"[EVAL] Using student keys for evaluation: {student_keys}")
         
         # Sample different dropout configurations for evaluation
-        dropout_configs = self._generate_eval_dropout_configs(available_keys)
+        dropout_configs = self._generate_eval_dropout_configs(student_keys)
         
         all_metrics = {}
         
@@ -253,24 +257,80 @@ class CustomEvalCallback(BaseCallback):
         if self.debug:
             print(f"[EVAL] Comprehensive evaluation complete")
     
-    def _generate_eval_dropout_configs(self, available_keys):
-        """Generate a set of dropout configurations for evaluation."""
+    def _generate_eval_dropout_configs(self, student_keys):
+        """Generate a comprehensive set of dropout configurations for evaluation."""
         configs = {}
         
-        # Always include full observation
-        configs['full_obs'] = available_keys.copy()
+        # 1. SUBSET EVALUATION - Use predefined eval_keys like original PPO dropout
+        if hasattr(self.config, 'eval_keys'):
+            print("[EVAL] Adding subset evaluation configs (for comparison with original PPO dropout)")
+            # Add all predefined evaluation environments from config
+            eval_keys_config = self.config.eval_keys
+            for env_name in dir(eval_keys_config):
+                if env_name.startswith('env'):
+                    eval_env_config = getattr(eval_keys_config, env_name)
+                    mlp_pattern = getattr(eval_env_config, 'mlp_keys', '.*')
+                    cnn_pattern = getattr(eval_env_config, 'cnn_keys', '.*')
+                    
+                    # Parse keys from patterns using student_keys as the base
+                    mlp_keys = self._parse_keys_from_pattern(mlp_pattern, student_keys)
+                    cnn_keys = self._parse_keys_from_pattern(cnn_pattern, student_keys)
+                    subset_keys = mlp_keys + cnn_keys
+                    
+                    if subset_keys:  # Only add if keys are found
+                        configs[f'subset_{env_name}'] = subset_keys
         
-        # Include single key configurations
-        for key in available_keys:
-            configs[f'only_{key}'] = [key]
+        # 2. PROBABILISTIC EVALUATION - Match training dropout probability
+        print("[EVAL] Adding probabilistic evaluation configs")
+        if hasattr(self.config, 'dropout'):
+            # Get current training dropout probability
+            dropout_scheduler = DropoutScheduler(self.config.dropout)
+            # Use a representative episode number (e.g., 1000 episodes in)
+            current_dropout_prob = dropout_scheduler.get_dropout_probability(1000)
+            
+            # Generate multiple probabilistic samples using student_keys
+            for sample_idx in range(3):  # 3 samples of probabilistic dropout
+                prob_keys = []
+                for key in student_keys:
+                    if random.random() > current_dropout_prob:
+                        prob_keys.append(key)
+                
+                # Ensure at least one key
+                if not prob_keys:
+                    prob_keys = [random.choice(student_keys)]
+                
+                configs[f'prob_sample_{sample_idx}_p{current_dropout_prob:.2f}'] = prob_keys
         
-        # Include some random subsets with different sizes
-        for size in [2, 3, len(available_keys)//2]:
-            if size < len(available_keys) and size > 0:
-                random_keys = random.sample(available_keys, size)
-                configs[f'random_{size}keys'] = random_keys
+        # 3. ROBUSTNESS EVALUATION - Test different dropout probabilities
+        print("[EVAL] Adding robustness evaluation configs")
+        for test_prob in [0.1, 0.3, 0.5, 0.7, 0.9]:
+            robust_keys = []
+            for key in student_keys:
+                if random.random() > test_prob:
+                    robust_keys.append(key)
+            
+            # Ensure at least one key
+            if not robust_keys:
+                robust_keys = [random.choice(student_keys)]
+            
+            configs[f'robust_p{test_prob:.1f}'] = robust_keys
         
         return configs
+    
+    def _parse_keys_from_pattern(self, pattern, student_keys):
+        """Parse keys from regex pattern using student_keys as the base."""
+        if pattern == '.*':
+            return student_keys
+        elif pattern == '^$':
+            return []
+        else:
+            try:
+                regex = re.compile(pattern)
+                matched_keys = [k for k in student_keys if regex.search(k)]
+                return matched_keys
+            except re.error as e:
+                print(f"Warning: Invalid regex pattern '{pattern}': {e}")
+                return []
     
     def _evaluate_environment(self, env_name, eval_keys):
         """Evaluate the agent in a specific environment configuration."""
@@ -397,7 +457,7 @@ class ProbabilisticEpisodeMaskingWrapper(gym.ObservationWrapper):
         self._set_observation_space()
         
         print(f"[PROB DROPOUT] Available keys: {self.available_keys}")
-        print(f"[PROB DROPOUT] Student keys: {self.student_keys}")
+        print(f"[PROB DROPOUT] Student keys (used for dropout): {self.student_keys}")
     
     def _set_observation_space(self):
         """Set the observation space to match student keys."""
@@ -430,16 +490,16 @@ class ProbabilisticEpisodeMaskingWrapper(gym.ObservationWrapper):
         # Get current dropout probability
         dropout_prob = self.dropout_scheduler.get_dropout_probability(self.episode_counter)
         
-        # Probabilistically select keys
+        # Probabilistically select keys FROM STUDENT KEYS ONLY
         selected_keys = []
-        for key in self.available_keys:
+        for key in self.student_keys:  # Use student_keys, not available_keys
             if random.random() > dropout_prob:  # Include key if random number > dropout_prob
                 selected_keys.append(key)
         
         # Ensure at least one key is selected (constraint: can't have empty observations)
         if not selected_keys:
-            # If no keys were selected, randomly pick one
-            selected_keys = [random.choice(self.available_keys)]
+            # If no keys were selected, randomly pick one FROM STUDENT KEYS
+            selected_keys = [random.choice(self.student_keys)]
         
         return selected_keys, dropout_prob
     

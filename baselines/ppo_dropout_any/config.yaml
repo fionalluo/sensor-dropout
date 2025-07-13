@@ -4,7 +4,7 @@ defaults:
   torch_deterministic: true
   cuda: true
   track: true
-  wandb_project: "baseline-710"
+  wandb_project: "baseline-test-712"
   wandb_entity: null
   capture_video: false
 
@@ -15,6 +15,21 @@ defaults:
 
   # Teacher and student observation keys
   keys: {mlp_keys: '.*', cnn_keys: '.*'}
+  
+  # Evaluation keys (for subset evaluation comparison with original PPO dropout)
+  eval_keys:
+    env1:
+      mlp_keys: '.*'
+      cnn_keys: '.*'
+    env2:
+      mlp_keys: '.*'
+      cnn_keys: '.*'
+    env3:
+      mlp_keys: '.*'
+      cnn_keys: '.*'
+    env4:
+      mlp_keys: '.*'
+      cnn_keys: '.*'
   
   # Probabilistic dropout configuration (modular design)
   dropout:
@@ -82,6 +97,20 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
   dropout:
     schedule_type: 'constant'
     base_probability: 0.3  # Higher chance of keeping keys (70% inclusion rate)
+  # Evaluation keys for subset comparison (same as original PPO dropout)
+  eval_keys:
+    env1:
+      mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b'
+      cnn_keys: '^$'
+    env2: # must press button to reveal tiger/treasure up-down relative position. starts with key
+      mlp_keys: '\b(neighbors_unprivileged_nokey|door_unprivileged|doors_unlocked|position|has_key)\b'
+      cnn_keys: '^$'
+    env3:  # must get key to reveal unlocked doors. starts with button
+      mlp_keys: '\b(neighbors_unprivileged_nobutton|door|doors_unlocked_unprivileged|position|has_key)\b'
+      cnn_keys: '^$'
+    env4:  # must press button and get key to reveal unlocked doors and tiger/treasure relative position. starts with nothing
+      mlp_keys: '\b(neighbors_unprivileged|door_unprivileged|doors_unlocked_unprivileged|position|has_key)\b'
+      cnn_keys: '^$'
   # Reduced learning rate for stability in simple grid environment
   ppo:
     learning_rate: 1e-4
@@ -102,6 +131,26 @@ gymnasium_maze: &maze_base
     start_probability: 0.7  # Start with higher dropout
     end_probability: 0.2    # End with lower dropout
     total_episodes: 5000    # Reduce dropout over 5000 episodes
+  # Evaluation keys for subset comparison (same as original PPO dropout)
+  eval_keys:
+    env1:  # Goal position, neighbors 5x5
+      mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b'
+      cnn_keys: '^$'
+    env2:  # Goal position, neighbors_3x3
+      mlp_keys: '\b(goal_position|position|neighbors_3x3)\b'
+      cnn_keys: '^$'
+    env3:  # No goal position, neighbors_3x3
+      mlp_keys: '\b(goal_position_unprivileged|position|neighbors_3x3)\b'
+      cnn_keys: '^$'
+    env4:  # No goal position, neighbors_5x5
+      mlp_keys: '\b(goal_position_unprivileged|position|neighbors_3x3|neighbors_5x5)\b'
+      cnn_keys: '^$'
+    env5: # No goal position, neighbors_3x3 unprivileged
+      mlp_keys: '\b(goal_position_unprivileged|position|neighbors_3x3_unprivileged)\b'
+      cnn_keys: '^$'
+    env6: # No goal position, neighbors_5x5 unprivileged
+      mlp_keys: '\b(goal_position_unprivileged|position|neighbors_3x3_unprivileged|neighbors_5x5_unprivileged)\b'
+      cnn_keys: '^$'
   exp_name: "maze_ppo_dropout_any"
 
 gymnasium_maze11:
@@ -127,6 +176,29 @@ gymnasium_blindpick: &blindpick_base
     start_probability: 0.6   # Start with moderate dropout
     decay_rate: 0.9995      # Slow decay
     min_probability: 0.1    # Maintain some dropout throughout
+  # Evaluation keys for subset comparison (same as original PPO dropout)
+  eval_keys:
+    env1: # full privileged observations -- reach directly for object
+      mlp_keys: '.*'
+      cnn_keys: '.*'
+    env2:  # NO TOUCH -- reach directly without touch
+      mlp_keys: '\b(robot_state|obj_state)\b'
+      cnn_keys: '.*'
+    env3:  # NO OBJ STATE -- reach directly using image and not obj state
+      mlp_keys: '\b(robot_state|touch)\b'
+      cnn_keys: '.*'
+    env4: # NO OBJ STATE, only a wrist camera -- searching behavior
+      mlp_keys: '\b(robot_state|touch)\b'
+      cnn_keys: 'gripper_camera_rgb'
+    env5:  # full state, only wrist camera -- searching but obj_state gives it away
+      mlp_keys: '.*'
+      cnn_keys: 'gripper_camera_rgb'
+    env6:  # full state, only front camera -- searching but image, obj_state gives it away
+      mlp_keys: '.*'
+      cnn_keys: 'camera_front'
+    env7:  # full state, only side camera -- searching but image, obj_state gives it away
+      mlp_keys: '.*'
+      cnn_keys: 'camera_side'
   exp_name: "blindpick_ppo_dropout_any"
 
 # Blind Pick with different dropout schedules for experimentation
