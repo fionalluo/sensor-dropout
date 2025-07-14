@@ -4,7 +4,7 @@ defaults:
   torch_deterministic: true
   cuda: false
   track: true
-  wandb_project: "baseline-710"
+  wandb_project: "baseline-712"
   wandb_entity: null
 
   task: gymnasium_TigerDoorKey-v0
@@ -151,25 +151,25 @@ gymnasium_blindpick: &blindpick_base
   keys: {mlp_keys: '.*', cnn_keys: '.*'}
   num_eval_configs: 7
   eval_keys:
-    env1: # Full multimodal teacher
+    env1: # full privileged observations -- reach directly for object
       mlp_keys: '.*'
       cnn_keys: '.*'
-    env2:  # Robot state only teacher (no touch, all cameras)
-      mlp_keys: 'robot_state'
+    env2:  # NO TOUCH -- reach directly without touch
+      mlp_keys: '\b(robot_state|obj_state)\b'
       cnn_keys: '.*'
-    env3:  # Touch only teacher (no robot state, all cameras)
-      mlp_keys: 'touch'
+    env3:  # NO OBJ STATE -- reach directly using image and not obj state
+      mlp_keys: '\b(robot_state|touch)\b'
       cnn_keys: '.*'
-    env4: # Vision only teacher (no proprioception)
-      mlp_keys: '^$'
-      cnn_keys: '.*'
-    env5:  # Limited vision teacher (only wrist camera)
+    env4: # NO OBJ STATE, only a wrist camera -- searching behavior
+      mlp_keys: '\b(robot_state|touch)\b'
+      cnn_keys: 'gripper_camera_rgb'
+    env5:  # full state, only wrist camera -- searching but obj_state gives it away
       mlp_keys: '.*'
       cnn_keys: 'gripper_camera_rgb'
-    env6:  # Front camera only teacher
+    env6:  # full state, only front camera -- searching but image, obj_state gives it away
       mlp_keys: '.*'
       cnn_keys: 'camera_front'
-    env7:  # Side camera only teacher
+    env7:  # full state, only side camera -- searching but image, obj_state gives it away
       mlp_keys: '.*'
       cnn_keys: 'camera_side'
 

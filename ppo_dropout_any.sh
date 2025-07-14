@@ -6,18 +6,18 @@ generate_unique_seed() {
 }
 
 # Base log directory
-BASE_LOGDIR=~/logdir/baselines/ppo_dropout
+BASE_LOGDIR=~/logdir/baselines/ppo_dropout_any
 
 # List of configs to run
 CONFIGS=(
   "gymnasium_tigerdoorkey"
   # "gymnasium_tigerdoorkeylarge"
-  "gymnasium_maze"
-  "gymnasium_maze11"
-  "gymnasium_blindpick"
+  # "gymnasium_maze"
+  # "gymnasium_maze11"
+  # "gymnasium_blindpick"
 )
 
-NUM_SEEDS=10
+NUM_SEEDS=1
 INITIAL_SEED=$(generate_unique_seed)
 
 SEEDS=()
@@ -32,9 +32,9 @@ for CONFIG in "${CONFIGS[@]}"; do
   for SEED in "${SEEDS[@]}"; do
     LOGDIR="${BASE_LOGDIR}/${CONFIG}_${SEED}"
 
-    echo "Running PPO Dropout baseline with config ${CONFIG} and seed ${SEED}, logging to ${LOGDIR}"
+    echo "Running PPO Dropout Any baseline with config ${CONFIG} and seed ${SEED}, logging to ${LOGDIR}"
 
-    timeout 10h python3 -u baselines/ppo_dropout/train.py \
+    timeout 10h python3 -u baselines/ppo_dropout_any/train.py \
       --configs ${CONFIG} \
       --seed "$SEED"
 

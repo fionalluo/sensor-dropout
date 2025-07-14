@@ -215,6 +215,17 @@ class SimpleImitationTrainer:
         for key, space in student_obs_space.spaces.items():
             print(f"  {key}: {space}")
         
+        # Check action space type for compatibility
+        action_space = self.env.action_space
+        if isinstance(action_space, gym.spaces.Discrete):
+            print(f"🔍 DEBUG: Discrete action space with {action_space.n} actions")
+            self.is_discrete_action = True
+        elif isinstance(action_space, gym.spaces.Box):
+            print(f"🔍 DEBUG: Continuous action space with shape {action_space.shape}")
+            self.is_discrete_action = False
+        else:
+            raise ValueError(f"Unsupported action space type: {type(action_space)}")
+        
         # Create a temporary environment with student observation space
         # We need to do this because self.env has the full observation space and can't be passed in
         class TempEnv(gym.Env):
@@ -244,8 +255,8 @@ class SimpleImitationTrainer:
         print(f"Extracted student model: {type(student_model)}")
         return student_model, action_space
     
-    def get_teacher_probs(self, full_obs: Dict, teacher_config: str = None) -> torch.Tensor:
-        """Get teacher action probabilities for given observation."""
+    def get_teacher_distribution_params(self, full_obs: Dict, teacher_config: str = None) -> torch.Tensor:
+        """Get teacher action distribution parameters for given observation."""
         # Use current teacher if none specified
         if teacher_config is None:
             teacher_config = self.get_current_teacher_config()
@@ -266,50 +277,45 @@ class SimpleImitationTrainer:
                 print(f"ERROR: Teacher {teacher_config} expects key '{expected_key}' but it's not in observation!")
                 import sys
                 sys.exit(1)
-        
-        # # Debug: Show teacher observations
-        # if self.debug and getattr(self, '_in_training', False):
-        #     print(f"=== TEACHER ({teacher_config}) ===")
-        #     print(f"Teacher observation keys: {list(teacher_obs.keys())}")
-        
-        # # Always print teacher observations for debugging
-        # if getattr(self, '_in_training', False):
-        #     print(f"=== TEACHER ({teacher_config}) OBSERVATIONS ===")
-        #     print(f"Teacher observation keys: {sorted(teacher_obs.keys())}")
-        #     for key in sorted(teacher_obs.keys()):
-        #         value = teacher_obs[key]
-        #         if isinstance(value, torch.Tensor):
-        #             print(f"  {key}: shape={value.shape}, dtype={value.dtype}")
-        #             print(f"    values: {value.flatten().tolist()}")
-        #         else:
-        #             print(f"  {key}: {type(value)} = {value}")
                 
         # Convert to numpy for SB3 and add batch dimension
         obs_numpy = self._obs_to_numpy(teacher_obs)
         obs_batch = self._add_batch_dim(obs_numpy)
         
-        # Get teacher probabilities directly
+        # Get teacher distribution parameters
         with torch.no_grad():
             obs_tensor = teacher_agent.policy.obs_to_tensor(obs_batch)[0]
             distribution = teacher_agent.policy.get_distribution(obs_tensor)
-            if hasattr(distribution.distribution, 'probs'):
-                teacher_probs = distribution.distribution.probs.squeeze(0)
-            else:
-                # Fallback: compute probabilities from logits
-                if hasattr(distribution.distribution, 'logits'):
-                    teacher_probs = F.softmax(distribution.distribution.logits.squeeze(0), dim=-1)
+            
+            if self.is_discrete_action:
+                # For discrete actions, return probabilities
+                if hasattr(distribution.distribution, 'probs'):
+                    teacher_params = distribution.distribution.probs.squeeze(0)
                 else:
-                    # Fallback for continuous actions - uniform distribution
-                    teacher_probs = torch.ones(self.action_space.n, device=self.device) / self.action_space.n
+                    # Fallback: compute probabilities from logits
+                    if hasattr(distribution.distribution, 'logits'):
+                        teacher_params = F.softmax(distribution.distribution.logits.squeeze(0), dim=-1)
+                    else:
+                        # Fallback - uniform distribution
+                        teacher_params = torch.ones(self.action_space.n, device=self.device) / self.action_space.n
+            else:
+                # For continuous actions, return mean and log_std
+                if hasattr(distribution.distribution, 'loc') and hasattr(distribution.distribution, 'scale'):
+                    # Normal distribution
+                    mean = distribution.distribution.loc.squeeze(0)
+                    log_std = torch.log(distribution.distribution.scale.squeeze(0))
+                    teacher_params = torch.cat([mean, log_std], dim=-1)  # Concatenate mean and log_std
+                else:
+                    # Fallback for other continuous distributions
+                    mean = distribution.mean.squeeze(0)
+                    # Assume unit variance if scale not available
+                    log_std = torch.zeros_like(mean)
+                    teacher_params = torch.cat([mean, log_std], dim=-1)
         
-        # Debug: Show teacher action probabilities
-        # if self.debug and getattr(self, '_in_training', False):
-        #     print(f"Teacher action probs: {teacher_probs.detach().cpu().numpy()}")
-        
-        return teacher_probs.to(self.device)
+        return teacher_params.to(self.device)
     
-    def get_student_probs(self, full_obs: Dict, teacher_config: str = None) -> torch.Tensor:
-        """Get student action probabilities for given observation (after masking)."""
+    def get_student_distribution_params(self, full_obs: Dict, teacher_config: str = None) -> torch.Tensor:
+        """Get student action distribution parameters for given observation (after masking)."""
         # Use current teacher if none specified
         if teacher_config is None:
             teacher_config = self.get_current_teacher_config()
@@ -329,40 +335,39 @@ class SimpleImitationTrainer:
             self.student_keys,
             all_teacher_keys,
             device=None,
-            debug=False  # Enable debug for now
+            debug=False
         )
-        
-        # # Debug: Show student observations (after masking)
-        # if self.debug and getattr(self, '_in_training', False):
-        #     print(f"\n=== STUDENT (masked for {teacher_config}) ===")
-        #     print(f"Student observation keys: {list(masked_obs.keys())}")
-        
-        # # Always print student observations for debugging
-        # if getattr(self, '_in_training', False):
-        #     print(f"=== STUDENT (masked for {teacher_config}) OBSERVATIONS ===")
-        #     print(f"Student observation keys: {sorted(masked_obs.keys())}")
-        #     for key in sorted(masked_obs.keys()):
-        #         value = masked_obs[key]
-        #         if isinstance(value, torch.Tensor):
-        #             print(f"  {key}: shape={value.shape}, dtype={value.dtype}")
-        #             print(f"    values: {value.flatten().tolist()}")
-        #         else:
-        #             print(f"  {key}: {type(value)} = {value}")
                 
         # Convert to numpy for SB3 model and add batch dimension
         obs_numpy = self._obs_to_numpy(masked_obs)
         obs_batch = self._add_batch_dim(obs_numpy)
         
-        # Get student probabilities directly
+        # Get student distribution parameters
         obs_tensor = self.student_model.obs_to_tensor(obs_batch)[0]
         distribution = self.student_model.get_distribution(obs_tensor)
-        student_probs = distribution.distribution.probs.squeeze(0)
         
-        # Debug: Show student action probabilities
-        # if self.debug and getattr(self, '_in_training', False):
-        #     print(f"Student action probs: {student_probs.detach().cpu().numpy()}")
+        if self.is_discrete_action:
+            # For discrete actions, return probabilities
+            if hasattr(distribution.distribution, 'probs'):
+                student_params = distribution.distribution.probs.squeeze(0)
+            else:
+                # Fallback: compute probabilities from logits
+                student_params = F.softmax(distribution.distribution.logits.squeeze(0), dim=-1)
+        else:
+            # For continuous actions, return mean and log_std
+            if hasattr(distribution.distribution, 'loc') and hasattr(distribution.distribution, 'scale'):
+                # Normal distribution
+                mean = distribution.distribution.loc.squeeze(0)
+                log_std = torch.log(distribution.distribution.scale.squeeze(0))
+                student_params = torch.cat([mean, log_std], dim=-1)  # Concatenate mean and log_std
+            else:
+                # Fallback for other continuous distributions
+                mean = distribution.mean.squeeze(0)
+                # Assume unit variance if scale not available
+                log_std = torch.zeros_like(mean)
+                student_params = torch.cat([mean, log_std], dim=-1)
         
-        return student_probs
+        return student_params
     
     def collect_and_train(self, num_samples: int = 2048) -> float:
         """Collect a fixed number of samples by rolling out episodes and train on the accumulated batch."""
@@ -375,9 +380,9 @@ class SimpleImitationTrainer:
         # Reset gradients at the start
         self.optimizer.zero_grad()
         
-        # Initialize lists to collect probabilities
-        student_probs_list = []
-        teacher_probs_list = []
+        # Initialize lists to collect distribution parameters
+        student_params_list = []
+        teacher_params_list = []
         
         # Initialize episode state if not already in progress
         if not hasattr(self, '_current_obs') or self._current_obs is None:
@@ -403,24 +408,33 @@ class SimpleImitationTrainer:
             # Convert observation to tensors
             obs_tensors = self._obs_to_tensors(obs)
             
-            # Get student probabilities
-            student_probs = self.get_student_probs(obs_tensors, current_teacher)
+            # Get student distribution parameters
+            student_params = self.get_student_distribution_params(obs_tensors, current_teacher)
             
-            # Calculate teacher probabilities for this observation
-            teacher_probs = self.get_teacher_probs(obs_tensors, current_teacher)
+            # Calculate teacher distribution parameters for this observation
+            teacher_params = self.get_teacher_distribution_params(obs_tensors, current_teacher)
             
-            # Collect probabilities for batch processing
-            student_probs_list.append(student_probs)
-            teacher_probs_list.append(teacher_probs)
+            # Collect parameters for batch processing
+            student_params_list.append(student_params)
+            teacher_params_list.append(teacher_params)
             
             samples_collected_this_call += 1
             
             # Cycle to next teacher for next sample
             self.cycle_to_next_teacher()
             
-            # Get student action to continue episode (reuse the student_probs we already computed)
+            # Get student action to continue episode
             with torch.no_grad():
-                action = torch.multinomial(student_probs, 1).item()
+                if self.is_discrete_action:
+                    # For discrete actions, sample from probabilities
+                    action = torch.multinomial(student_params, 1).item()
+                else:
+                    # For continuous actions, sample from normal distribution
+                    action_dim = self.action_space.shape[0]
+                    mean = student_params[:action_dim]
+                    log_std = student_params[action_dim:]
+                    std = torch.exp(log_std)
+                    action = torch.normal(mean, std).cpu().numpy()
             
             # Step environment with student action
             obs, reward, done, truncated, info = self.env.step(action)
@@ -442,10 +456,25 @@ class SimpleImitationTrainer:
             self._current_obs = obs
         
         # Compute batch loss
-        student_probs_batch = torch.stack(student_probs_list)  # [2048, num_actions]
-        teacher_probs_batch = torch.stack(teacher_probs_list)
+        student_params_batch = torch.stack(student_params_list)  # [batch_size, param_dim]
+        teacher_params_batch = torch.stack(teacher_params_list)
         
-        loss = F.kl_div(torch.log(student_probs_batch + 1e-8), teacher_probs_batch, reduction='batchmean')
+        if self.is_discrete_action:
+            # For discrete actions, use KL divergence between probability distributions
+            loss = F.kl_div(torch.log(student_params_batch + 1e-8), teacher_params_batch, reduction='batchmean')
+        else:
+            # For continuous actions, use MSE loss on distribution parameters
+            # Split parameters into mean and log_std
+            action_dim = self.action_space.shape[0]
+            student_mean = student_params_batch[:, :action_dim]
+            student_log_std = student_params_batch[:, action_dim:]
+            teacher_mean = teacher_params_batch[:, :action_dim]
+            teacher_log_std = teacher_params_batch[:, action_dim:]
+            
+            # MSE loss on means and log stds
+            mean_loss = F.mse_loss(student_mean, teacher_mean)
+            std_loss = F.mse_loss(student_log_std, teacher_log_std)
+            loss = mean_loss + std_loss
         
         loss.backward()
         
@@ -608,8 +637,21 @@ class SimpleImitationTrainer:
                         with torch.no_grad():
                             obs_tensor = teacher_agent.policy.obs_to_tensor(obs_batch)[0]
                             distribution = teacher_agent.policy.get_distribution(obs_tensor)
-                            action_probs = F.softmax(distribution.distribution.logits, dim=-1)
-                            action = torch.argmax(action_probs).item()
+                            
+                            if isinstance(self.env.action_space, gym.spaces.Discrete):
+                                # For discrete actions, use argmax for deterministic evaluation
+                                if hasattr(distribution.distribution, 'logits'):
+                                    action_probs = F.softmax(distribution.distribution.logits, dim=-1)
+                                    action = torch.argmax(action_probs).item()
+                                else:
+                                    action_probs = distribution.distribution.probs
+                                    action = torch.argmax(action_probs).item()
+                            else:
+                                # For continuous actions, use mean for deterministic evaluation
+                                if hasattr(distribution.distribution, 'loc'):
+                                    action = distribution.distribution.loc.squeeze(0).cpu().numpy()
+                                else:
+                                    action = distribution.mean.squeeze(0).cpu().numpy()
                         
                         # Step environment
                         obs, reward, done, truncated, info = self.env.step(action)
@@ -689,8 +731,21 @@ class SimpleImitationTrainer:
                 with torch.no_grad():
                     obs_tensor = self.student_model.obs_to_tensor(obs_batch)[0]
                     distribution = self.student_model.get_distribution(obs_tensor)
-                    action_probs = F.softmax(distribution.distribution.logits, dim=-1)
-                    action = torch.argmax(action_probs).item()
+                    
+                    if self.is_discrete_action:
+                        # For discrete actions, use argmax for deterministic evaluation
+                        if hasattr(distribution.distribution, 'logits'):
+                            action_probs = F.softmax(distribution.distribution.logits, dim=-1)
+                            action = torch.argmax(action_probs).item()
+                        else:
+                            action_probs = distribution.distribution.probs
+                            action = torch.argmax(action_probs).item()
+                    else:
+                        # For continuous actions, use mean for deterministic evaluation
+                        if hasattr(distribution.distribution, 'loc'):
+                            action = distribution.distribution.loc.squeeze(0).cpu().numpy()
+                        else:
+                            action = distribution.mean.squeeze(0).cpu().numpy()
                 
                 # Step environment
                 obs, reward, done, truncated, info = self.env.step(action)
@@ -750,15 +805,17 @@ class SimpleImitationTrainer:
                 # Convert observations to tensors for masking
                 obs_tensors = self._obs_to_tensors(obs)
                 
-                # Get teacher probabilities for this environment configuration
+                # Get student action (with masking)
                 with torch.no_grad():
-                    teacher_probs = self.get_teacher_probs(obs_tensors, env_name)
-                    teacher_action = torch.argmax(teacher_probs).item()
+                    student_params = self.get_student_distribution_params(obs_tensors, env_name)
+                    if self.is_discrete_action:
+                        # For discrete actions, use argmax for deterministic evaluation
+                        student_action = torch.argmax(student_params).item()
+                    else:
+                        # For continuous actions, use mean for deterministic evaluation
+                        action_dim = self.action_space.shape[0]
+                        student_action = student_params[:action_dim].cpu().numpy()
                 
-                # Get student probabilities (with masking)
-                with torch.no_grad():
-                    student_probs = self.get_student_probs(obs_tensors, env_name)
-                    student_action = torch.argmax(student_probs).item()
                 # Use student action to step environment (since we're evaluating the student)
                 action = student_action
                 

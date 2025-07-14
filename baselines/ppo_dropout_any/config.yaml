@@ -1,5 +1,5 @@
 defaults:
-  exp_name: ppo_dropout_baseline
+  exp_name: ppo_dropout_any_baseline
   seed: 0
   torch_deterministic: true
   cuda: true
@@ -15,7 +15,8 @@ defaults:
 
   # Teacher and student observation keys
   keys: {mlp_keys: '.*', cnn_keys: '.*'}
-  num_eval_configs: 8
+  
+  # Evaluation keys (for subset evaluation comparison with original PPO dropout)
   eval_keys:
     env1:
       mlp_keys: '.*'
@@ -29,18 +30,19 @@ defaults:
     env4:
       mlp_keys: '.*'
       cnn_keys: '.*'
-    env5:
-      mlp_keys: '.*'
-      cnn_keys: '.*'
-    env6:
-      mlp_keys: '.*'
-      cnn_keys: '.*'
-    env7:
-      mlp_keys: '.*'
-      cnn_keys: '.*'
-    env8:
-      mlp_keys: '.*'
-      cnn_keys: '.*'
+  
+  # Probabilistic dropout configuration (modular design)
+  dropout:
+    schedule_type: 'constant'  # Options: 'constant', 'linear', 'exponential'
+    base_probability: 0.5      # For constant schedule
+    # For linear schedule:
+    # start_probability: 0.8
+    # end_probability: 0.2
+    # total_episodes: 10000
+    # For exponential schedule:
+    # start_probability: 0.8
+    # decay_rate: 0.995
+    # min_probability: 0.1
 
   save_model: false
   log_keys_video: [image]
@@ -76,10 +78,9 @@ defaults:
   # Evaluation settings
   eval:
     eval_freq: 2048  # Evaluate every 2048 callback calls (matches rollout frequency)
-    n_eval_episodes: 10  # Reduced episodes since we're evaluating much more frequently
+    n_eval_episodes: 10  # Number of evaluation episodes
     eval_envs: 4  # Number of parallel environments for evaluation
     video_log_interval: 1  # Log videos every evaluation call
-    num_eval_configs: 4
   
   # Training settings
   log_interval: 1  # Log every rollout
@@ -88,86 +89,94 @@ defaults:
 # Named Configs
 # ====================
 
-# Tiger Door Key
+# Tiger Door Key with probabilistic dropout
 gymnasium_tigerdoorkey: &tigerdoorkey_base
   task: gymnasium_TigerDoorKey-v0
   total_timesteps: 400000
   keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
-  # Reduced learning rate for stability in simple grid environment
-  ppo:
-    learning_rate: 1e-4      # Reduced from 3e-4 for more stable learning
-  num_eval_configs: 4
+  dropout:
+    schedule_type: 'constant'
+    base_probability: 0.3  # Higher chance of keeping keys (70% inclusion rate)
+  # Evaluation keys for subset comparison (same as original PPO dropout)
   eval_keys:
     env1:
       mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b'
       cnn_keys: '^$'
-
     env2: # must press button to reveal tiger/treasure up-down relative position. starts with key
       mlp_keys: '\b(neighbors_unprivileged_nokey|door_unprivileged|doors_unlocked|position|has_key)\b'
       cnn_keys: '^$'
-
     env3:  # must get key to reveal unlocked doors. starts with button
       mlp_keys: '\b(neighbors_unprivileged_nobutton|door|doors_unlocked_unprivileged|position|has_key)\b'
       cnn_keys: '^$'
-
     env4:  # must press button and get key to reveal unlocked doors and tiger/treasure relative position. starts with nothing
       mlp_keys: '\b(neighbors_unprivileged|door_unprivileged|doors_unlocked_unprivileged|position|has_key)\b'
       cnn_keys: '^$'
-
-  exp_name: "tigerdoorkey_ppo_dropout"
+  # Reduced learning rate for stability in simple grid environment
+  ppo:
+    learning_rate: 1e-4
+  exp_name: "tigerdoorkey_ppo_dropout_any"
 
 gymnasium_tigerdoorkeylarge:
   << : *tigerdoorkey_base
   task: "gymnasium_tigerdoorkeylarge"
   total_timesteps: 500000
-  exp_name: "tigerdoorkeylarge_ppo_dropout"
+  exp_name: "tigerdoorkeylarge_ppo_dropout_any"
 
 gymnasium_maze: &maze_base
   task: gymnasium_Maze7x7-v0
   total_timesteps: 400000
-  keys: {mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b', cnn_keys: '^$'}  # omit the distance key
-  num_eval_configs: 6
-  eval_keys:  # Note that neighbors_5x5 only includes neighbors not in the 3x3 neighbors (they are disjoint)
+  keys: {mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b', cnn_keys: '^$'}
+  dropout:
+    schedule_type: 'linear'
+    start_probability: 0.7  # Start with higher dropout
+    end_probability: 0.2    # End with lower dropout
+    total_episodes: 5000    # Reduce dropout over 5000 episodes
+  # Evaluation keys for subset comparison (same as original PPO dropout)
+  eval_keys:
     env1:  # Goal position, neighbors 5x5
       mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b'
       cnn_keys: '^$'
-    
     env2:  # Goal position, neighbors_3x3
       mlp_keys: '\b(goal_position|position|neighbors_3x3)\b'
       cnn_keys: '^$'
-    
     env3:  # No goal position, neighbors_3x3
       mlp_keys: '\b(goal_position_unprivileged|position|neighbors_3x3)\b'
       cnn_keys: '^$'
-
     env4:  # No goal position, neighbors_5x5
       mlp_keys: '\b(goal_position_unprivileged|position|neighbors_3x3|neighbors_5x5)\b'
       cnn_keys: '^$'
-    
     env5: # No goal position, neighbors_3x3 unprivileged
       mlp_keys: '\b(goal_position_unprivileged|position|neighbors_3x3_unprivileged)\b'
       cnn_keys: '^$'
-    
     env6: # No goal position, neighbors_5x5 unprivileged
       mlp_keys: '\b(goal_position_unprivileged|position|neighbors_3x3_unprivileged|neighbors_5x5_unprivileged)\b'
       cnn_keys: '^$'
-
-  exp_name: "maze_ppo_dropout"
+  exp_name: "maze_ppo_dropout_any"
 
 gymnasium_maze11:
   << : *maze_base
   task: gymnasium_Maze11x11-v0
   total_timesteps: 1500000
-  exp_name: "maze11_ppo_dropout"
+  dropout:
+    schedule_type: 'linear'
+    start_probability: 0.7
+    end_probability: 0.2
+    total_episodes: 10000  # Longer schedule for more complex environment
+  exp_name: "maze11_ppo_dropout_any"
 
-# Blind Pick environment
+# Blind Pick environment with exponential dropout schedule
 gymnasium_blindpick: &blindpick_base
   task: gymnasium_FOFixedGripper2DBlind7cmPick-v0
   total_timesteps: 5000000
   num_envs: 32
   log_keys_video: [camera_front]
   keys: {mlp_keys: '.*', cnn_keys: '.*'} # robot_state, touch, camera_front, camera_side, gripper_camera_rgb
-  num_eval_configs: 7
+  dropout:
+    schedule_type: 'exponential'
+    start_probability: 0.6   # Start with moderate dropout
+    decay_rate: 0.9995      # Slow decay
+    min_probability: 0.1    # Maintain some dropout throughout
+  # Evaluation keys for subset comparison (same as original PPO dropout)
   eval_keys:
     env1: # full privileged observations -- reach directly for object
       mlp_keys: '.*'
@@ -190,42 +199,30 @@ gymnasium_blindpick: &blindpick_base
     env7:  # full state, only side camera -- searching but image, obj_state gives it away
       mlp_keys: '.*'
       cnn_keys: 'camera_side'
+  exp_name: "blindpick_ppo_dropout_any"
 
-  exp_name: "blindpick_ppo_dropout"
+# Blind Pick with different dropout schedules for experimentation
+blindpick_constant_dropout:
+  << : *blindpick_base
+  dropout:
+    schedule_type: 'constant'
+    base_probability: 0.4  # 60% inclusion rate
+  exp_name: "blindpick_constant_dropout"
 
-# Blind Pick with different sensor configurations
+blindpick_linear_dropout:
+  << : *blindpick_base
+  dropout:
+    schedule_type: 'linear'
+    start_probability: 0.8  # High dropout initially
+    end_probability: 0.2   # Low dropout later
+    total_episodes: 15000  # Long schedule for complex task
+  exp_name: "blindpick_linear_dropout"
+
+# Blind Pick with Oracle State (simplified observations)
 blindpick_oracle_state:
   << : *blindpick_base
   keys: {mlp_keys: r'\b(robot_state|obj_state)\b', cnn_keys: '^$'}
-  eval_keys:
-    env1: # oracle state (robot_state + obj_state)
-      mlp_keys: r'\b(robot_state|obj_state)\b'
-      cnn_keys: '^$'
-  exp_name: "blindpick_oracle_state_ppo_dropout"
-
-blindpick_vision_only:
-  << : *blindpick_base
-  keys: {mlp_keys: '^$', cnn_keys: '.*'}
-  eval_keys:
-    env1: # vision only
-      mlp_keys: '^$'
-      cnn_keys: '.*'
-  exp_name: "blindpick_vision_only_ppo_dropout"
-
-blindpick_touch_vision:
-  << : *blindpick_base
-  keys: {mlp_keys: 'touch', cnn_keys: '.*'}
-  eval_keys:
-    env1: # touch + vision
-      mlp_keys: 'touch'
-      cnn_keys: '.*'
-  exp_name: "blindpick_touch_vision_ppo_dropout"
-
-blindpick_robot_state_vision:
-  << : *blindpick_base
-  keys: {mlp_keys: 'robot_state', cnn_keys: '.*'}
-  eval_keys:
-    env1: # robot state + vision
-      mlp_keys: 'robot_state'
-      cnn_keys: '.*'
-  exp_name: "blindpick_robot_state_vision_ppo_dropout" 
+  dropout:
+    schedule_type: 'constant'
+    base_probability: 0.5  # 50% dropout for simplified observations
+  exp_name: "blindpick_oracle_state_dropout_any" 

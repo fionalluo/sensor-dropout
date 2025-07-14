@@ -4,7 +4,7 @@ defaults:
   torch_deterministic: true
   cuda: true
   track: true
-  wandb_project: "baseline-710"
+  wandb_project: "baseline-712"
   wandb_entity: null
   capture_video: false
 
@@ -165,28 +165,30 @@ gymnasium_blindpick: &blindpick_base
   total_timesteps: 5000000
   num_envs: 32
   log_keys_video: [camera_front]
-  keys: {mlp_keys: '.*', cnn_keys: '.*'} # robot_state, touch, camera_front, camera_side, gripper_camera_rgb
+  # mlp keys: robot_state, touch, obj_state
+  # cnn keys: camera_front, camera_side, gripper_camera_rgb
+  keys: {mlp_keys: '.*', cnn_keys: '.*'}
   num_eval_configs: 7
   eval_keys:
-    env1: # full privileged observations
+    env1: # full privileged observations -- reach directly for object
       mlp_keys: '.*'
       cnn_keys: '.*'
-    env2:  # robot state, NO touch, but using all cameras
-      mlp_keys: 'robot_state'
+    env2:  # NO TOUCH -- reach directly without touch
+      mlp_keys: '\b(robot_state|obj_state)\b'
       cnn_keys: '.*'
-    env3:  # NO robot state, touch, but using all cameras
-      mlp_keys: 'touch'
+    env3:  # NO OBJ STATE -- reach directly using image and not obj state
+      mlp_keys: '\b(robot_state|touch)\b'
       cnn_keys: '.*'
-    env4: # NO robot state, NO touch, ONLY all cameras
-      mlp_keys: '^$'
-      cnn_keys: '.*'
-    env5:  # robot state, touch, but only wrist camera
+    env4: # NO OBJ STATE, only a wrist camera -- searching behavior
+      mlp_keys: '\b(robot_state|touch)\b'
+      cnn_keys: 'gripper_camera_rgb'
+    env5:  # full state, only wrist camera -- searching but obj_state gives it away
       mlp_keys: '.*'
       cnn_keys: 'gripper_camera_rgb'
-    env6:  # no robot state, touch, but only front camera
+    env6:  # full state, only front camera -- searching but image, obj_state gives it away
       mlp_keys: '.*'
       cnn_keys: 'camera_front'
-    env7:  # robot state, touch, but only side camera
+    env7:  # full state, only side camera -- searching but image, obj_state gives it away
       mlp_keys: '.*'
       cnn_keys: 'camera_side'
 
