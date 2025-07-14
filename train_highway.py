@@ -18,7 +18,7 @@ from pathlib import Path
 
 def record_rollout(
     model_path: str = "models/model.zip",
-    env_id: str = "highway_parking-v0",
+    env_id: str = "parking-v0",
     output_path: str = "rollout.mp4",
     n_steps: int = 1000,
     deterministic: bool = True,
@@ -52,6 +52,7 @@ def record_rollout(
     render_obs, info = render_env.reset(seed=42)
     frames = []
 
+    total_reward = 0
     for _ in range(n_steps):
         # Capture frame *before* the step so we also see the initial state
         # frame = env.render()
@@ -65,11 +66,12 @@ def record_rollout(
         ## switch x and y
         # last_frame = last_frame.transpose(1, 0)
         frames.append(last_frame)
-
+        total_reward += reward
         if terminated or truncated:
             break
 
     env.close()
+    print(f"Total reward: {total_reward}")
 
     if len(frames) == 0:
         raise RuntimeError("No frames captured – check render_mode or env compatibility.")
