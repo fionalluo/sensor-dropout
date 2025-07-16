@@ -6,10 +6,60 @@ command via ``sbatch --wrap``.  The signature matches the resource flags we
 commonly use across scripts (job name, GPUs, memory, CPUs, etc.).
 """
 from __future__ import annotations
-
+import logging
+import os
+import sys
 import subprocess
 from pathlib import Path
 from typing import List
+
+def get_conda_env(env_name):
+    conda_init = "source $(conda info --base)/etc/profile.d/conda.sh"
+    acv = f"bash -c '{conda_init} && conda activate {env_name} &&"
+    return acv
+
+def run_cmd(cmd, step_name="", *, conda_env=None, allow_error=False, dry_run=False):
+    """Execute a shell command with optional conda-environment wrapping.
+
+    Parameters
+    ----------
+    cmd : str | list
+        The command to run. Lists are automatically joined by spaces for
+        convenience, so you can write ``["python", "script.py", "--arg", "val"]``
+        instead of hand-crafting long f-strings.
+    step_name : str, optional
+        Human-readable label used in logs.
+    conda_env : str, optional
+        If given, the command is executed inside that conda environment using
+        the same *conda activate* wrapper used elsewhere in the codebase.
+    allow_error : bool, default False
+        When *False*, a non-zero exit status will terminate the program.
+    dry_run : bool, default False
+        Log the command but do not execute it. Useful for debugging.
+    """
+
+    # Convert list-based commands to a single string.
+    if isinstance(cmd, list):
+        cmd = " ".join(map(str, cmd))
+
+    if conda_env:
+        conda_cmd = get_conda_env(conda_env)
+        cmd = f"{conda_cmd} {cmd}'"  # close the single quote opened in get_conda_env
+
+    logging.info(f"[RUN] {step_name} | {cmd}")
+
+    if dry_run:
+        logging.info("[RUN] Dry-run enabled; command not executed.")
+        return True
+
+    exit_code = os.system(cmd)
+    if exit_code != 0 and not allow_error:
+        logging.error(f"[RUN] Stopping pipeline at step: {step_name}")
+        sys.exit(exit_code)
+
+    logging.info(f"[RUN] Successfully completed step: {step_name}")
+    return exit_code == 0
+
 
 def submit_to_slurm(
     cmd: str,
@@ -23,6 +73,7 @@ def submit_to_slurm(
     mem: str = "32G",
     cpus: str = "32",
     out_dir: str | Path = "slurm_outs",
+    exclude: str | None = None,
 ) -> None:
     """Submit *cmd* to Slurm using ``sbatch --wrap``.
 
@@ -40,6 +91,8 @@ def submit_to_slurm(
         Standard Slurm resource flags.
     out_dir : str | Path
         Directory where ``sbatch`` stdout files are written (will be created).
+    exclude : str, optional
+        Comma-separated list of nodes to exclude from job allocation.
     """
     out_path = Path(out_dir) / job_name
     out_path.mkdir(parents=True, exist_ok=True)
@@ -55,12 +108,14 @@ def submit_to_slurm(
         f"--gpus={gpus}",
         f"--mem={mem}",
         f"--cpus-per-task={cpus}",
-        "--wrap",
-        cmd,
     ]
+    if exclude:
+        sbatch_cmd.append(f"--exclude={exclude}")
+
+    sbatch_cmd.extend(["--wrap", cmd])
 
     print("[sbatch]", " ".join(sbatch_cmd))
-    subprocess.run(sbatch_cmd, check=True) 
+    subprocess.run(sbatch_cmd, check=True)
 
 def add_slurm_args(parser):
     """Attach common Slurm CLI flags to an ``argparse.ArgumentParser``.
@@ -77,9 +132,14 @@ def add_slurm_args(parser):
     group.add_argument('--gpus', default='1', help='GPUs per job')
     group.add_argument('--mem', default='32G', help='Memory per job')
     group.add_argument('--cpus', default='32', help='CPUs per task')
+    group.add_argument(
+        '--exclude',
+        default='kd-2080ti-[1-4].grasp.maas,dj-2080ti-0.grasp.maas,mp-2080ti-0.grasp.maas',
+        help='Comma-separated list of nodes to exclude.'
+    )
     return group
 
 def slurm_kwargs_from_args(args):
     """Return dict of kwargs accepted by :func:`submit_to_slurm` extracted from *args*."""
-    keys = ('job_name', 'time', 'partition', 'qos', 'gpus', 'mem', 'cpus')
+    keys = ('job_name', 'time', 'partition', 'qos', 'gpus', 'mem', 'cpus', 'exclude')
     return {k: getattr(args, k) for k in keys} 

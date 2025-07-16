@@ -54,6 +54,7 @@ from embodied import wrappers
 from baselines.shared.config_utils import load_config
 from baselines.shared.masking_utils import mask_observations_for_student
 
+
 # Environment registration & constants
 # -----------------------------------------------------------------------------
 
@@ -134,7 +135,9 @@ class CustomEvalCallback(BaseCallback):
         n_eval_episodes=5,
         deterministic=True,
         verbose=1,
-        debug=False
+        debug=False,
+        eval_metrics_manager=None,
+        masking_callback=None
     ):
         super().__init__(verbose)
         self.eval_env = eval_env
@@ -145,6 +148,8 @@ class CustomEvalCallback(BaseCallback):
         self.deterministic = deterministic
         self.debug = debug
         self.last_eval_step = -1  # Track last evaluation step to handle irregular increments
+        self.eval_metrics_manager = eval_metrics_manager
+        self.masking_callback = masking_callback  # Reference to masking stats callback
         
         # Get the number of eval configs
         self.num_eval_configs = getattr(config, 'num_eval_configs', 4)
@@ -247,10 +252,22 @@ class CustomEvalCallback(BaseCallback):
             else:
                 print(f"Warning: Missing eval_keys for {env_name}")
         
+        # Update masking callback with performance metrics
+        if self.masking_callback is not None:
+            print("  Updating adaptive masking metrics...")
+            for env_name, metrics in env_metrics.items():
+                self.masking_callback.update_env_performance(env_name, metrics['mean_return'])
+                if self.debug:
+                    print(f"    {env_name}: {metrics['mean_return']:.2f}")
+
+        # Note: Probability logging is now handled by MaskingStatsCallback
+
         # 3. Compute and log mean metrics across all environments
         self._log_mean_metrics(env_metrics)
         
         print("Evaluation complete!")
+    
+
 
     def _evaluate_student_default(self):
         """Evaluate student on training environment with student keys only (filtered, same as training)."""
@@ -320,7 +337,7 @@ class CustomEvalCallback(BaseCallback):
                 "eval/std_return": std_return,
                 "eval/mean_length": mean_length,
                 "global_step": self.num_timesteps
-            }, step=self.num_timesteps)
+            })
         
         eval_env.close()
 
@@ -421,7 +438,7 @@ class CustomEvalCallback(BaseCallback):
                 f"full_eval/{env_name}/std_return": std_return,
                 f"full_eval/{env_name}/mean_length": mean_length,
                 "global_step": self.num_timesteps
-            }, step=self.num_timesteps)
+            })
         
         eval_env.close()
         
@@ -452,21 +469,232 @@ class CustomEvalCallback(BaseCallback):
                 f"full_eval/env_mean/std_return": mean_std_return,
                 f"full_eval/env_mean/mean_length": mean_mean_length,
                 "global_step": self.num_timesteps
-            }, step=self.num_timesteps)
+            })
+
+# -----------------------------------------------------------------------------
+# SB3-Friendly Masking Statistics Callback
+# -----------------------------------------------------------------------------
+
+class MaskingStatsCallback(BaseCallback):
+    """
+    SB3-friendly callback that tracks masking statistics from the info dict.
+    This eliminates the need for shared state in the environment wrapper.
+    """
+    
+    def __init__(self, num_eval_configs=4, masking_strategy='cycle', config=None, verbose=0):
+        super().__init__(verbose)
+        self.num_eval_configs = num_eval_configs
+        self.masking_strategy = masking_strategy
+        self.config = config
+        
+        # Get adaptive configuration with backward compatible defaults
+        adaptive_config = getattr(config, 'adaptive', SimpleNamespace()) if config else SimpleNamespace()
+        self.warmup_timesteps = getattr(adaptive_config, 'warmup_timesteps', 50000)
+        self.smoothing_factor = getattr(adaptive_config, 'smoothing_factor', 0.1)
+        self.min_evaluations = getattr(adaptive_config, 'min_evaluations', 3)
+        
+        # Handle None values explicitly (in case config uses null in YAML)
+        if self.smoothing_factor is None:
+            self.smoothing_factor = 0
+        
+        # Determine smoothing mode
+        if self.smoothing_factor is None or self.smoothing_factor == 0:
+            self.smoothing_mode = 'latest'  # No smoothing, use latest value
+        elif self.smoothing_factor == -1:
+            self.smoothing_mode = 'average'  # Simple average of all evaluations
+        elif 0 < self.smoothing_factor <= 1:
+            self.smoothing_mode = 'ema'  # Exponential moving average
+        else:
+            raise ValueError(f"Invalid smoothing_factor: {self.smoothing_factor}. Use None/0 (latest), -1 (average), or 0-1 (EMA)")
+        
+        # Local tracking (no multiprocessing issues)
+        self.selection_counts = {f'env{i}': 0 for i in range(1, num_eval_configs + 1)}
+        self.total_selections = 0
+        
+        # For adaptive strategy - performance tracking with flexible smoothing
+        self.env_performance_raw = {f'env{i}': [] for i in range(1, num_eval_configs + 1)}  # Store raw values for average mode
+        self.env_performance_current = {f'env{i}': 0.0 for i in range(1, num_eval_configs + 1)}  # Current performance value
+        self.env_evaluation_count = {f'env{i}': 0 for i in range(1, num_eval_configs + 1)}  # Count evaluations
+        
+        # Track selections since last log
+        self.selections_since_log = 0
+    
+    def _on_step(self) -> bool:
+        """
+        Called after each step. Track selections from info dict.
+        """
+        # Check all environments for episode completions
+        if 'infos' in self.locals:
+            for i, info in enumerate(self.locals['infos']):
+                # Check if episode ended with selection info
+                if 'episode_env_selection' in info and info['episode_env_selection']:
+                    env_name = info['episode_env_selection']
+                    if env_name in self.selection_counts:
+                        self.selection_counts[env_name] += 1
+                        self.total_selections += 1
+                        self.selections_since_log += 1
+                        
+                        if self.verbose > 1:
+                            print(f"Episode completed with {env_name} selection")
+        
+        return True
+    
+    def _on_rollout_end(self) -> None:
+        """
+        Called at the end of a rollout. Log statistics to wandb.
+        """
+        if self.total_selections > 0 and self.selections_since_log > 0:
+            # Calculate empirical probabilities
+            empirical_probs = np.array([
+                self.selection_counts[f'env{i}'] / self.total_selections 
+                for i in range(1, self.num_eval_configs + 1)
+            ])
+            
+            # Calculate theoretical probabilities
+            theoretical_probs = self._calculate_theoretical_probabilities()
+            
+            # Log to wandb if available
+            if wandb.run is not None:
+                metrics = {}
+                
+                # Log empirical probabilities
+                for i, prob in enumerate(empirical_probs):
+                    metrics[f"masking_strategy/{self.masking_strategy}_env{i+1}_empirical_prob"] = prob
+                
+                # Log theoretical probabilities
+                for i, prob in enumerate(theoretical_probs):
+                    metrics[f"masking_strategy/{self.masking_strategy}_env{i+1}_prob"] = prob
+                
+                # Log adaptive scheduling metrics if using adaptive strategy
+                if self.masking_strategy == 'adaptive':
+                    # Log performance for each environment
+                    for i in range(1, self.num_eval_configs + 1):
+                        env_name = f'env{i}'
+                        metrics[f"adaptive/performance_{self.smoothing_mode}_{env_name}"] = self.env_performance_current[env_name]
+                        metrics[f"adaptive/evaluation_count_{env_name}"] = self.env_evaluation_count[env_name]
+                        # Also log latest raw value for comparison
+                        if self.env_performance_raw[env_name]:
+                            metrics[f"adaptive/performance_raw_{env_name}"] = self.env_performance_raw[env_name][-1]
+                    
+                    # Log adaptive status
+                    in_warmup = self.num_timesteps < self.warmup_timesteps
+                    min_evals = min(self.env_evaluation_count.values())
+                    enough_evals = min_evals >= self.min_evaluations
+                    metrics[f"adaptive/in_warmup"] = int(in_warmup)
+                    metrics[f"adaptive/enough_evaluations"] = int(enough_evals)
+                    metrics[f"adaptive/is_active"] = int(not in_warmup and enough_evals)
+                    metrics[f"adaptive/warmup_progress"] = min(1.0, self.num_timesteps / self.warmup_timesteps)
+                    metrics[f"adaptive/smoothing_mode"] = self.smoothing_mode
+                
+                metrics["global_step"] = self.num_timesteps
+                wandb.log(metrics)
+                
+                if self.verbose > 0:
+                    print(f"Logged masking probabilities - Total selections: {self.total_selections}")
+            
+            self.selections_since_log = 0
+    
+    def _calculate_theoretical_probabilities(self):
+        """Calculate theoretical probabilities based on strategy."""
+        if self.masking_strategy == 'cycle' or self.masking_strategy == 'uniform':
+            # Uniform distribution
+            return np.ones(self.num_eval_configs) / self.num_eval_configs
+        
+        elif self.masking_strategy == 'adaptive':
+            # Check if we're still in warmup period
+            if self.num_timesteps < self.warmup_timesteps:
+                if self.verbose > 0:
+                    print(f"[ADAPTIVE] Still in warmup ({self.num_timesteps}/{self.warmup_timesteps}), using uniform")
+                return np.ones(self.num_eval_configs) / self.num_eval_configs
+            
+            # Check if we have enough evaluations for all environments
+            min_evals = min(self.env_evaluation_count.values())
+            if min_evals < self.min_evaluations:
+                if self.verbose > 0:
+                    print(f"[ADAPTIVE] Not enough evaluations yet ({min_evals}/{self.min_evaluations}), using uniform")
+                return np.ones(self.num_eval_configs) / self.num_eval_configs
+            
+            # Based on current environment performance (using selected smoothing mode)
+            returns = np.array([self.env_performance_current[f'env{i}'] for i in range(1, self.num_eval_configs + 1)])
+            
+            if len(np.unique(returns)) == 1:
+                # All same performance - uniform
+                return np.ones(self.num_eval_configs) / self.num_eval_configs
+            else:
+                # Softmax of negative returns (favor worse environments)
+                neg_returns = -returns
+                stable_neg_returns = neg_returns - np.max(neg_returns)
+                exp_weights = np.exp(stable_neg_returns)
+                probabilities = exp_weights / np.sum(exp_weights)
+                
+                if self.verbose > 0:
+                    print(f"[ADAPTIVE] Performance: {[f'{r:.3f}' for r in returns]}")
+                    print(f"[ADAPTIVE] Probabilities: {[f'{p:.3f}' for p in probabilities]}")
+                
+                return probabilities
+        
+        else:
+            return np.ones(self.num_eval_configs) / self.num_eval_configs
+    
+    def update_env_performance(self, env_name, mean_return):
+        """Update performance metrics for adaptive strategy using flexible smoothing."""
+        if env_name in self.env_performance_current:
+            # Always store raw performance and increment count
+            self.env_performance_raw[env_name].append(mean_return)
+            self.env_evaluation_count[env_name] += 1
+            
+            # Update current performance based on smoothing mode
+            if self.smoothing_mode == 'latest':
+                # No smoothing - use latest value only
+                self.env_performance_current[env_name] = mean_return
+                
+            elif self.smoothing_mode == 'average':
+                # Simple average of all evaluations
+                self.env_performance_current[env_name] = np.mean(self.env_performance_raw[env_name])
+                
+            elif self.smoothing_mode == 'ema':
+                # Exponential moving average
+                if self.env_evaluation_count[env_name] == 1:
+                    # First evaluation - initialize with this value
+                    self.env_performance_current[env_name] = mean_return
+                else:
+                    # Update using EMA: new_avg = α * new_value + (1-α) * old_avg
+                    old_avg = self.env_performance_current[env_name]
+                    self.env_performance_current[env_name] = (
+                        self.smoothing_factor * mean_return + 
+                        (1 - self.smoothing_factor) * old_avg
+                    )
+            
+            if self.verbose > 0:
+                print(f"[PERF UPDATE] {env_name}: raw={mean_return:.3f}, "
+                      f"{self.smoothing_mode}={self.env_performance_current[env_name]:.3f}, "
+                      f"count={self.env_evaluation_count[env_name]}")
+    
+    def get_adaptive_probabilities(self):
+        """Get current adaptive probabilities for environments to use."""
+        if self.masking_strategy == 'adaptive' or self.masking_strategy == 'uniform':
+            return self._calculate_theoretical_probabilities()
+        return None
 
 # -----------------------------------------------------------------------------
 # Training-time Episode Masking Wrapper
 # -----------------------------------------------------------------------------
 
 class EpisodeMaskingWrapper(gym.ObservationWrapper):
-    """Wrapper that randomly selects an environment subset for each episode and masks observations accordingly.
-    The observation space remains unchanged - only the observations are masked."""
+    """SB3-friendly wrapper that selects environment subsets for each episode.
     
-    def __init__(self, env, config):
+    This wrapper is now stateless - it only tracks local state and communicates
+    through the info dict. All cross-environment statistics are handled by callbacks.
+    """
+    
+    def __init__(self, env, config, env_idx=0, adaptive_probs_getter=None):
         super().__init__(env)
         self.config = config
+        self.env_idx = env_idx  # Unique index for this environment instance
+        self.masking_strategy = getattr(config, 'masking_strategy', 'cycle')
         self.num_eval_configs = getattr(config, 'num_eval_configs', 4)
-        
+        self.adaptive_probs_getter = adaptive_probs_getter  # Function to get adaptive probabilities
+
         # Get all available keys from the environment once
         obs, _ = self.env.reset()
         self.available_keys = [k for k in obs.keys() if k not in ['reward', 'is_first', 'is_last', 'is_terminal']]
@@ -488,12 +716,11 @@ class EpisodeMaskingWrapper(gym.ObservationWrapper):
             print("No keys specified in config.")
             self.student_keys = []
         
-        # Current episode's teacher keys (will be set at episode start)
+        # Local state only (no shared state)
         self.current_teacher_keys = None
         self.current_env_name = None
-        
-        # Track episode boundaries
         self.episode_start = True
+        self.episode_counter = 0
     
     def _set_observation_space(self):
         """Set the observation space to match the student keys."""
@@ -522,14 +749,38 @@ class EpisodeMaskingWrapper(gym.ObservationWrapper):
                 return []
     
     def _select_env_subset(self):
-        """Cycle through environment subsets for each episode."""
-        # Use episode counter to cycle through environments
-        if not hasattr(self, 'episode_counter'):
-            self.episode_counter = 0
+        """Selects an environment subset for the episode based on the masking strategy."""
         
-        subset_idx = (self.episode_counter % self.num_eval_configs) + 1
-        env_name = f"env{subset_idx}"
+        if self.masking_strategy == 'cycle':
+            # Each environment cycles independently through configs
+            # Use env_idx offset to ensure different envs start at different points
+            subset_idx = ((self.episode_counter + self.env_idx) % self.num_eval_configs) + 1
+            env_name = f"env{subset_idx}"
         
+        elif self.masking_strategy == 'uniform':
+            # Pure random selection
+            chosen_idx = np.random.randint(1, self.num_eval_configs + 1)
+            env_name = f"env{chosen_idx}"
+        
+        elif self.masking_strategy == 'adaptive':
+            # Get probabilities from callback if available
+            if self.adaptive_probs_getter is not None:
+                probs = self.adaptive_probs_getter()
+                if probs is not None:
+                    chosen_idx = np.random.choice(self.num_eval_configs, p=probs) + 1
+                    env_name = f"env{chosen_idx}"
+                else:
+                    # Fallback to random if no probs available yet
+                    chosen_idx = np.random.randint(1, self.num_eval_configs + 1)
+                    env_name = f"env{chosen_idx}"
+            else:
+                # Fallback to random
+                chosen_idx = np.random.randint(1, self.num_eval_configs + 1)
+                env_name = f"env{chosen_idx}"
+        else:
+            raise ValueError(f"Unknown masking strategy: {self.masking_strategy}")
+
+        # Fallback to env1 if the chosen env_name is not in the config
         if not hasattr(self.config.eval_keys, env_name):
             print(f"Warning: Missing eval_keys for {env_name}, using env1")
             env_name = "env1"
@@ -545,6 +796,8 @@ class EpisodeMaskingWrapper(gym.ObservationWrapper):
         teacher_keys = teacher_mlp_keys + teacher_cnn_keys
         
         return env_name, teacher_keys
+    
+
     
     def observation(self, obs):
         """Mask observations based on the current episode's environment subset."""
@@ -586,16 +839,27 @@ class EpisodeMaskingWrapper(gym.ObservationWrapper):
         """Reset the environment and select a new environment subset for the new episode."""
         obs, info = self.env.reset(**kwargs)
         self.episode_start = True  # Mark that we're starting a new episode
-        self.episode_counter = getattr(self, 'episode_counter', 0) + 1  # Increment episode counter
+        self.episode_counter += 1  # Increment episode counter
+        
+        # Add environment metadata to info
+        info['env_idx'] = self.env_idx
+        info['episode_counter'] = self.episode_counter
+        
         return self.observation(obs), info
     
     def step(self, action):
         """Step the environment and mask the observation."""
         obs, reward, terminated, truncated, info = self.env.step(action)
         
+        # Add selection info to the info dict for callbacks to track
+        info['env_selection'] = self.current_env_name
+        info['masking_strategy'] = self.masking_strategy
+        
         # If episode is done, mark for new episode
         if terminated or truncated:
             self.episode_start = True
+            # Add episode completion info
+            info['episode_env_selection'] = self.current_env_name
         
         return self.observation(obs), reward, terminated, truncated, info
 
@@ -604,10 +868,23 @@ class EpisodeMaskingWrapper(gym.ObservationWrapper):
 # -----------------------------------------------------------------------------
 
 def train_ppo_dropout(envs, config, seed):
-    """Train PPO with episode-level observation masking."""
+    """Train PPO with episode-level observation masking (SB3-friendly version)."""
     
     # Global seeding for reproducibility
     set_random_seed(seed)
+
+    # Create a masking stats callback for tracking
+    masking_strategy = getattr(config, 'masking_strategy', 'cycle')
+    print(f"Using {masking_strategy} masking strategy.")
+    num_eval_configs = getattr(config, 'num_eval_configs', 4)
+    
+    # Create the masking callback that will track statistics
+    masking_callback = MaskingStatsCallback(
+        num_eval_configs=num_eval_configs,
+        masking_strategy=masking_strategy,
+        config=config,
+        verbose=1
+    )
     
     # Create base environment function (unfiltered - contains all keys)
     def _make_base_env(env_idx=0):
@@ -623,9 +900,13 @@ def train_ppo_dropout(envs, config, seed):
         # Create the base environment using gymnasium (unfiltered - contains all keys)
         base_env = _make_base_env(env_idx=env_idx)
         
-        # Apply episode-level masking wrapper that randomly selects environment subsets
-        # This wrapper will mask observations but keep the observation space unchanged
-        env = EpisodeMaskingWrapper(base_env, config)
+        # Apply episode-level masking wrapper (SB3-friendly - no shared state)
+        env = EpisodeMaskingWrapper(
+            base_env, 
+            config, 
+            env_idx=env_idx,
+            adaptive_probs_getter=masking_callback.get_adaptive_probabilities
+        )
         
         return env
     
@@ -690,6 +971,10 @@ def train_ppo_dropout(envs, config, seed):
             config=config,  # Pass the original config object
             sync_tensorboard=True,
         )
+        
+        # Set global_step as the default x-axis for all metrics
+        wandb.define_metric("global_step")
+        wandb.define_metric("*", step_metric="global_step")
 
     # Get PPO hyperparameters from config, with fallbacks to SB3 defaults
     ppo_config = getattr(config, 'ppo', {})
@@ -770,11 +1055,13 @@ def train_ppo_dropout(envs, config, seed):
         n_eval_episodes=n_eval_episodes,
         deterministic=True,
         verbose=1,
-        debug=False  # Enable debug to see what's happening
+        debug=False,  # Enable debug to see what's happening
+        eval_metrics_manager=None,  # No longer using shared manager
+        masking_callback=masking_callback  # Pass reference to masking callback
     )
 
-    # Prepare callbacks
-    callbacks = [eval_callback, custom_eval_callback]
+    # Prepare callbacks - masking callback first to track all steps
+    callbacks = [masking_callback, eval_callback, custom_eval_callback]
     if run is not None:
         callbacks.append(WandbCallback(
             gradient_save_freq=1_000,
@@ -803,7 +1090,7 @@ def train_ppo_dropout(envs, config, seed):
     vec_env.close()
     filtered_eval_env.close()
     unfiltered_eval_env.close()
-    
+
     if run is not None:
         run.finish()
     
@@ -822,8 +1109,14 @@ def parse_args():
     parser.add_argument('--num_envs', type=int, default=8, help="Number of parallel environments.")
     parser.add_argument('--total_timesteps', type=int, default=500000, help="Total timesteps for training.")
     parser.add_argument('--use_wandb', action='store_true', help="Enable wandb logging.")
-    parser.add_argument('--no_wandb', action='store_true', help="Disable wandb logging.")
     parser.add_argument('--wandb_project', type=str, default="sensor-dropout", help="Wandb project name.")
+    parser.add_argument(
+        '--masking_strategy', 
+        type=str, 
+        default='cycle', 
+        choices=['cycle', 'uniform', 'adaptive'], 
+        help="Strategy for selecting sensor subsets during training."
+    )
     return parser.parse_args()
 
 def main(argv=None):

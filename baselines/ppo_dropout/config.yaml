@@ -12,6 +12,13 @@ defaults:
   total_timesteps: 500000
   num_envs: 8
   use_wandb: true
+  masking_strategy: cycle  # Strategy for selecting sensor subsets: cycle, random, or adaptive
+
+  # Adaptive scheduling configuration
+  adaptive:
+    warmup_timesteps: 50000  # Use uniform sampling for first 50k timesteps before switching to adaptive
+    smoothing_factor: 0.1    # EMA smoothing factor: 0.1 = slow, 0.9 = fast, null/0 = no smoothing (latest only), -1 = simple average
+    min_evaluations: 3       # Minimum number of evaluations before using adaptive probabilities (1 = immediate)
 
   # Teacher and student observation keys
   keys: {mlp_keys: '.*', cnn_keys: '.*'}
@@ -96,6 +103,11 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
   # Reduced learning rate for stability in simple grid environment
   ppo:
     learning_rate: 1e-4      # Reduced from 3e-4 for more stable learning
+  # Adaptive scheduling configuration for TigerDoorKey
+  adaptive:
+    warmup_timesteps: 20000  # Shorter warmup for simpler environment
+    smoothing_factor: 0.2    # Slightly faster adaptation
+    min_evaluations: 2       # Fewer evaluations needed
   num_eval_configs: 4
   eval_keys:
     env1:
@@ -116,6 +128,34 @@ gymnasium_tigerdoorkey: &tigerdoorkey_base
 
   exp_name: "tigerdoorkey_ppo_dropout"
 
+
+
+# Tiger Door Key
+debug_gymnasium_tigerdoorkey: &debug_tigerdoorkey_base
+  task: gymnasium_TigerDoorKey-v0
+  total_timesteps: 400000
+  keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
+  # Reduced learning rate for stability in simple grid environment
+  ppo:
+    learning_rate: 1e-4      # Reduced from 3e-4 for more stable learning
+  # Example: No smoothing (backward compatible with old behavior)
+  adaptive:
+    warmup_timesteps: 10000  # Short warmup for debugging
+    smoothing_factor: null   # No smoothing - use latest evaluation only
+    min_evaluations: 1       # Immediate adaptation after first evaluation
+  num_eval_configs: 2
+  eval_keys:
+    env1:
+      mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b'
+      cnn_keys: '^$'
+    env2:  # must press button and get key to reveal unlocked doors and tiger/treasure relative position. starts with nothing
+      mlp_keys: '\b(neighbors_unprivileged|door_unprivileged|doors_unlocked_unprivileged|position|has_key)\b'
+      cnn_keys: '^$'
+
+  exp_name: "adaptive_debug_ppo_dropout"
+
+
+
 gymnasium_tigerdoorkeylarge:
   << : *tigerdoorkey_base
   task: "gymnasium_tigerdoorkeylarge"
@@ -126,6 +166,11 @@ gymnasium_maze: &maze_base
   task: gymnasium_Maze7x7-v0
   total_timesteps: 400000
   keys: {mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b', cnn_keys: '^$'}  # omit the distance key
+  # Adaptive scheduling configuration for Maze (more conservative due to complexity)
+  adaptive:
+    warmup_timesteps: 80000  # Longer warmup for more complex environment
+    smoothing_factor: 0.1    # Slower adaptation to avoid noise
+    min_evaluations: 4       # More evaluations needed for stable estimates
   num_eval_configs: 6
   eval_keys:  # Note that neighbors_5x5 only includes neighbors not in the 3x3 neighbors (they are disjoint)
     env1:  # Goal position, neighbors 5x5
@@ -228,4 +273,35 @@ blindpick_robot_state_vision:
     env1: # robot state + vision
       mlp_keys: 'robot_state'
       cnn_keys: '.*'
-  exp_name: "blindpick_robot_state_vision_ppo_dropout" 
+  exp_name: "blindpick_robot_state_vision_ppo_dropout"
+
+# ====================
+# Adaptive Smoothing Mode Examples
+# ====================
+
+# Example: Latest value only (no smoothing, backward compatible)
+gymnasium_tigerdoorkey_latest:
+  << : *tigerdoorkey_base
+  adaptive:
+    warmup_timesteps: 10000
+    smoothing_factor: null   # or 0 - no smoothing
+    min_evaluations: 1       # immediate adaptation
+  exp_name: "tigerdoorkey_latest_ppo_dropout"
+
+# Example: Simple average (cumulative mean)
+gymnasium_tigerdoorkey_average:
+  << : *tigerdoorkey_base
+  adaptive:
+    warmup_timesteps: 20000
+    smoothing_factor: -1     # simple average of all evaluations
+    min_evaluations: 3       # wait for more stable average
+  exp_name: "tigerdoorkey_average_ppo_dropout"
+
+# Example: Fast EMA adaptation
+gymnasium_tigerdoorkey_fast_ema:
+  << : *tigerdoorkey_base
+  adaptive:
+    warmup_timesteps: 15000
+    smoothing_factor: 0.5    # fast adaptation to recent performance
+    min_evaluations: 2
+  exp_name: "tigerdoorkey_fast_ema_ppo_dropout" 

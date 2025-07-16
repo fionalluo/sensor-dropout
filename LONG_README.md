@@ -14,13 +14,26 @@ pick one observation-space from `ppo/config.yaml`. Default to train all obs
 
 ## Running
 
-For continuous control, SB3 PPO
-
 ```
-python debug_blindpick.py --num_seeds 5 --slurm 2>&1 | tee error.logs
+python train.py --baseline ppo_dropout --configs gymnasium_tigerdoorkey --num_seeds 4 [--slurm]
 ```
 
+## Plotting
 
 ```
-python run_ppo.py --slurm --configs gymnasium_blindpick --num_seeds 4 --wandb_project fiona-ppo-blindpick-with-oracle
+python sensor-dropout/plot/plot.py --projects ppo_dropout-gymnasium_tigerdoorkey ppo_dropout-adaptive-gymnasium_tigerdoorkey --run_dir sensor-dropout/wandb --ymin 0
 ```
+
+```
+python sensor-dropout/plot/plot.py --projects ppo_dropout-gymnasium_maze ppo_dropout-adaptive-gymnasium_maze --run_dir sensor-dropout/wandb --ymin 0
+```
+
+
+```
+python sensor-dropout/plot/plot.py --projects ppo_dropout-gymnasium_maze11 ppo_dropout-adaptive-gymnasium_maze11 --run_dir sensor-dropout/wandb --ymin 0
+```
+
+
+## Dropout fancier tricks
+
+gymnasium_tigerdoorkey
