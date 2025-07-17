@@ -59,7 +59,7 @@ from embodied import wrappers
 from baselines.shared.config_utils import load_config
 from baselines.shared.masking_utils import mask_observations_for_student
 from baselines.shared.isaac_vec_env_wrapper import IsaacVecEnvWrapper
-from baselines.shared.eval_utils_sb3 import ObservationFilterWrapper, VecObservationFilterWrapper, CustomEvalCallback
+from baselines.shared.eval_utils_sb3 import ObservationFilterWrapper, VecObservationFilterWrapper, CustomEvalCallback, IsaacGymEvalCallback
 
 # Environment registration & constants
 # -----------------------------------------------------------------------------
@@ -210,22 +210,35 @@ def train_ppo(envs, config, seed, enable_custom_eval=True):
             verbose=1
         )
         callbacks.append(eval_callback)
-    
+
     # Conditionally add custom evaluation callback
     if enable_custom_eval:
         print("Enabling custom evaluation across observation subsets")
-        custom_eval_callback = CustomEvalCallback(
-            unfiltered_eval_env,  # Use unfiltered environment for masking
-            config,
-            _make_eval_env_for_callback,  # Function to create unfiltered environments
-            eval_freq=eval_freq,
-            n_eval_episodes=n_eval_episodes,
-            deterministic=True,
-            verbose=1,
-            debug=False,  # Enable debug to see what's happening
-            base_env_for_keys=base_env if suite == "isaacgym" else None
-        )
-        callbacks.append(custom_eval_callback)
+        if suite == "isaacgym":
+            # Use IsaacGymEvalCallback for Isaac Gym
+            isaacgym_eval_callback = IsaacGymEvalCallback(
+                base_env,  # The existing parallel Isaac Gym env
+                model=None,  # Will be set after PPO model is created
+                n_eval_episodes=n_eval_episodes,
+                eval_freq=eval_freq,
+                deterministic=True,
+                verbose=1,
+                log_wandb=config.use_wandb
+            )
+            callbacks.append(isaacgym_eval_callback)
+        else:
+            custom_eval_callback = CustomEvalCallback(
+                unfiltered_eval_env,  # Use unfiltered environment for masking
+                config,
+                _make_eval_env_for_callback,  # Function to create unfiltered environments
+                eval_freq=eval_freq,
+                n_eval_episodes=n_eval_episodes,
+                deterministic=True,
+                verbose=1,
+                debug=False,  # Enable debug to see what's happening
+                base_env_for_keys=base_env if suite == "isaacgym" else None
+            )
+            callbacks.append(custom_eval_callback)
     else:
         print("Custom evaluation across subsets disabled - using standard evaluation only")
     if run is not None:
@@ -238,13 +251,16 @@ def train_ppo(envs, config, seed, enable_custom_eval=True):
     # Perform initial evaluation at step 0 like simple_imitation.py
     print("\nInitial evaluation at step 0")
     for callback in callbacks:
-        # Only run initial evaluation for CustomEvalCallback (comprehensive evaluation)
+        # Only run initial evaluation for CustomEvalCallback or IsaacGymEvalCallback (comprehensive evaluation)
         # Skip standard EvalCallback since model logger isn't initialized yet
-        if isinstance(callback, CustomEvalCallback):
+        if isinstance(callback, (CustomEvalCallback, IsaacGymEvalCallback)):
             callback.init_callback(model)
             # Set num_timesteps to 0 for initial evaluation
             callback.num_timesteps = 0
-            callback._run_comprehensive_evaluation()
+            if hasattr(callback, '_run_comprehensive_evaluation'):
+                callback._run_comprehensive_evaluation()
+            elif hasattr(callback, '_run_isaacgym_evaluation'):
+                callback._run_isaacgym_evaluation()
 
     # Train the model
     model.learn(
@@ -252,6 +268,12 @@ def train_ppo(envs, config, seed, enable_custom_eval=True):
         callback=callbacks,
         log_interval=log_interval,
     )
+
+    # For Isaac Gym, set the model in the callback after creation
+    if suite == "isaacgym":
+        for cb in callbacks:
+            if isinstance(cb, IsaacGymEvalCallback):
+                cb.model = model
 
     vec_env.close()
     filtered_eval_env.close()

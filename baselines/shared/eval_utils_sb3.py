@@ -500,3 +500,102 @@ class CustomEvalCallback(BaseCallback):
                 "comprehensive_eval/mean_length": mean_length,
                 "comprehensive_eval/std_length": std_length
             })
+
+
+class IsaacGymEvalCallback(BaseCallback):
+    """Evaluation callback for Isaac Gym: evaluates using the existing parallel env, collects episodes in parallel, and logs mean/std return/length."""
+    def __init__(self, env, model, n_eval_episodes=5, eval_freq=10000, deterministic=True, verbose=1, log_wandb=True):
+        super().__init__(verbose)
+        self.env = env  # The existing parallel Isaac Gym env
+        self.model = model
+        self.n_eval_episodes = n_eval_episodes
+        self.eval_freq = eval_freq
+        self.deterministic = deterministic
+        self.log_wandb = log_wandb
+        self.last_eval_step = -1
+        self.isaacgym_suite = True
+
+    def _on_step(self):
+        if self.eval_freq > 0:
+            current_step = self.num_timesteps
+            if current_step == 0 and self.last_eval_step == -1:
+                print(f"\nInitial Isaac Gym evaluation at step {current_step}")
+                self._run_isaacgym_evaluation()
+                self.last_eval_step = current_step
+            else:
+                prev_eval_count = self.last_eval_step // self.eval_freq
+                current_eval_count = current_step // self.eval_freq
+                if current_eval_count > prev_eval_count:
+                    next_eval_step = (prev_eval_count + 1) * self.eval_freq
+                    print(f"\nIsaac Gym evaluation triggered: step {current_step} crossed boundary at {next_eval_step} (eval_freq={self.eval_freq})")
+                    self._run_isaacgym_evaluation()
+                    self.last_eval_step = current_step
+        return True
+
+    def _run_isaacgym_evaluation(self):
+        print(f"[IsaacGymEvalCallback] Starting evaluation with {self.n_eval_episodes} episodes...")
+        num_envs = getattr(self.env, 'num_envs', 1)
+        current_returns = np.zeros(num_envs)
+        current_lengths = np.zeros(num_envs)
+        episode_returns = []
+        episode_lengths = []
+        episodes_collected = 0
+        obs = self.env.reset()
+        if isinstance(obs, tuple):
+            obs = obs[0]
+        while episodes_collected < self.n_eval_episodes:
+            # Prepare obs_batch for model.predict
+            obs_batch = {k: v for k, v in obs.items()}
+            # Ensure all obs are np arrays
+            for k in obs_batch:
+                if isinstance(obs_batch[k], torch.Tensor):
+                    obs_batch[k] = obs_batch[k].cpu().numpy()
+                elif not isinstance(obs_batch[k], np.ndarray):
+                    obs_batch[k] = np.array(obs_batch[k])
+            with torch.no_grad():
+                action, _ = self.model.predict(obs_batch, deterministic=self.deterministic)
+            if isinstance(action, np.ndarray) and action.ndim == 1:
+                action = np.expand_dims(action, axis=0)
+            step_result = self.env.step(action)
+            if isinstance(step_result, tuple):
+                if len(step_result) == 5:
+                    obs, reward, done, truncated, info = step_result
+                elif len(step_result) == 4:
+                    obs, reward, done, info = step_result
+                    truncated = np.zeros_like(done)
+                else:
+                    obs = step_result[0]
+                    reward = done = truncated = info = None
+            else:
+                reward = done = truncated = info = None
+            if info is None:
+                info = {}
+            reward = np.array(reward)
+            done = np.array(done)
+            truncated = np.array(truncated)
+            current_returns += reward
+            current_lengths += 1
+            for i in range(num_envs):
+                if ((done[i] if done is not None else False) or (truncated[i] if truncated is not None else False)):
+                    episode_returns.append(current_returns[i])
+                    episode_lengths.append(current_lengths[i])
+                    current_returns[i] = 0
+                    current_lengths[i] = 0
+                    episodes_collected += 1
+                    if episodes_collected >= self.n_eval_episodes:
+                        break
+        episode_returns = np.array(episode_returns[:self.n_eval_episodes])
+        episode_lengths = np.array(episode_lengths[:self.n_eval_episodes])
+        mean_return = np.mean(episode_returns)
+        std_return = np.std(episode_returns)
+        mean_length = np.mean(episode_lengths)
+        std_length = np.std(episode_lengths)
+        print(f"[IsaacGymEvalCallback] mean_return={mean_return:.2f}, std_return={std_return:.2f}, mean_length={mean_length:.1f}, std_length={std_length:.1f}")
+        if self.log_wandb and wandb.run is not None:
+            wandb.log({
+                "isaacgym_eval/mean_return": mean_return,
+                "isaacgym_eval/std_return": std_return,
+                "isaacgym_eval/mean_length": mean_length,
+                "isaacgym_eval/std_length": std_length,
+                "global_step": self.num_timesteps
+            }, step=self.num_timesteps)

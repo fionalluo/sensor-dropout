@@ -10,12 +10,12 @@ BASE_LOGDIR=~/logdir/baselines/ppo
 
 # List of configs to run
 CONFIGS=(
-  "gymnasium_tigerdoorkey"
+  # "gymnasium_tigerdoorkey"
   # "gymnasium_tigerdoorkeylarge"
   # "gymnasium_maze"
   # "gymnasium_maze11"
   # "gymnasium_blindpick"
-  # "gymnasium_aerialnavigation"
+  "gymnasium_aerialnavigation"
 )
 
 NUM_SEEDS=1
