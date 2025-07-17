@@ -16,7 +16,7 @@ This project requires setting up a conda environment and installing the necessar
 
 ### Conda Environment Setup
 
-⚠️ **Important**: If you plan to use the aerial gym simulation, you need to create a conda environment with Python 3.8 for Isaac Gym compatibility. Otherwise, use Python 3.9 for other environments.
+⚠️ **Important**: If you plan to use the aerial gym simulation, you need to create a conda environment with Python 3.8 for Isaac Gym compatibility. If you don't plan to use the aerial gym at all, you can use Python 3.9 for other environments temporarily.
 
 #### For Aerial Gym Simulation (Isaac Gym Compatible)
 
@@ -68,11 +68,7 @@ This project requires setting up a conda environment and installing the necessar
    ```bash
    git clone https://github.com/fionalluo/aerial_gym
    ```
-   Follow the setup instructions listed here.
-
-2. Follow the aerial gym setup tutorial:
-   - Visit: https://ntnu-arl.github.io/aerial_gym_simulator/2_getting_started/
-   - Complete the Isaac Gym installation steps as outlined in the tutorial
+   Follow the setup instructions listed here in the 2_getting_started.md readme.
 
 ### Grid Setup
 

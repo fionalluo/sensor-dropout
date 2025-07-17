@@ -14,7 +14,8 @@ CONFIGS=(
   # "gymnasium_tigerdoorkeylarge"
   # "gymnasium_maze"
   # "gymnasium_maze11"
-  "gymnasium_blindpick"
+  # "gymnasium_blindpick"
+  "gymnasium_aerialnavigation"
 )
 
 NUM_SEEDS=1
