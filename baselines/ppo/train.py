@@ -3,7 +3,10 @@
 Entry point script for SB3 PPO training that can be run directly.
 This script handles the import issues and provides a clean interface.
 """
-import aerial_gym
+try:
+    import aerial_gym
+except ImportError:
+    print("[WARN] aerial_gym could not be imported. Continuing without it.")
 
 import os
 import sys

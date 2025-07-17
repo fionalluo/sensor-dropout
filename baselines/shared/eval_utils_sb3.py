@@ -383,11 +383,18 @@ class CustomEvalCallback(BaseCallback):
                         else:
                             obs_tensors[key] = torch.tensor([value], dtype=torch.float32)
                 
+                # Parse eval_keys patterns to get teacher_keys (list of keys)
+                available_keys = list(obs.keys())
+                mlp_keys_pattern = getattr(eval_keys, 'mlp_keys', '.*')
+                cnn_keys_pattern = getattr(eval_keys, 'cnn_keys', '.*')
+                teacher_mlp_keys = self._parse_keys_from_pattern(mlp_keys_pattern, available_keys)
+                teacher_cnn_keys = self._parse_keys_from_pattern(cnn_keys_pattern, available_keys)
+                teacher_keys = teacher_mlp_keys + teacher_cnn_keys
                 # Mask observations for the student
                 masked_obs = mask_observations_for_student(
                     obs_tensors, 
                     self.student_keys, 
-                    eval_keys, # Use eval_keys for subset evaluation
+                    teacher_keys, # Use parsed teacher_keys (list)
                     device=None,  # Use CPU for evaluation
                     debug=self.debug and episode == 0
                 )
