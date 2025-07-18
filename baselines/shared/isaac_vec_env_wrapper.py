@@ -27,6 +27,7 @@ class IsaacVecEnvWrapper(VecEnv):
         self._process_spaces()
         self._ep_rew_buf = np.zeros(self.num_envs)
         self._ep_len_buf = np.zeros(self.num_envs)
+        self._first_episode_logged = False  # Track if we've logged the first episode
         super().__init__(self.num_envs, self.observation_space, self.action_space)
 
     def _process_spaces(self):
@@ -74,21 +75,50 @@ class IsaacVecEnvWrapper(VecEnv):
             self.action_space = action_space
 
     def reset(self) -> VecEnvObs:
+        if not self._first_episode_logged:
+            print("[DEBUG] IsaacVecEnvWrapper.reset() called")
         obs = self.env.reset()
         # If obs is a tuple, extract the first element (the actual observation)
         if isinstance(obs, tuple):
             obs = obs[0]
         self._ep_rew_buf = np.zeros(self.num_envs)
         self._ep_len_buf = np.zeros(self.num_envs)
-        return self._process_obs(obs)
+        processed_obs = self._process_obs(obs)
+        if not self._first_episode_logged:
+            print(f"[DEBUG] Reset: processed_obs type: {type(processed_obs)}, keys: {list(processed_obs.keys()) if isinstance(processed_obs, dict) else None}")
+            if isinstance(processed_obs, dict):
+                for k, v in processed_obs.items():
+                    print(f"[DEBUG] Reset: obs[{k}] shape: {v.shape}, dtype: {v.dtype}")
+        return processed_obs
 
     def step_async(self, actions: np.ndarray):
+        if not self._first_episode_logged:
+            print(f"[DEBUG] IsaacVecEnvWrapper.step_async() called with actions type: {type(actions)}, shape: {actions.shape if hasattr(actions, 'shape') else None}")
+            # Log the first few actions for inspection
+            if isinstance(actions, np.ndarray):
+                for i in range(min(3, actions.shape[0])):
+                    print(f"[DEBUG] step_async: action[{i}]: {actions[i]}")
         if isinstance(actions, np.ndarray):
             actions = torch.from_numpy(actions).to(device=self.device, dtype=torch.float32)
+        if not self._first_episode_logged:
+            print(f"[DEBUG] step_async: actions converted to torch: {isinstance(actions, torch.Tensor)}, shape: {actions.shape if hasattr(actions, 'shape') else None}")
         self._async_actions = actions
 
     def step_wait(self) -> VecEnvStepReturn:
+        if not self._first_episode_logged:
+            print("[DEBUG] IsaacVecEnvWrapper.step_wait() called")
         obs, rewards, terminated, truncated, info = self.env.step(self._async_actions)
+        # Log reward and done for first 2 envs only during first episode
+        if not self._first_episode_logged:
+            if isinstance(rewards, (np.ndarray, torch.Tensor)):
+                for i in range(min(2, len(rewards))):
+                    print(f"[DEBUG] step_wait: reward[{i}]: {rewards[i]}")
+            if isinstance(terminated, (np.ndarray, torch.Tensor)):
+                for i in range(min(2, len(terminated))):
+                    print(f"[DEBUG] step_wait: terminated[{i}]: {terminated[i]}")
+            if isinstance(truncated, (np.ndarray, torch.Tensor)):
+                for i in range(min(2, len(truncated))):
+                    print(f"[DEBUG] step_wait: truncated[{i}]: {truncated[i]}")
         # If obs is a tuple, extract the first element (the actual observation)
         if isinstance(obs, tuple):
             obs = obs[0]
@@ -106,6 +136,14 @@ class IsaacVecEnvWrapper(VecEnv):
         self._ep_len_buf += 1
         infos = self._process_info(info, obs, terminated, truncated, dones)
         done_indices = np.where(dones)[0]
+        # Log episode return and length for first 2 envs that finish, but only during first episode
+        for idx in done_indices:
+            if idx < 2 and not self._first_episode_logged:
+                print(f"[DEBUG] step_wait: Episode done for env {idx}: return={self._ep_rew_buf[idx]}, length={self._ep_len_buf[idx]}")
+        # Mark first episode as logged if any episode ends
+        if len(done_indices) > 0 and not self._first_episode_logged:
+            self._first_episode_logged = True
+            print("[DEBUG] First episode completed - stopping debug logs")
         self._ep_rew_buf[done_indices] = 0
         self._ep_len_buf[done_indices] = 0
         return obs, rewards, dones, infos
