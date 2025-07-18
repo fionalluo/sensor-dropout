@@ -85,12 +85,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--wandb_project", default=None, help="Wandb project name. If not set, a name is generated from baseline and configs.")
 
     # PPO Dropout specific arguments
-    p.add_argument(
-        "--masking_strategy",
-        choices=["cycle", "uniform", "adaptive"],
-        default="cycle",
-        help="Masking strategy for ppo_dropout baseline (cycle, random, or adaptive).",
-    )
     p.add_argument("--version", type=int, default=1, help="Version number for wandb project.")
 
     # Slurm flags (including --slurm) via shared helper
@@ -119,7 +113,7 @@ def main() -> None:
     if args.wandb_project is None:
         configs_str = "-".join(sorted(args.configs))
         # Include masking strategy in project name for ppo_dropout
-        args.wandb_project = f"{baseline}-{args.masking_strategy}-{configs_str}-v{args.version}"
+        args.wandb_project = f"{baseline}-{configs_str}-v{args.version}"
         print(f"INFO: --wandb_project not set, generated project name: '{args.wandb_project}'")
     # ---
 
@@ -127,8 +121,7 @@ def main() -> None:
     os.environ.setdefault("MUJOCO_GL", "egl")
 
     # Seed generation
-    # initial_seed = args.seed if args.seed is not None else generate_unique_seed()
-    initial_seed = 42 ## deterministic seed for reproducibility
+    initial_seed = args.seed if args.seed is not None else generate_unique_seed()
     seeds = [initial_seed + i for i in range(args.num_seeds)]
 
     base_logdir = Path(os.path.expanduser(args.base_logdir))
@@ -148,13 +141,11 @@ def main() -> None:
 
             cmd = (
                 f"python -u {args.train_script} "
-                f"--configs {config} --seed {seed} --wandb_project {args.wandb_project}"
+                f"--configs {config} --seed {seed} --wandb_project {args.wandb_project} "
             )
 
-            # Add masking strategy for ppo_dropout
-            if baseline == "ppo_dropout":
-                cmd += f" --masking_strategy {args.masking_strategy}"
-
+            # Masking strategy is now embedded in the config files
+            
             if args.slurm:
                 submit_to_slurm(cmd, idx=cmd_idx, **slurm_common)
                 cmd_idx += 1

@@ -77,72 +77,72 @@ defaults:
 # Debug Configs
 # ====================
 
-# Base debug configuration for Maze
-debug_maze_base: &debug_maze_base
-  task: gymnasium_Maze7x7-v0
-  total_timesteps: 400000
-  keys: {mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b', cnn_keys: '^$'}  # omit the distance key
+# Base debug configuration for Tiger Door Key
+debug_tiger_base: &debug_tiger_base
+  task: gymnasium_TigerDoorKey-v0
+  keys: {mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b', cnn_keys: '^$'}
+  ppo:
+    learning_rate: 1e-4
   num_eval_configs: 2
-  eval_keys:  # Note that neighbors_5x5 only includes neighbors not in the 3x3 neighbors (they are disjoint)
-    env1:  # Goal position, neighbors 5x5
-      mlp_keys: '\b(goal_position|position|neighbors_3x3|neighbors_5x5)\b'
+  eval_keys:
+    env1:
+      mlp_keys: '\b(neighbors|door|doors_unlocked|position|has_key)\b'
+      cnn_keys: '^$'
+    env2:  # must press button and get key to reveal unlocked doors and tiger/treasure relative position
+      mlp_keys: '\b(neighbors_unprivileged|door_unprivileged|doors_unlocked_unprivileged|position|has_key)\b'
       cnn_keys: '^$'
 
-    env2: # No goal position, neighbors_5x5 unprivileged
-      mlp_keys: '\b(goal_position_unprivileged|position|neighbors_5x5_unprivileged)\b'
-      cnn_keys: '^$'
-
-# Debug Maze with Cycle strategy (deterministic cycling)
-debug_maze_cycle:
-  <<: *debug_maze_base
+# Debug Tiger Door Key with Cycle strategy (deterministic cycling)
+debug_tiger_cycle:
+  << : *debug_tiger_base
   masking_strategy: cycle
-  exp_name: "debug_maze_cycle"
+  exp_name: "debug_tiger_cycle"
 
-# Debug Maze with Adaptive strategy (no warmup, immediate adaptation)
-debug_maze_adaptive_window1:
-  <<: *debug_maze_base
+# Debug Tiger Door Key with Adaptive strategy (no warmup, immediate adaptation)
+debug_tiger_adaptive_window1:
+  << : *debug_tiger_base
   masking_strategy: adaptive
   adaptive:
     warmup_timesteps: 0      # No warmup - immediate adaptive behavior
     evaluation_window: 1     # Use only the most recent evaluation
     smoothing_factor: 0      # Average the window
-  exp_name: "debug_maze_adaptive_naive"
+  exp_name: "debug_tiger_adaptive_naive"
 
-# # Debug Maze with warmup
-# debug_maze_adaptive_warmup_window1:
-#   <<: *debug_maze_base
-#   masking_strategy: adaptive
-#   adaptive:
-#     warmup_timesteps: 100_000  # 100k timesteps warmup (uses cycling during warmup)
-#     evaluation_window: 1     # Use only the most recent evaluation
-#     smoothing_factor: 0      # Average the window
-#   exp_name: "debug_maze_adaptive_warmup"
+# Debug Tiger Door Key with warmup
+debug_tiger_adaptive_warmup_window1:
+  << : *debug_tiger_base
+  masking_strategy: adaptive
+  adaptive:
+    warmup_timesteps: 100_000  # 100k timesteps warmup (uses cycling during warmup)
+    evaluation_window: 1     # Use only the most recent evaluation
+    smoothing_factor: 0      # Average the window
+  exp_name: "debug_tiger_adaptive_warmup"
 
-# # Debug Maze with adaptive (100k warmup, window 3 average)
-# debug_maze_adaptive_warmup_window3:
-#   <<: *debug_maze_base
-#   masking_strategy: adaptive
-#   adaptive:
-#     warmup_timesteps: 100_000  # 100k warmup then adapt
-#     evaluation_window: 3       # Look at last 3 evals
-#     smoothing_factor: 0        # Average window
-#   exp_name: "debug_maze_adaptive_warmup_window3"
+# Debug Tiger Door Key with adaptive (100k warmup, window 3 average)
+debug_tiger_adaptive_warmup_window3:
+  << : *debug_tiger_base
+  masking_strategy: adaptive
+  adaptive:
+    warmup_timesteps: 100_000  # 100k warmup then adapt
+    evaluation_window: 3       # Look at last 3 evals
+    smoothing_factor: 0        # Average window
+  exp_name: "debug_tiger_adaptive_warmup_window3"
 
-# debug_maze_adaptive_warmup_window100:
-#   <<: *debug_maze_base
-#   masking_strategy: adaptive
-#   adaptive:
-#     warmup_timesteps: 100_000  # 100k warmup then adapt
-#     evaluation_window: 100       # Look at last 100 evals
-#     smoothing_factor: 0        # Average window
-#   exp_name: "debug_maze_adaptive_warmup_window100"
+debug_tiger_adaptive_warmup_window100:
+  << : *debug_tiger_base
+  masking_strategy: adaptive
+  adaptive:
+    warmup_timesteps: 100_000  # 100k warmup then adapt
+    evaluation_window: 100       # Look at last 3 evals
+    smoothing_factor: 0        # Average window
+  exp_name: "debug_tiger_adaptive_warmup_window100"
 
-# # Debug Maze with adaptive (100k warmup, window 100 EMA)
-# debug_maze_adaptive_warmup_window100_ema:
-#   <<: *debug_maze_base
-#   masking_strategy: adaptive
-#   adaptive:
-#     warmup_timesteps: 100_000
-#     evaluation_window: 100
-#     smoothing_factor: 0.5      # Exponential smoothing
-#   exp_name: "debug_maze_adaptive_warmup_window100_ema"
+# Debug Tiger Door Key with adaptive (100k warmup, window 3 EMA)
+debug_tiger_adaptive_warmup_window100_ema:
+  << : *debug_tiger_base
+  masking_strategy: adaptive
+  adaptive:
+    warmup_timesteps: 100_000
+    evaluation_window: 100
+    smoothing_factor: 0.5      # Exponential smoothing
+  exp_name: "debug_tiger_adaptive_warmup_window3_ema"

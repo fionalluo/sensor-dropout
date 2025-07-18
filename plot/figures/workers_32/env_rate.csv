@@ -1,0 +1,3 @@
+Method,Average Performance,Final Performance,AUC,Time Steps
+empirical_masking_strategy/adaptive_env1_empirical_prob (N=4),0.5013344086515293,0.50055987267733,197132.71083231978,393216
+empirical_masking_strategy/adaptive_env2_empirical_prob (N=4),0.49866559134847055,0.4994401273226699,196083.2891676802,393216

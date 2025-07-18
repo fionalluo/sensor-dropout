@@ -39,7 +39,7 @@ def extract_wandb_info(run_dir):
     project = _resolve(cfg.get('wandb_project') or cfg.get('project'))
     return entity, project
 
-def cleanup_wandb_project(wandb_dir, project_name, dry_run=False):
+def cleanup_wandb_project(wandb_dir, wandb_project, dry_run=False):
     """
     Delete all runs from a specific project in the wandb directory.
     
@@ -47,7 +47,7 @@ def cleanup_wandb_project(wandb_dir, project_name, dry_run=False):
     -----------
     wandb_dir : str
         Path to the wandb directory containing run folders
-    project_name : str
+    wandb_project: str
         Name of the project to clean up
     dry_run : bool
         If True, only print what would be deleted without actually deleting
@@ -77,17 +77,17 @@ def cleanup_wandb_project(wandb_dir, project_name, dry_run=False):
         run_id = run_dir.name.split('-')[-1]
         entity, project = extract_wandb_info(run_dir)
         
-        if project == project_name:
+        if project == wandb_project:
             runs_to_delete.append((run_dir, run_id, entity))
             logging.info(f"Found matching run: {run_id} (project: {project}, entity: {entity})")
         else:
-            logging.debug(f"Skipping run {run_id}: project '{project}' != '{project_name}'")
+            logging.debug(f"Skipping run {run_id}: project '{project}' != '{wandb_project}'")
     
     if not runs_to_delete:
-        logging.info(f"No runs found for project '{project_name}'")
+        logging.info(f"No runs found for project '{wandb_project}'")
         return
     
-    logging.info(f"Found {len(runs_to_delete)} runs to delete for project '{project_name}'")
+    logging.info(f"Found {len(runs_to_delete)} runs to delete for project '{wandb_project}'")
     
     if dry_run:
         logging.info("DRY RUN MODE - No files will be deleted")
@@ -95,7 +95,7 @@ def cleanup_wandb_project(wandb_dir, project_name, dry_run=False):
             logging.info(f"Would delete: {run_dir}")
     else:
         # Ask for confirmation
-        response = input(f"Are you sure you want to delete {len(runs_to_delete)} runs from project '{project_name}'? (yes/no): ")
+        response = input(f"Are you sure you want to delete {len(runs_to_delete)} runs from project '{wandb_project}'? (yes/no): ")
         if response.lower() not in ['yes', 'y']:
             logging.info("Operation cancelled by user")
             return
@@ -117,7 +117,7 @@ def main():
         description="Clean up WandB runs from a specific project in the local wandb folder"
     )
     parser.add_argument(
-        "--project_name",
+        "--wandb_project",
         help="Name of the WandB project to clean up",
         required=True
     )
@@ -142,7 +142,7 @@ def main():
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     
-    cleanup_wandb_project(args.wandb_dir, args.project_name, dry_run=args.dry_run)
+    cleanup_wandb_project(args.wandb_dir, args.wandb_project, dry_run=args.dry_run)
 
 if __name__ == "__main__":
     main() 

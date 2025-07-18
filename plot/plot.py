@@ -9,6 +9,9 @@ import subprocess
 import re
 import shutil
 import yaml  # For parsing config.yaml
+from typing import Union, List
+from rich.console import Console
+from rich.table import Table
 
 # Use non-interactive backend to avoid hanging on headless servers
 import matplotlib
@@ -50,6 +53,28 @@ def get_plot_filename(mode, projects, metrics):
         return f"figures/plot_{project_safe}_{metric_safe}.png"
     else:
         raise ValueError(f"Unknown plot mode: {mode}")
+
+def get_csv_filename(plot_filename):
+    """
+    Convert a plot filename to corresponding CSV filename.
+    
+    Args:
+        plot_filename (str): The plot filename (e.g., "figures/plot_name.png")
+    
+    Returns:
+        str: The CSV filename (e.g., "figures/plot_name.csv")
+    """
+    if plot_filename is None:
+        return None
+    
+    # Replace the extension with .csv
+    return os.path.splitext(plot_filename)[0] + ".csv"
+
+def truncate_label(label, max_len=40):
+    """Truncates a label to a maximum length for plot legends."""
+    if len(label) > max_len:
+        return label[:max_len-3] + "..."
+    return label
 
 # --- default W&B colour cycle -------------------------------------------------
 _WANDB_PALETTE = [
@@ -168,6 +193,120 @@ def fetch_run_data(run_path):
 # Modular helpers
 # -----------------------------------------------------------------------------
 
+def compute_performance_metrics(steps, values):
+    """
+    Compute performance metrics: average performance, final performance, AUC, and time span.
+    
+    Args:
+        steps (np.array): X-axis values (steps)
+        values (np.array): Y-axis values (metric values)
+    
+    Returns:
+        tuple: (average_performance, final_performance, auc, time_span)
+    """
+    if len(steps) == 0 or len(values) == 0:
+        return 0.0, 0.0, 0.0, 0.0
+    
+    # Remove NaN values
+    mask = ~(np.isnan(steps) | np.isnan(values))
+    if not np.any(mask):
+        return 0.0, 0.0, 0.0, 0.0
+    
+    clean_steps = steps[mask]
+    clean_values = values[mask]
+    
+    # Sort by steps to ensure proper calculation
+    sort_idx = np.argsort(clean_steps)
+    clean_steps = clean_steps[sort_idx]
+    clean_values = clean_values[sort_idx]
+    
+    # Compute metrics
+    if len(clean_steps) <= 1:
+        average_performance = clean_values[0] if len(clean_values) > 0 else 0.0
+        final_performance = clean_values[0] if len(clean_values) > 0 else 0.0
+        auc = 0.0
+        time_span = 0.0
+    else:
+        auc = np.trapz(clean_values, clean_steps)
+        time_span = clean_steps[-1] - clean_steps[0]
+        average_performance = auc / time_span if time_span > 0 else 0.0
+        final_performance = clean_values[-1]
+    
+    return average_performance, final_performance, auc, time_span
+
+def print_performance_table(results_data, title="Performance Metrics", csv_filename=None):
+    """
+    Print a nice table with performance metrics using rich and optionally save to CSV.
+    
+    Args:
+        results_data (list): List of dicts containing 'label', 'avg_perf', 'final_perf', 'auc', 'time_span'
+        title (str): Title for the table
+        csv_filename (str, optional): Filename to save CSV data to
+    """
+    console = Console()
+    
+    table = Table(title=title)
+    table.add_column("Method", style="cyan", no_wrap=True)
+    table.add_column("Average Performance", style="magenta", justify="right")
+    table.add_column("Final Performance", style="green", justify="right") 
+    table.add_column("AUC", style="yellow", justify="right")
+    table.add_column("Time Steps", style="blue", justify="right")
+    
+    if len(results_data) > 1:
+        # Find best values for highlighting
+        best_avg = max(data['avg_perf'] for data in results_data)
+        best_final = max(data['final_perf'] for data in results_data)
+        best_auc = max(data['auc'] for data in results_data)
+        best_time = max(data['time_span'] for data in results_data)  # Longest training
+        
+        for data in results_data:
+            # Style the best values with bold and bright colors
+            avg_style = "[bold bright_magenta]" if data['avg_perf'] == best_avg else ""
+            final_style = "[bold bright_green]" if data['final_perf'] == best_final else ""
+            auc_style = "[bold bright_yellow]" if data['auc'] == best_auc else ""
+            time_style = "[bold bright_blue]" if data['time_span'] == best_time else ""
+            
+            table.add_row(
+                data['label'],
+                f"{avg_style}{data['avg_perf']:.3f}",
+                f"{final_style}{data['final_perf']:.3f}",
+                f"{auc_style}{data['auc']:.2e}",
+                f"{time_style}{data['time_span']:.0f}"
+            )
+    else:
+        # Single entry, no highlighting needed
+        data = results_data[0]
+        table.add_row(
+            data['label'],
+            f"{data['avg_perf']:.3f}",
+            f"{data['final_perf']:.3f}",
+            f"{data['auc']:.2e}",
+            f"{data['time_span']:.0f}"
+        )
+    
+    console.print()
+    console.print(table)
+    console.print()
+    
+    # Save to CSV if filename provided
+    if csv_filename:
+        df = pd.DataFrame(results_data)
+        # Rename columns for better CSV headers
+        df = df.rename(columns={
+            'label': 'Method',
+            'avg_perf': 'Average Performance', 
+            'final_perf': 'Final Performance',
+            'auc': 'AUC',
+            'time_span': 'Time Steps'
+        })
+        
+        # Ensure directory exists
+        csv_dir = os.path.dirname(csv_filename)
+        if csv_dir:  # Only create directory if there is one
+            os.makedirs(csv_dir, exist_ok=True)
+        df.to_csv(csv_filename, index=False)
+        print(f"Performance metrics saved to: {csv_filename}")
+
 def get_step_column(df):
     """Determine which step column exists in the DataFrame."""
     return "global_step"
@@ -179,7 +318,7 @@ def get_step_column(df):
     #     raise ValueError(f"Neither '_step' nor 'step' column found in the DataFrame: {df.columns}")
 
 
-def collect_run_histories(run_dirs, metric: str, *, entity: str, project: str):
+def collect_run_histories(run_dirs, metric: str, *, entity: str, project: str, seeds: Union[List[int], None] = None):
     """Return list of DataFrames containing [step_col, metric] for each run directory."""
     histories = []
     api = wandb.Api()
@@ -203,6 +342,12 @@ def collect_run_histories(run_dirs, metric: str, *, entity: str, project: str):
 
         try:
             run = fetch_run_data(run_path_guess)
+            # Filter by seed if seeds list provided
+            if seeds is not None:
+                run_seed = run.config.get('seed') if hasattr(run, 'config') else None
+                if run_seed is None or int(run_seed) not in seeds:
+                    logging.info(f"Skipping run {run_id}: seed {run_seed} not in {seeds}")
+                    continue
             logging.info(f"Loaded run from cloud: {run_path_guess}")
         except (wandb.errors.CommError, wandb.errors.Error):
             # logging.warning(f"Run {run_id} not found in cloud – syncing from {rd}")
@@ -280,10 +425,17 @@ def aggregate_histories(histories: list[pd.DataFrame], metric: str):
 
 
 def plot_history(steps, mean, lower, upper, label, *, filename: str, project: str, metric: str, n_runs: int, ymin=None, ymax=None):
+    # Compute and print performance metrics
+    avg_perf, final_perf, auc, time_span = compute_performance_metrics(steps, mean)
+    
+    results_data = [{'label': label, 'avg_perf': avg_perf, 'final_perf': final_perf, 'auc': auc, 'time_span': time_span}]
+    csv_filename = get_csv_filename(filename)
+    print_performance_table(results_data, f"Performance Metrics for {metric}", csv_filename)
+    
     with wandb_style():
         plt.figure()
         plt.grid(axis='y', color="#E5E5E5", linestyle='-', linewidth=1.0, alpha=1.0)
-        line, = plt.plot(steps, mean, '-', label=label)
+        line, = plt.plot(steps, mean, '-', label=truncate_label(label))
         if lower is not None and upper is not None:
             plt.fill_between(steps, lower, upper, alpha=0.3, color=line.get_color())
 
@@ -296,7 +448,7 @@ def plot_history(steps, mean, lower, upper, label, *, filename: str, project: st
         plt.title(f"{metric} – project '{project}'{title_suffix}")
         plt.xlabel("global_step", loc='right')
         # plt.ylabel("Mean Return") # Removed to match wandb UI
-        legend = plt.legend(loc="lower right", frameon=False)
+        legend = plt.legend(loc="best", frameon=False)
         # Match legend text color to line color
         for text in legend.get_texts():
             text.set_color(line.get_color())
@@ -311,6 +463,18 @@ def plot_history(steps, mean, lower, upper, label, *, filename: str, project: st
 
 def plot_comparison(results: list[dict], *, title: str, ylabel: str, filename: str, ymin=None, ymax=None):
     """Plot multiple curves on one figure."""
+    # Compute and print performance metrics for each curve
+    results_data = []
+    for res in results:
+        steps = res['steps']
+        mean = res['mean']
+        label = res['label']
+        avg_perf, final_perf, auc, time_span = compute_performance_metrics(steps, mean)
+        results_data.append({'label': label, 'avg_perf': avg_perf, 'final_perf': final_perf, 'auc': auc, 'time_span': time_span})
+    
+    csv_filename = get_csv_filename(filename)
+    print_performance_table(results_data, f"Performance Comparison: {title}", csv_filename)
+    
     with wandb_style():
         plt.figure()
         plt.grid(axis='y', color="#E5E5E5", linestyle='-', linewidth=1.0, alpha=1.0)
@@ -320,7 +484,7 @@ def plot_comparison(results: list[dict], *, title: str, ylabel: str, filename: s
             lower = res['lower']
             upper = res['upper']
             label = res['label']
-            line, = plt.plot(steps, mean, '-', label=label)
+            line, = plt.plot(steps, mean, '-', label=truncate_label(label))
             if lower is not None and upper is not None:
                 plt.fill_between(steps, lower, upper, alpha=0.2, color=line.get_color())
 
@@ -332,7 +496,7 @@ def plot_comparison(results: list[dict], *, title: str, ylabel: str, filename: s
         plt.title(title, fontweight='bold')
         plt.xlabel("global_step", loc='right')
         # plt.ylabel(ylabel) # Removed to match wandb UI
-        legend = plt.legend(loc="lower right", frameon=False)
+        legend = plt.legend(loc="best", frameon=False)
         # Match legend text color to line color
         for line, text in zip(legend.get_lines(), legend.get_texts()):
             text.set_color(line.get_color())
@@ -344,6 +508,18 @@ def plot_comparison(results: list[dict], *, title: str, ylabel: str, filename: s
 
 def plot_multiple_metrics(results: list[dict], *, project: str, filename: str, ymin=None, ymax=None):
     """Plot multiple metrics on one figure."""
+    # Compute and print performance metrics for each metric
+    results_data = []
+    for res in results:
+        steps = res['steps']
+        mean = res['mean']
+        label = res['label']
+        avg_perf, final_perf, auc, time_span = compute_performance_metrics(steps, mean)
+        results_data.append({'label': label, 'avg_perf': avg_perf, 'final_perf': final_perf, 'auc': auc, 'time_span': time_span})
+    
+    csv_filename = get_csv_filename(filename)
+    print_performance_table(results_data, f"Multiple Metrics Performance: {project}", csv_filename)
+    
     with wandb_style():
         plt.figure()
         plt.grid(axis='y', color="#E5E5E5", linestyle='-', linewidth=1.0, alpha=1.0)
@@ -353,7 +529,7 @@ def plot_multiple_metrics(results: list[dict], *, project: str, filename: str, y
             lower = res['lower']
             upper = res['upper']
             label = res['label']
-            line, = plt.plot(steps, mean, '-', label=label)
+            line, = plt.plot(steps, mean, '-', label=truncate_label(label))
             if lower is not None and upper is not None:
                 plt.fill_between(steps, lower, upper, alpha=0.2, color=line.get_color())
 
@@ -365,14 +541,14 @@ def plot_multiple_metrics(results: list[dict], *, project: str, filename: str, y
         plt.title(f"{project}")
         plt.xlabel("global_step", loc='right')
         # plt.ylabel("Value") # Removed to match wandb UI
-        legend = plt.legend(loc="lower right", frameon=False)
+        legend = plt.legend(loc="best", frameon=False)
         # Match legend text color to line color
         for line, text in zip(legend.get_lines(), legend.get_texts()):
             text.set_color(line.get_color())
 
         os.makedirs("figures", exist_ok=True)
         metrics_safe = "__".join([m['metric'].replace('/', '_') for m in results])[:100]
-        plt.savefig(f"figures/plot_{project}_combined_{metrics_safe}.png", bbox_inches='tight', dpi=160)
+        plt.savefig(filename, bbox_inches='tight', dpi=160)
         plt.close()
 
 
@@ -435,6 +611,13 @@ def main():
         help="One or more metric keys to fetch (e.g. full_eval_return/mean). A comparison plot is made per metric.",
     )
     parser.add_argument(
+        "--seeds",
+        type=int,
+        nargs='+',
+        default=None,
+        help="Optional list of seeds to include. Only runs whose config.seed is in this list will be processed."
+    )
+    parser.add_argument(
         "--ymin",
         type=float,
         default=None,
@@ -445,6 +628,12 @@ def main():
         type=float,
         default=None,
         help="Set y-axis upper limit.",
+    )
+    parser.add_argument(
+        "--filename",
+        type=str,
+        default=None,
+        help="Custom filename for the output plot. If not specified, filename will be auto-generated based on projects and metrics.",
     )
 
     args = parser.parse_args()
@@ -490,7 +679,7 @@ def main():
         for project in args.projects:
             for metric in args.metrics:
                 logging.info(f"  Fetching data for project: '{project}' with metric: '{metric}'")
-                histories = collect_run_histories(run_dirs, metric, entity=entity, project=project)
+                histories = collect_run_histories(run_dirs, metric, entity=entity, project=project, seeds=args.seeds)
                 
                 if not histories:
                     logging.warning(f"  No valid histories found for project '{project}' with metric '{metric}'")
@@ -510,7 +699,7 @@ def main():
             logging.error("No data collected for any project-metric combination. Skipping plot.")
             return
         
-        filename = get_plot_filename('comparison', args.projects, args.metrics)
+        filename = args.filename or get_plot_filename('comparison', args.projects, args.metrics)
         plot_comparison(all_results, title="Multiple Projects and Metrics", ylabel="Value", filename=filename, ymin=args.ymin, ymax=args.ymax)
         print(f"Generated plot: {filename}")
         return
@@ -522,7 +711,7 @@ def main():
             results = []
             for project in args.projects:
                 logging.info(f"  Fetching data for project: '{project}'")
-                histories = collect_run_histories(run_dirs, metric, entity=entity, project=project)
+                histories = collect_run_histories(run_dirs, metric, entity=entity, project=project, seeds=args.seeds)
                 
                 if not histories:
                     logging.warning(f"  No valid histories found for project '{project}' with metric '{metric}'")
@@ -542,7 +731,7 @@ def main():
                 logging.error(f"No data collected for metric '{metric}' across any project. Skipping plot.")
                 continue
             
-            filename = get_plot_filename('comparison', args.projects, [metric])
+            filename = args.filename or get_plot_filename('comparison', args.projects, [metric])
             plot_comparison(results, title=metric, ylabel=metric, filename=filename, ymin=args.ymin, ymax=args.ymax)
             print(f"Generated plot: {filename}")
         
@@ -554,7 +743,7 @@ def main():
 
     for metric in args.metrics:
         logging.info(f"Processing metric '{metric}' ...")
-        histories = collect_run_histories(run_dirs, metric, entity=entity, project=project)
+        histories = collect_run_histories(run_dirs, metric, entity=entity, project=project, seeds=args.seeds)
         if not histories:
             logging.warning(f"No histories found for '{project}' with metric '{metric}'")
             continue
@@ -581,7 +770,7 @@ def main():
 
     if len(aggregated) == 1:
         res = aggregated[0]
-        filename = get_plot_filename('single', [project], [res['metric']])
+        filename = args.filename or get_plot_filename('single', [project], [res['metric']])
         plot_history(
             res['steps'], res['mean'], res['lower'], res['upper'], res['label'],
             filename=filename, project=project, metric=res['metric'], n_runs=res['n_runs'], ymin=args.ymin, ymax=args.ymax,
@@ -589,7 +778,7 @@ def main():
         print(f"Generated plot: {filename}")
     else:
         metrics = [res['metric'] for res in aggregated]
-        filename = get_plot_filename('multiple_metrics', [project], metrics)
+        filename = args.filename or get_plot_filename('multiple_metrics', [project], metrics)
         plot_multiple_metrics(aggregated, project=project, filename=filename, ymin=args.ymin, ymax=args.ymax)
         print(f"Generated plot: {filename}")
 

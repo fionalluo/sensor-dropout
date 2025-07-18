@@ -1,0 +1,5 @@
+Method,Average Performance,Final Performance,AUC,Time Steps
+ppo_dropout-debug_tiger_cycle-v1_full_eval_return/env1/mean_return (N=4),6.3590986328125,10.0,2604686.8,409600
+ppo_dropout-debug_tiger_cycle-v1_full_eval_return/env2/mean_return (N=4),4.601328125,10.0,1884704.0,409600
+ppo_dropout-debug_tiger_adaptive_warmup_window100_ema-v1_full_eval_return/env1/mean_return (N=4),6.3003486328125,10.0,2580622.8,409600
+ppo_dropout-debug_tiger_adaptive_warmup_window100_ema-v1_full_eval_return/env2/mean_return (N=4),4.875078125,10.0,1996832.0,409600

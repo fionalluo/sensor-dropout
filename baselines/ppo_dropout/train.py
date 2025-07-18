@@ -13,6 +13,7 @@ import warnings
 import pathlib
 import importlib
 import multiprocessing as mp
+from datetime import timedelta
 from functools import partial as bind
 from types import SimpleNamespace
 
@@ -490,22 +491,8 @@ class MaskingStatsCallback(BaseCallback):
         # Get adaptive configuration with backward compatible defaults
         adaptive_config = getattr(config, 'adaptive', SimpleNamespace()) if config else SimpleNamespace()
         self.warmup_timesteps = getattr(adaptive_config, 'warmup_timesteps', 50000)
-        self.smoothing_factor = getattr(adaptive_config, 'smoothing_factor', 0.1)
-        self.min_evaluations = getattr(adaptive_config, 'min_evaluations', 3)
-        
-        # Handle None values explicitly (in case config uses null in YAML)
-        if self.smoothing_factor is None:
-            self.smoothing_factor = 0
-        
-        # Determine smoothing mode
-        if self.smoothing_factor is None or self.smoothing_factor == 0:
-            self.smoothing_mode = 'latest'  # No smoothing, use latest value
-        elif self.smoothing_factor == -1:
-            self.smoothing_mode = 'average'  # Simple average of all evaluations
-        elif 0 < self.smoothing_factor <= 1:
-            self.smoothing_mode = 'ema'  # Exponential moving average
-        else:
-            raise ValueError(f"Invalid smoothing_factor: {self.smoothing_factor}. Use None/0 (latest), -1 (average), or 0-1 (EMA)")
+        self.evaluation_window = getattr(adaptive_config, 'evaluation_window', 3)
+        self.smoothing_factor = getattr(adaptive_config, 'smoothing_factor', 0)
         
         # Local tracking (no multiprocessing issues)
         self.selection_counts = {f'env{i}': 0 for i in range(1, num_eval_configs + 1)}
@@ -559,7 +546,7 @@ class MaskingStatsCallback(BaseCallback):
                 
                 # Log empirical probabilities
                 for i, prob in enumerate(empirical_probs):
-                    metrics[f"masking_strategy/{self.masking_strategy}_env{i+1}_empirical_prob"] = prob
+                    metrics[f"empirical_masking_strategy/{self.masking_strategy}_env{i+1}_empirical_prob"] = prob
                 
                 # Log theoretical probabilities
                 for i, prob in enumerate(theoretical_probs):
@@ -570,7 +557,7 @@ class MaskingStatsCallback(BaseCallback):
                     # Log performance for each environment
                     for i in range(1, self.num_eval_configs + 1):
                         env_name = f'env{i}'
-                        metrics[f"adaptive/performance_{self.smoothing_mode}_{env_name}"] = self.env_performance_current[env_name]
+                        metrics[f"adaptive/performance_window_{env_name}"] = self.env_performance_current[env_name]
                         metrics[f"adaptive/evaluation_count_{env_name}"] = self.env_evaluation_count[env_name]
                         # Also log latest raw value for comparison
                         if self.env_performance_raw[env_name]:
@@ -579,12 +566,16 @@ class MaskingStatsCallback(BaseCallback):
                     # Log adaptive status
                     in_warmup = self.num_timesteps < self.warmup_timesteps
                     min_evals = min(self.env_evaluation_count.values())
-                    enough_evals = min_evals >= self.min_evaluations
+                    enough_evals = min_evals >= self.evaluation_window
                     metrics[f"adaptive/in_warmup"] = int(in_warmup)
                     metrics[f"adaptive/enough_evaluations"] = int(enough_evals)
                     metrics[f"adaptive/is_active"] = int(not in_warmup and enough_evals)
-                    metrics[f"adaptive/warmup_progress"] = min(1.0, self.num_timesteps / self.warmup_timesteps)
-                    metrics[f"adaptive/smoothing_mode"] = self.smoothing_mode
+                    # Handle division by zero when warmup_timesteps is 0
+                    if self.warmup_timesteps > 0:
+                        metrics[f"adaptive/warmup_progress"] = min(1.0, self.num_timesteps / self.warmup_timesteps)
+                    else:
+                        metrics[f"adaptive/warmup_progress"] = 1.0  # No warmup means always "complete"
+                    metrics[f"adaptive/evaluation_window"] = self.evaluation_window
                 
                 metrics["global_step"] = self.num_timesteps
                 wandb.log(metrics)
@@ -601,20 +592,20 @@ class MaskingStatsCallback(BaseCallback):
             return np.ones(self.num_eval_configs) / self.num_eval_configs
         
         elif self.masking_strategy == 'adaptive':
-            # Check if we're still in warmup period
+            # Check warmup first (centralized here)
             if self.num_timesteps < self.warmup_timesteps:
                 if self.verbose > 0:
                     print(f"[ADAPTIVE] Still in warmup ({self.num_timesteps}/{self.warmup_timesteps}), using uniform")
                 return np.ones(self.num_eval_configs) / self.num_eval_configs
             
-            # Check if we have enough evaluations for all environments
+            # Relaxed guard: adapt as soon as each env has at least 1 eval
             min_evals = min(self.env_evaluation_count.values())
-            if min_evals < self.min_evaluations:
+            if min_evals < 1:  # Or set to 2-3 if you want a small minimum
                 if self.verbose > 0:
-                    print(f"[ADAPTIVE] Not enough evaluations yet ({min_evals}/{self.min_evaluations}), using uniform")
+                    print(f"[ADAPTIVE] Not enough evaluations yet ({min_evals}), using uniform")
                 return np.ones(self.num_eval_configs) / self.num_eval_configs
             
-            # Based on current environment performance (using selected smoothing mode)
+            # Use pre-calculated performance values (already smoothed with evaluation_window + smoothing_factor)
             returns = np.array([self.env_performance_current[f'env{i}'] for i in range(1, self.num_eval_configs + 1)])
             
             if len(np.unique(returns)) == 1:
@@ -628,7 +619,8 @@ class MaskingStatsCallback(BaseCallback):
                 probabilities = exp_weights / np.sum(exp_weights)
                 
                 if self.verbose > 0:
-                    print(f"[ADAPTIVE] Performance: {[f'{r:.3f}' for r in returns]}")
+                    smoothing_type = "avg" if self.smoothing_factor == 0 else f"ema({self.smoothing_factor})"
+                    print(f"[ADAPTIVE] Performance (window={self.evaluation_window}, {smoothing_type}): {[f'{r:.3f}' for r in returns]}")
                     print(f"[ADAPTIVE] Probabilities: {[f'{p:.3f}' for p in probabilities]}")
                 
                 return probabilities
@@ -637,37 +629,44 @@ class MaskingStatsCallback(BaseCallback):
             return np.ones(self.num_eval_configs) / self.num_eval_configs
     
     def update_env_performance(self, env_name, mean_return):
-        """Update performance metrics for adaptive strategy using flexible smoothing."""
+        """Update performance metrics using evaluation_window + smoothing_factor."""
         if env_name in self.env_performance_current:
             # Always store raw performance and increment count
             self.env_performance_raw[env_name].append(mean_return)
             self.env_evaluation_count[env_name] += 1
             
-            # Update current performance based on smoothing mode
-            if self.smoothing_mode == 'latest':
-                # No smoothing - use latest value only
-                self.env_performance_current[env_name] = mean_return
-                
-            elif self.smoothing_mode == 'average':
-                # Simple average of all evaluations
-                self.env_performance_current[env_name] = np.mean(self.env_performance_raw[env_name])
-                
-            elif self.smoothing_mode == 'ema':
-                # Exponential moving average
-                if self.env_evaluation_count[env_name] == 1:
-                    # First evaluation - initialize with this value
-                    self.env_performance_current[env_name] = mean_return
+            # Get the window of data to work with
+            raw_performances = self.env_performance_raw[env_name]
+            if len(raw_performances) >= self.evaluation_window:
+                # Take the last evaluation_window results
+                recent_performances = raw_performances[-self.evaluation_window:]
+            else:
+                # Use all available results if we have fewer than evaluation_window
+                recent_performances = raw_performances
+            
+            # Apply smoothing based on smoothing_factor
+            if self.smoothing_factor == 0:
+                # Average the data in the window
+                current_performance = np.mean(recent_performances)
+            else:
+                # Exponential moving average over the window data
+                if len(recent_performances) == 1:
+                    current_performance = recent_performances[0]
                 else:
-                    # Update using EMA: new_avg = α * new_value + (1-α) * old_avg
-                    old_avg = self.env_performance_current[env_name]
-                    self.env_performance_current[env_name] = (
-                        self.smoothing_factor * mean_return + 
-                        (1 - self.smoothing_factor) * old_avg
-                    )
+                    # Apply EMA to the window data
+                    current_performance = recent_performances[0]  # Start with first value
+                    for i in range(1, len(recent_performances)):
+                        current_performance = (
+                            self.smoothing_factor * recent_performances[i] + 
+                            (1 - self.smoothing_factor) * current_performance
+                        )
+            
+            self.env_performance_current[env_name] = current_performance
             
             if self.verbose > 0:
+                smoothing_type = "avg" if self.smoothing_factor == 0 else f"ema({self.smoothing_factor})"
                 print(f"[PERF UPDATE] {env_name}: raw={mean_return:.3f}, "
-                      f"{self.smoothing_mode}={self.env_performance_current[env_name]:.3f}, "
+                      f"{smoothing_type}={current_performance:.3f} (window={len(recent_performances)}), "
                       f"count={self.env_evaluation_count[env_name]}")
     
     def get_adaptive_probabilities(self):
@@ -675,6 +674,12 @@ class MaskingStatsCallback(BaseCallback):
         if self.masking_strategy == 'adaptive' or self.masking_strategy == 'uniform':
             return self._calculate_theoretical_probabilities()
         return None
+
+    def is_in_warmup(self):
+        """Check if we're currently in the warmup period for adaptive strategy."""
+        if self.masking_strategy == 'adaptive':
+            return self.num_timesteps < self.warmup_timesteps
+        return False
 
 # -----------------------------------------------------------------------------
 # Training-time Episode Masking Wrapper
@@ -687,13 +692,14 @@ class EpisodeMaskingWrapper(gym.ObservationWrapper):
     through the info dict. All cross-environment statistics are handled by callbacks.
     """
     
-    def __init__(self, env, config, env_idx=0, adaptive_probs_getter=None):
+    def __init__(self, env, config, env_idx=0, adaptive_probs_getter=None, masking_callback=None):
         super().__init__(env)
         self.config = config
         self.env_idx = env_idx  # Unique index for this environment instance
         self.masking_strategy = getattr(config, 'masking_strategy', 'cycle')
         self.num_eval_configs = getattr(config, 'num_eval_configs', 4)
         self.adaptive_probs_getter = adaptive_probs_getter  # Function to get adaptive probabilities
+        self.masking_callback = masking_callback  # Reference to masking callback for warmup check
 
         # Get all available keys from the environment once
         obs, _ = self.env.reset()
@@ -763,20 +769,32 @@ class EpisodeMaskingWrapper(gym.ObservationWrapper):
             env_name = f"env{chosen_idx}"
         
         elif self.masking_strategy == 'adaptive':
-            # Get probabilities from callback if available
-            if self.adaptive_probs_getter is not None:
-                probs = self.adaptive_probs_getter()
-                if probs is not None:
-                    chosen_idx = np.random.choice(self.num_eval_configs, p=probs) + 1
-                    env_name = f"env{chosen_idx}"
+            # Check if we're in warmup period - if so, use cycling like 'cycle' strategy
+            if self.masking_callback is not None and self.masking_callback.is_in_warmup():
+                # Use cycling behavior during warmup for fair comparison with 'cycle' strategy
+                subset_idx = ((self.episode_counter + self.env_idx) % self.num_eval_configs) + 1
+                env_name = f"env{subset_idx}"
+                # Debug: Only print occasionally to avoid spam
+                if self.episode_counter % 100 == 0 and self.env_idx == 0:
+                    print(f"[ADAPTIVE WARMUP] Episode {self.episode_counter}: Using cycling selection (env{subset_idx})")
+            else:
+                # Not in warmup - use adaptive probabilities
+                if self.adaptive_probs_getter is not None:
+                    probs = self.adaptive_probs_getter()
+                    if probs is not None:
+                        chosen_idx = np.random.choice(self.num_eval_configs, p=probs) + 1
+                        env_name = f"env{chosen_idx}"
+                        # Debug: Only print occasionally to avoid spam
+                        if self.episode_counter % 100 == 0 and self.env_idx == 0:
+                            print(f"[ADAPTIVE] Episode {self.episode_counter}: Using adaptive selection (env{chosen_idx}, probs={[f'{p:.3f}' for p in probs]})")
+                    else:
+                        # Fallback to random if no probs available yet
+                        chosen_idx = np.random.randint(1, self.num_eval_configs + 1)
+                        env_name = f"env{chosen_idx}"
                 else:
-                    # Fallback to random if no probs available yet
+                    # Fallback to random
                     chosen_idx = np.random.randint(1, self.num_eval_configs + 1)
                     env_name = f"env{chosen_idx}"
-            else:
-                # Fallback to random
-                chosen_idx = np.random.randint(1, self.num_eval_configs + 1)
-                env_name = f"env{chosen_idx}"
         else:
             raise ValueError(f"Unknown masking strategy: {self.masking_strategy}")
 
@@ -905,7 +923,8 @@ def train_ppo_dropout(envs, config, seed):
             base_env, 
             config, 
             env_idx=env_idx,
-            adaptive_probs_getter=masking_callback.get_adaptive_probabilities
+            adaptive_probs_getter=masking_callback.get_adaptive_probabilities,
+            masking_callback=masking_callback
         )
         
         return env
@@ -1110,13 +1129,6 @@ def parse_args():
     parser.add_argument('--total_timesteps', type=int, default=500000, help="Total timesteps for training.")
     parser.add_argument('--use_wandb', action='store_true', help="Enable wandb logging.")
     parser.add_argument('--wandb_project', type=str, default="sensor-dropout", help="Wandb project name.")
-    parser.add_argument(
-        '--masking_strategy', 
-        type=str, 
-        default='cycle', 
-        choices=['cycle', 'uniform', 'adaptive'], 
-        help="Strategy for selecting sensor subsets during training."
-    )
     return parser.parse_args()
 
 def main(argv=None):
@@ -1153,4 +1165,5 @@ if __name__ == "__main__":
     start_time = time.time()
     main() 
     end_time = time.time()
-    print(f"Training completed in {end_time - start_time:.2f} seconds") 
+    elapsed_time = end_time - start_time
+    print(f"Training completed in {timedelta(seconds=elapsed_time)}") 
