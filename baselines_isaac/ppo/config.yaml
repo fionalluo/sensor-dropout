@@ -3,69 +3,10 @@
 
 defaults:
   exp_name: isaaclab_test
-  seed: 0
-  cuda: true
-  track: true
   wandb_project: "isaaclab-test"
-  wandb_entity: null
-  wandb_name: null
-  capture_video: false
-
   task: Isaac-Velocity-Flat-Unitree-A1-v0
-  total_timesteps: 500000
-  num_envs: 8
-  use_wandb: true
 
-  # PPO Hyperparameters (RL-Games style)
-  ppo:
-    learning_rate: 3e-4
-    batch_size: 64
-    mini_epochs: 10
-    gamma: 0.99
-    gae_lambda: 0.95
-    clip_value: 0.2
-    entropy_coef: 0.0
-    value_loss_coef: 0.5
-    max_grad_norm: 0.5
-    horizon_length: 2048
-    normalize_advantage: true
-    normalize_input: false
-    reward_shaper: null
-
-  # Observation keys (if using masking/filtering)
-  keys: {mlp_keys: '.*', cnn_keys: '.*'}
-  num_eval_configs: 4
-  eval_keys:
-    env1:
-      mlp_keys: '.*'
-      cnn_keys: '.*'
-    env2:
-      mlp_keys: '.*'
-      cnn_keys: '.*'
-    env3:
-      mlp_keys: '.*'
-      cnn_keys: '.*'
-    env4:
-      mlp_keys: '.*'
-      cnn_keys: '.*'
-
-  save_model: true
-  log_keys_video: [image]
-
-  # Evaluation settings
-  eval:
-    eval_freq: 2048
-    n_eval_episodes: 5
-    eval_envs: 4
-    video_log_interval: 1
-    num_eval_configs: 4
-
-  # Training settings
-  log_interval: 1
-
-# Example named config for a specific IsaacLab task
 isaac_velocity_flat_unitree_a1:
-  task: Isaac-Velocity-Flat-Unitree-A1-v0
-  total_timesteps: 1000000
-  num_envs: 32
-  exp_name: "isaac_velocity_flat_unitree_a1_ppo" 
+  exp_name: "isaac_velocity_flat_unitree_a1_ppo"
+  wandb_project: "isaaclab-test"
+  task: Isaac-Velocity-Flat-Unitree-A1-v0 
