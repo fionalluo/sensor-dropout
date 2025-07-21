@@ -261,6 +261,19 @@ class CustomEvalCallback(BaseCallback):
                 if self.debug:
                     print(f"    {env_name}: {metrics['mean_return']:.2f}")
 
+        # After updating performance, get the latest adaptive state
+        in_warmup = self.masking_callback.is_in_warmup()
+        adaptive_probs = self.masking_callback.get_adaptive_probabilities()
+
+        # Broadcast the updated state to all parallel environments
+        if self.training_env is not None:
+            print(f"  Broadcasting adaptive state: warmup={in_warmup}, probs={adaptive_probs}")
+            self.training_env.env_method(
+                "update_adaptive_state",
+                in_warmup,
+                adaptive_probs,
+            )
+
         # Note: Probability logging is now handled by MaskingStatsCallback
 
         # 3. Compute and log mean metrics across all environments
@@ -546,11 +559,11 @@ class MaskingStatsCallback(BaseCallback):
                 
                 # Log empirical probabilities
                 for i, prob in enumerate(empirical_probs):
-                    metrics[f"empirical_masking_strategy/{self.masking_strategy}_env{i+1}_empirical_prob"] = prob
+                    metrics[f"empirical_masking_strategy/env{i+1}_prob"] = prob
                 
                 # Log theoretical probabilities
                 for i, prob in enumerate(theoretical_probs):
-                    metrics[f"masking_strategy/{self.masking_strategy}_env{i+1}_prob"] = prob
+                    metrics[f"masking_strategy/env{i+1}_prob"] = prob
                 
                 # Log adaptive scheduling metrics if using adaptive strategy
                 if self.masking_strategy == 'adaptive':
@@ -621,7 +634,7 @@ class MaskingStatsCallback(BaseCallback):
                 if self.verbose > 0:
                     smoothing_type = "avg" if self.smoothing_factor == 0 else f"ema({self.smoothing_factor})"
                     print(f"[ADAPTIVE] Performance (window={self.evaluation_window}, {smoothing_type}): {[f'{r:.3f}' for r in returns]}")
-                    print(f"[ADAPTIVE] Probabilities: {[f'{p:.3f}' for p in probabilities]}")
+                    print(f"[ADAPTIVE] Adaptive Probabilities: {[f'{p:.3f}' for p in probabilities]}")
                 
                 return probabilities
         
@@ -692,14 +705,16 @@ class EpisodeMaskingWrapper(gym.ObservationWrapper):
     through the info dict. All cross-environment statistics are handled by callbacks.
     """
     
-    def __init__(self, env, config, env_idx=0, adaptive_probs_getter=None, masking_callback=None):
+    def __init__(self, env, config, env_idx=0):
         super().__init__(env)
         self.config = config
         self.env_idx = env_idx  # Unique index for this environment instance
         self.masking_strategy = getattr(config, 'masking_strategy', 'cycle')
         self.num_eval_configs = getattr(config, 'num_eval_configs', 4)
-        self.adaptive_probs_getter = adaptive_probs_getter  # Function to get adaptive probabilities
-        self.masking_callback = masking_callback  # Reference to masking callback for warmup check
+        
+        # Internal state for adaptive strategy, to be updated from the main process
+        self.in_warmup = True
+        self.adaptive_probabilities = None
 
         # Get all available keys from the environment once
         obs, _ = self.env.reset()
@@ -727,6 +742,11 @@ class EpisodeMaskingWrapper(gym.ObservationWrapper):
         self.current_env_name = None
         self.episode_start = True
         self.episode_counter = 0
+    
+    def update_adaptive_state(self, in_warmup, probabilities):
+        """Update the wrapper's adaptive state from the main process."""
+        self.in_warmup = in_warmup
+        self.adaptive_probabilities = probabilities
     
     def _set_observation_space(self):
         """Set the observation space to match the student keys."""
@@ -769,30 +789,23 @@ class EpisodeMaskingWrapper(gym.ObservationWrapper):
             env_name = f"env{chosen_idx}"
         
         elif self.masking_strategy == 'adaptive':
-            # Check if we're in warmup period - if so, use cycling like 'cycle' strategy
-            if self.masking_callback is not None and self.masking_callback.is_in_warmup():
+            # Use internal state which is updated by the main process via env_method
+            if self.in_warmup:
                 # Use cycling behavior during warmup for fair comparison with 'cycle' strategy
                 subset_idx = ((self.episode_counter + self.env_idx) % self.num_eval_configs) + 1
                 env_name = f"env{subset_idx}"
-                # Debug: Only print occasionally to avoid spam
-                if self.episode_counter % 100 == 0 and self.env_idx == 0:
-                    print(f"[ADAPTIVE WARMUP] Episode {self.episode_counter}: Using cycling selection (env{subset_idx})")
             else:
-                # Not in warmup - use adaptive probabilities
-                if self.adaptive_probs_getter is not None:
-                    probs = self.adaptive_probs_getter()
-                    if probs is not None:
-                        chosen_idx = np.random.choice(self.num_eval_configs, p=probs) + 1
+                # Not in warmup - use adaptive probabilities if available
+                if self.adaptive_probabilities is not None:
+                    try:
+                        chosen_idx = np.random.choice(self.num_eval_configs, p=self.adaptive_probabilities) + 1
                         env_name = f"env{chosen_idx}"
-                        # Debug: Only print occasionally to avoid spam
-                        if self.episode_counter % 100 == 0 and self.env_idx == 0:
-                            print(f"[ADAPTIVE] Episode {self.episode_counter}: Using adaptive selection (env{chosen_idx}, probs={[f'{p:.3f}' for p in probs]})")
-                    else:
-                        # Fallback to random if no probs available yet
+                    except ValueError: # Catch if probs don't sum to 1
+                        print(f"Warning: Invalid adaptive probabilities {self.adaptive_probabilities}, falling back to uniform.")
                         chosen_idx = np.random.randint(1, self.num_eval_configs + 1)
                         env_name = f"env{chosen_idx}"
                 else:
-                    # Fallback to random
+                    # Fallback to random if no probs available yet
                     chosen_idx = np.random.randint(1, self.num_eval_configs + 1)
                     env_name = f"env{chosen_idx}"
         else:
@@ -922,9 +935,7 @@ def train_ppo_dropout(envs, config, seed):
         env = EpisodeMaskingWrapper(
             base_env, 
             config, 
-            env_idx=env_idx,
-            adaptive_probs_getter=masking_callback.get_adaptive_probabilities,
-            masking_callback=masking_callback
+            env_idx=env_idx
         )
         
         return env
@@ -989,6 +1000,7 @@ def train_ppo_dropout(envs, config, seed):
             name=f"ppo_dropout-{config.task}-{config.exp_name}-seed{seed}",
             config=config,  # Pass the original config object
             sync_tensorboard=True,
+            dir=pathlib.Path(config.output_dir),
         )
         
         # Set global_step as the default x-axis for all metrics
@@ -1030,6 +1042,10 @@ def train_ppo_dropout(envs, config, seed):
     print(f"  Use SDE: {use_sde}")
     print(f"  Target KL: {target_kl}")
 
+    # Create output directory
+    output_dir = pathlib.Path(config.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     # Create PPO model with configurable hyperparameters
     model = PPO(
         "MultiInputPolicy",
@@ -1051,14 +1067,14 @@ def train_ppo_dropout(envs, config, seed):
         policy_kwargs=policy_kwargs,
         verbose=1,
         seed=seed,
-        tensorboard_log=f"./tb_logs/ppo_dropout-{config.task}-{config.exp_name}-seed{seed}",
+        tensorboard_log=output_dir / f"tb_logs/ppo_dropout-{config.task}-{config.exp_name}-seed{seed}",
     )
 
     # Create evaluation callbacks
     eval_callback = EvalCallback(
         filtered_eval_env,  # Use filtered environment (same as training)
-        best_model_save_path=f"./best_models/ppo_dropout-{config.task}-{config.exp_name}-seed{seed}",
-        log_path=f"./eval_logs/ppo_dropout-{config.task}-{config.exp_name}-seed{seed}",
+        best_model_save_path=output_dir / f"best_models/ppo_dropout-{config.task}-{config.exp_name}-seed{seed}",
+        log_path=output_dir / f"eval_logs/ppo_dropout-{config.task}-{config.exp_name}-seed{seed}",
         eval_freq=eval_freq,
         n_eval_episodes=n_eval_episodes,
         deterministic=True,
@@ -1084,7 +1100,7 @@ def train_ppo_dropout(envs, config, seed):
     if run is not None:
         callbacks.append(WandbCallback(
             gradient_save_freq=1_000,
-            model_save_path=f"models/{run.id}",
+            model_save_path=output_dir / f"models/{run.id}",
             verbose=2,
         ))
 
@@ -1129,6 +1145,7 @@ def parse_args():
     parser.add_argument('--total_timesteps', type=int, default=500000, help="Total timesteps for training.")
     parser.add_argument('--use_wandb', action='store_true', help="Enable wandb logging.")
     parser.add_argument('--wandb_project', type=str, default="sensor-dropout", help="Wandb project name.")
+    parser.add_argument('--output_dir', type=str, default=".", help="Directory to save all outputs.")
     return parser.parse_args()
 
 def main(argv=None):

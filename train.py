@@ -86,6 +86,7 @@ def parse_args() -> argparse.Namespace:
 
     # PPO Dropout specific arguments
     p.add_argument("--version", type=int, default=1, help="Version number for wandb project.")
+    p.add_argument("--output_dir", type=str, default=".", help="Directory to save all outputs.")
 
     # Slurm flags (including --slurm) via shared helper
     add_slurm_args(p)
@@ -142,6 +143,7 @@ def main() -> None:
             cmd = (
                 f"python -u {args.train_script} "
                 f"--configs {config} --seed {seed} --wandb_project {args.wandb_project} "
+                f"--output_dir {args.output_dir}"
             )
 
             # Masking strategy is now embedded in the config files

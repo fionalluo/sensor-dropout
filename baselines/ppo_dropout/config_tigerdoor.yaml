@@ -146,3 +146,22 @@ debug_tiger_adaptive_warmup_window100_ema:
     evaluation_window: 100
     smoothing_factor: 0.5      # Exponential smoothing
   exp_name: "debug_tiger_adaptive_warmup_window3_ema"
+
+# ====================
+# Test Configs
+# ====================
+
+# Test for parallel environment fix
+debug_parallel_fix:
+  << : *debug_tiger_base
+  masking_strategy: adaptive
+  num_envs: 2 # Must be > 1 to test parallel fix
+  total_timesteps: 20000 # Short run
+  eval:
+    eval_freq: 2048
+    n_eval_episodes: 5
+  adaptive:
+    warmup_timesteps: 4096  # Very short warmup (2 rollouts)
+    evaluation_window: 1     # Fast adaptation
+    smoothing_factor: 0      # No smoothing
+  exp_name: "debug_parallel_fix"

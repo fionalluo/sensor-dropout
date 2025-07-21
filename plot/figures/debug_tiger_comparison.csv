@@ -1,6 +1,0 @@
-Method,Average Performance,Final Performance,AUC,Time Steps
-ppo_dropout-debug_tiger_cycle-v1 (N=4),5.4802133789062495,10.0,2244695.4,409600
-ppo_dropout-debug_tiger_adaptive_window1-v1 (N=4),4.92021337890625,9.5,2015319.4,409600
-ppo_dropout-debug_tiger_adaptive_warmup_window1-v1 (N=4),5.46521337890625,10.0,2238551.4,409600
-ppo_dropout-debug_tiger_adaptive_warmup_window100-v1 (N=4),5.39083837890625,10.0,2208087.4,409600
-ppo_dropout-debug_tiger_adaptive_warmup_window100_ema-v1 (N=4),5.587713378906249,10.0,2288727.4,409600

@@ -134,7 +134,7 @@ def add_slurm_args(parser):
     group.add_argument('--cpus', default='32', help='CPUs per task')
     group.add_argument(
         '--exclude',
-        default='kd-2080ti-[1-4].grasp.maas,dj-2080ti-0.grasp.maas,mp-2080ti-0.grasp.maas',
+        default='kd-2080ti-[1-4].grasp.maas,dj-2080ti-0.grasp.maas,mp-2080ti-0.grasp.maas,al-l40s-0.grasp.maas',
         help='Comma-separated list of nodes to exclude.'
     )
     return group

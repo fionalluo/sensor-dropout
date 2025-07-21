@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 from contextlib import contextmanager
 from cycler import cycler
 
-def get_plot_filename(mode, projects, metrics):
+def get_plot_filename(mode, projects, metrics, plot_dir="figures"):
     """
     Generates a standardized plot filename.
 
@@ -29,6 +29,7 @@ def get_plot_filename(mode, projects, metrics):
         mode (str): 'comparison', 'multiple_metrics', or 'single'.
         projects (list[str]): List of project names.
         metrics (list[str]): List of metric names.
+        plot_dir (str): The directory where the plot will be saved.
 
     Returns:
         str: The generated filename for the plot.
@@ -40,17 +41,17 @@ def get_plot_filename(mode, projects, metrics):
         # Comparing multiple projects for a single metric
         projects_safe = "__".join(sorted([sanitize(p) for p in projects]))[:100]
         metric_safe = sanitize(metrics[0])
-        return f"figures/plot_compare_projects_{projects_safe}_{metric_safe}.png"
+        return f"{plot_dir}/plot_compare_projects_{projects_safe}_{metric_safe}.png"
     elif mode == 'multiple_metrics':
         # Single project with multiple metrics
         project_safe = sanitize(projects[0])
         metrics_safe = "__".join([sanitize(m) for m in metrics])[:100]
-        return f"figures/plot_{project_safe}_combined_{metrics_safe}.png"
+        return f"{plot_dir}/plot_{project_safe}_combined_{metrics_safe}.png"
     elif mode == 'single':
         # Single project, single metric
         project_safe = sanitize(projects[0])
         metric_safe = sanitize(metrics[0])
-        return f"figures/plot_{project_safe}_{metric_safe}.png"
+        return f"{plot_dir}/plot_{project_safe}_{metric_safe}.png"
     else:
         raise ValueError(f"Unknown plot mode: {mode}")
 
@@ -453,7 +454,7 @@ def plot_history(steps, mean, lower, upper, label, *, filename: str, project: st
         for text in legend.get_texts():
             text.set_color(line.get_color())
 
-        os.makedirs("figures", exist_ok=True)
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
         print(f"Saving figure to {filename}")
         plt.savefig(filename,
                     bbox_inches='tight',
@@ -501,7 +502,7 @@ def plot_comparison(results: list[dict], *, title: str, ylabel: str, filename: s
         for line, text in zip(legend.get_lines(), legend.get_texts()):
             text.set_color(line.get_color())
 
-        os.makedirs("figures", exist_ok=True)
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
         plt.savefig(filename, bbox_inches='tight', dpi=160)
         plt.close()
 
@@ -546,7 +547,7 @@ def plot_multiple_metrics(results: list[dict], *, project: str, filename: str, y
         for line, text in zip(legend.get_lines(), legend.get_texts()):
             text.set_color(line.get_color())
 
-        os.makedirs("figures", exist_ok=True)
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
         metrics_safe = "__".join([m['metric'].replace('/', '_') for m in results])[:100]
         plt.savefig(filename, bbox_inches='tight', dpi=160)
         plt.close()
@@ -589,7 +590,7 @@ def main():
     parser.add_argument(
         "--run_dir",
         type=str,
-        default="wandb",
+        default="/mnt/kostas-graid/datasets/vlongle/rl_sensors",
         help="Either (i) path to one local wandb run directory (run-XXXX) or (ii) a directory that contains several such run-* sub-folders produced by multiple seeds."
     )
     parser.add_argument(
@@ -634,6 +635,12 @@ def main():
         type=str,
         default=None,
         help="Custom filename for the output plot. If not specified, filename will be auto-generated based on projects and metrics.",
+    )
+    parser.add_argument(
+        "--plot_dir",
+        type=str,
+        default="figures",
+        help="Directory to save the generated plots."
     )
 
     args = parser.parse_args()
@@ -699,7 +706,7 @@ def main():
             logging.error("No data collected for any project-metric combination. Skipping plot.")
             return
         
-        filename = args.filename or get_plot_filename('comparison', args.projects, args.metrics)
+        filename = args.filename or get_plot_filename('comparison', args.projects, args.metrics, args.plot_dir)
         plot_comparison(all_results, title="Multiple Projects and Metrics", ylabel="Value", filename=filename, ymin=args.ymin, ymax=args.ymax)
         print(f"Generated plot: {filename}")
         return
@@ -731,7 +738,7 @@ def main():
                 logging.error(f"No data collected for metric '{metric}' across any project. Skipping plot.")
                 continue
             
-            filename = args.filename or get_plot_filename('comparison', args.projects, [metric])
+            filename = args.filename or get_plot_filename('comparison', args.projects, [metric], args.plot_dir)
             plot_comparison(results, title=metric, ylabel=metric, filename=filename, ymin=args.ymin, ymax=args.ymax)
             print(f"Generated plot: {filename}")
         
@@ -770,7 +777,7 @@ def main():
 
     if len(aggregated) == 1:
         res = aggregated[0]
-        filename = args.filename or get_plot_filename('single', [project], [res['metric']])
+        filename = args.filename or get_plot_filename('single', [project], [res['metric']], args.plot_dir)
         plot_history(
             res['steps'], res['mean'], res['lower'], res['upper'], res['label'],
             filename=filename, project=project, metric=res['metric'], n_runs=res['n_runs'], ymin=args.ymin, ymax=args.ymax,
@@ -778,7 +785,7 @@ def main():
         print(f"Generated plot: {filename}")
     else:
         metrics = [res['metric'] for res in aggregated]
-        filename = args.filename or get_plot_filename('multiple_metrics', [project], metrics)
+        filename = args.filename or get_plot_filename('multiple_metrics', [project], metrics, args.plot_dir)
         plot_multiple_metrics(aggregated, project=project, filename=filename, ymin=args.ymin, ymax=args.ymax)
         print(f"Generated plot: {filename}")
 

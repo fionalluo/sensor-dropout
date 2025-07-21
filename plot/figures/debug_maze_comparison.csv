@@ -1,3 +1,0 @@
-Method,Average Performance,Final Performance,AUC,Time Steps
-ppo_dropout-debug_maze_cycle-v2 (N=4),30.30311279296875,53.75,12412155.0,409600
-ppo_dropout-debug_maze_adaptive_window1-v2 (N=4),31.48436279296875,53.75,12895995.0,409600
