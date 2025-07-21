@@ -10,10 +10,10 @@ BASE_LOGDIR=~/logdir/baselines/ppo_dropout
 
 # List of configs to run
 CONFIGS=(
-  "gymnasium_tigerdoorkey"
+  # "gymnasium_tigerdoorkey"
   # "gymnasium_tigerdoorkeylarge"
-  "gymnasium_maze"
-  "gymnasium_maze11"
+  # "gymnasium_maze"
+  # "gymnasium_maze11"
   "gymnasium_blindpick"
 )
 
