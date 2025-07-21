@@ -2,9 +2,9 @@
 
 # User: specify your list of tasks and wandb project here
 TASKS=(
-  # "Isaac-Ant-v0"
+  "Isaac-Ant-v0"
   # "Isaac-Humanoid-v0"
-  "Isaac-Lift-Cube-Franka-v0"
+  # "Isaac-Lift-Cube-Franka-v0"
 )
 WANDB_PROJECT="isaac-test"
 WANDB_ENTITY="fionalluo"
@@ -30,7 +30,7 @@ for TASK in "${TASKS[@]}"; do
   for SEED in "${SEEDS[@]}"; do
     echo "Running RL-Games PPO baseline with task ${TASK}, seed ${SEED}, wandb_project ${WANDB_PROJECT}"
 
-    /workspace/isaaclab/isaaclab.sh -p /workspace/sensor-dropout/baselines_isaac/ppo/train.py \
+    /workspace/isaaclab/isaaclab.sh -p /workspace/sensor-dropout/baselines_isaac/ppo_dropout_any/train.py \
       --task "$TASK" \
       --wandb-project-name "$WANDB_PROJECT" \
       --wandb-entity "$WANDB_ENTITY" \

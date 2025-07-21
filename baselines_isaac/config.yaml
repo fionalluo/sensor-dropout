@@ -1,0 +1,45 @@
+Isaac-Ant-v0:
+  keys:
+    base_height: [0, 1]
+    base_lin_vel: [1, 4]
+    base_ang_vel: [4, 7]
+    base_yaw_roll: [7, 9]
+    base_angle_to_target: [9, 10]
+    base_up_proj: [10, 11]
+    base_heading_proj: [11, 12]
+    joint_pos_norm: [12, 20]
+    joint_vel_rel: [20, 28]
+    feet_body_forces: [28, 52]
+    last_actions: [52, 60]
+  dropout:
+    schedule_type: 'constant'
+    base_probability: 0.25
+
+Isaac-Humanoid-v0:
+  keys: 
+    base_height: [0, 1]
+    base_lin_vel: [1, 4]
+    base_ang_vel: [4, 7]
+    base_yaw_roll: [7, 9]
+    base_angle_to_target: [9, 10]
+    base_up_proj: [10, 11]
+    base_heading_proj: [11, 12]
+    joint_pos_norm: [12, 33]
+    joint_vel_rel: [33, 54]
+    feet_body_forces: [54, 66]
+    last_actions: [66, 87]
+  dropout:
+    schedule_type: 'constant'
+    base_probability: 0.25
+
+Isaac-Lift-Cube-Franka-v0:
+  keys: 
+    joint_pos: [0, 9]
+    joint_vel: [9, 18]
+    object_position: [18, 21]
+    target_object_position: [21, 28]
+    last_actions: [28, 36]
+  dropout:
+    schedule_type: 'constant'
+    base_probability: 0.25
+
