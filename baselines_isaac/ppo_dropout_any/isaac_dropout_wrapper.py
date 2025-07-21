@@ -44,21 +44,24 @@ class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
 
     def _mask_obs(self, obs):
         prob = self.dropout_scheduler.get_prob(0)  # No step tracking, always use base prob
-        # Handle dict or tensor
-        if isinstance(obs, dict):
+        # If obs is a dict with 'policy', mask that tensor
+        if isinstance(obs, dict) and "policy" in obs:
             obs = obs.copy()
+            policy_obs = obs["policy"].clone()
             for k in self.keys:
-                if k in obs and torch.rand(1, generator=self.rng).item() < prob:
+                rand_val = torch.rand(1, generator=self.rng).item()
+                if rand_val < prob:
+                    # print(f"[Dropout] Zeroing key: {k} (rand={rand_val:.3f} < prob={prob})")
                     start, end = self.key_indices[k]
-                    if torch.is_tensor(obs[k]):
-                        obs[k][..., start:end] = 0
-                    else:
-                        obs[k][start:end] = 0
+                    policy_obs[..., start:end] = 0
+            obs["policy"] = policy_obs
             return obs
         elif torch.is_tensor(obs):
             masked = obs.clone()
             for k in self.keys:
-                if torch.rand(1, generator=self.rng).item() < prob:
+                rand_val = torch.rand(1, generator=self.rng).item()
+                if rand_val < prob:
+                    # print(f"[Dropout] Zeroing key: {k} (rand={rand_val:.3f} < prob={prob})")
                     start, end = self.key_indices[k]
                     masked[..., start:end] = 0
             return masked

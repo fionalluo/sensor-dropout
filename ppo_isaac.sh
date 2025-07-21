@@ -32,6 +32,7 @@ for TASK in "${TASKS[@]}"; do
 
     /workspace/isaaclab/isaaclab.sh -p /workspace/sensor-dropout/baselines_isaac/ppo/train.py \
       --task "$TASK" \
+      --seed $SEED \
       --wandb-project-name "$WANDB_PROJECT" \
       --wandb-entity "$WANDB_ENTITY" \
       --track \
