@@ -114,17 +114,28 @@ def evaluate_checkpoint(env, checkpoint_path, task, num_eval_episodes, rl_device
     del runner
     import gc
     gc.collect()
+    return avg_reward, avg_episode_length
 
-def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_envs, env=None):
+def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_envs, env=None, wandb_project=None, wandb_entity=None, wandb_run_name=None):
     """
     Evaluate all checkpoints in a folder. If env is provided, use it; otherwise, create a new environment.
     Only close the environment if it was created here.
     Deeply reset the environment before each checkpoint evaluation.
+    Optionally log results to wandb if wandb_project, wandb_entity, and wandb_run_name are provided.
     """
+    import re
+    # Optionally import wandb
+    wandb = None
+    if wandb_project and wandb_entity and wandb_run_name:
+        import wandb as _wandb
+        wandb = _wandb
+        wandb.init(project=wandb_project, entity=wandb_entity, name=wandb_run_name, resume="allow")
+    # Load agent config to get steps_per_epoch
+    agent_cfg = load_cfg_from_registry(task, "rl_games_cfg_entry_point")
+    steps_per_epoch = agent_cfg["params"]["config"].get("steps_num", 1)
     # Find all checkpoint files matching regex ep_\d+
     checkpoint_pattern = os.path.join(checkpoint_folder, "*.pth")
     all_checkpoint_files = glob.glob(checkpoint_pattern)
-    import re
     checkpoint_files = [f for f in all_checkpoint_files if re.search(r'ep_\d+', os.path.basename(f))]
     checkpoint_files = sorted(checkpoint_files, key=os.path.basename)
     if not checkpoint_files:
@@ -155,15 +166,38 @@ def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_env
         agent_cfg = load_cfg_from_registry(task, "rl_games_cfg_entry_point")
         rl_device = agent_cfg["params"]["config"]["device"]
     for checkpoint_path in checkpoint_files:
+        # --- Deep reset the environment before evaluating this checkpoint ---
         env.reset()
         # ---
-        evaluate_checkpoint(
+        avg_reward, avg_episode_length = None, None
+        # Evaluate and get metrics
+        result = evaluate_checkpoint(
             env,
             checkpoint_path,
             task,
             num_eval_episodes,
             rl_device
         )
+        # result is printed, but also capture for wandb
+        # Extract epoch/step from checkpoint_path
+        checkpoint_name = os.path.basename(checkpoint_path)
+        epoch = None
+        global_step = None
+        match = re.search(r'ep_(\d+)', checkpoint_name)
+        if match:
+            epoch = int(match.group(1))
+            global_step = epoch * steps_per_epoch
+        # Log to wandb if enabled
+        if wandb is not None and result is not None:
+            wandb.log({
+                "eval/avg_reward": result[0],
+                "eval/avg_episode_length": result[1],
+                "eval/checkpoint": checkpoint_name,
+                "eval/epoch": epoch,
+                "global_step": global_step
+            })
+    if wandb is not None:
+        wandb.finish()
     if close_env:
         env.close()
     # simulation_app.close() is handled outside

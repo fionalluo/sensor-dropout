@@ -124,13 +124,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     log_root_path = os.path.abspath(log_root_path)
     print(f"[INFO] Logging experiment in directory: {log_root_path}")
     # specify directory for logging runs
-    log_dir = agent_cfg["params"]["config"].get("full_experiment_name", datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+    default_run_name = f"{args_cli.task}_{config_name}_seed{args_cli.seed}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+    log_dir = agent_cfg["params"]["config"].get("full_experiment_name", default_run_name)
     # set directory into agent config
     # logging directory path: <train_dir>/<full_experiment_name>
     agent_cfg["params"]["config"]["train_dir"] = log_root_path
     agent_cfg["params"]["config"]["full_experiment_name"] = log_dir
     wandb_project = config_name if args_cli.wandb_project_name is None else args_cli.wandb_project_name
     experiment_name = log_dir if args_cli.wandb_name is None else args_cli.wandb_name
+
+    # --- Set exp_name for wandb ---
+    exp_name = f"{args_cli.task}_ppo"
 
     # dump the configuration into log-directory
     dump_yaml(os.path.join(log_root_path, log_dir, "params", "env.yaml"), env_cfg)
@@ -192,12 +196,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             project=wandb_project,
             entity=args_cli.wandb_entity,
             name=experiment_name,
-            sync_tensorboard=True,
+            sync_tensorboard=True,  # disable so I can set step manually during evaluation phase
             monitor_gym=True,
             save_code=True,
         )
         wandb.config.update({"env_cfg": env_cfg.to_dict()})
         wandb.config.update({"agent_cfg": agent_cfg})
+        wandb.config.update({"exp_name": exp_name})
 
     if args_cli.checkpoint is not None:
         runner.run({"train": True, "play": False, "sigma": train_sigma, "checkpoint": resume_path})
@@ -220,12 +225,19 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     checkpoint_folder = os.path.join(log_root_path, log_dir, 'nn')
     num_eval_episodes = eval_cfg.get('num_eval_episodes', 100)
     num_envs = eval_cfg.get('num_envs', 100)
+    # Use the same wandb project, entity, and run name as training
+    wandb_project = config_name if args_cli.wandb_project_name is None else args_cli.wandb_project_name
+    wandb_run_name = log_dir if args_cli.wandb_name is None else args_cli.wandb_name
+    wandb_entity = args_cli.wandb_entity
     evaluate_all_checkpoints(
         task=args_cli.task,
         checkpoint_folder=checkpoint_folder,
         num_eval_episodes=num_eval_episodes,
         num_envs=num_envs,
-        env=env
+        env=env,
+        wandb_project=wandb_project,
+        wandb_entity=wandb_entity,
+        wandb_run_name=wandb_run_name
     )
     env.close()
     # Now it is safe to close the simulation app

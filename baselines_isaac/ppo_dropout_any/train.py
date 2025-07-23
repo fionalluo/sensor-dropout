@@ -148,6 +148,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     wandb_project = config_name if args_cli.wandb_project_name is None else args_cli.wandb_project_name
     experiment_name = log_dir if args_cli.wandb_name is None else args_cli.wandb_name
 
+    # --- Set exp_name for wandb ---
+    # Always include dropout probability for this script
+    exp_name = f"{args_cli.task}_ppo_dropout"
+    dropout_prob = None
+    # Try to get dropout probability from dropout_cfg (loaded above)
+    if 'base_probability' in dropout_cfg:
+        dropout_prob = dropout_cfg['base_probability']
+    if dropout_prob is not None:
+        exp_name = f"{exp_name}_{dropout_prob}"
+
     # dump the configuration into log-directory
     dump_yaml(os.path.join(log_root_path, log_dir, "params", "env.yaml"), env_cfg)
     dump_yaml(os.path.join(log_root_path, log_dir, "params", "agent.yaml"), agent_cfg)
@@ -228,6 +238,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         )
         wandb.config.update({"env_cfg": env_cfg.to_dict()})
         wandb.config.update({"agent_cfg": agent_cfg})
+        wandb.config.update({"exp_name": exp_name})
 
     if args_cli.checkpoint is not None:
         runner.run({"train": True, "play": False, "sigma": train_sigma, "checkpoint": resume_path})
