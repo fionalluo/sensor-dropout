@@ -101,6 +101,7 @@ from baselines_isaac.evaluation import evaluate_all_checkpoints
 
 @hydra_task_config(args_cli.task, "rl_games_cfg_entry_point")
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: dict):
+    import yaml  # Ensure yaml is imported before use
     """Train with RL-Games agent."""
     # override configurations with non-hydra CLI arguments
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
@@ -152,28 +153,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # Always include dropout probability for this script
     exp_name = f"{args_cli.task}_ppo_dropout"
     dropout_prob = None
-    # Try to get dropout probability from dropout_cfg (loaded above)
-    if 'base_probability' in dropout_cfg:
-        dropout_prob = dropout_cfg['base_probability']
-    if dropout_prob is not None:
-        exp_name = f"{exp_name}_{dropout_prob}"
-
-    # dump the configuration into log-directory
-    dump_yaml(os.path.join(log_root_path, log_dir, "params", "env.yaml"), env_cfg)
-    dump_yaml(os.path.join(log_root_path, log_dir, "params", "agent.yaml"), agent_cfg)
-    dump_pickle(os.path.join(log_root_path, log_dir, "params", "env.pkl"), env_cfg)
-    dump_pickle(os.path.join(log_root_path, log_dir, "params", "agent.pkl"), agent_cfg)
-
-    # read configurations about the agent-training
-    rl_device = agent_cfg["params"]["config"]["device"]
-    clip_obs = agent_cfg["params"]["env"].get("clip_observations", math.inf)
-    clip_actions = agent_cfg["params"]["env"].get("clip_actions", math.inf)
-
-    # create isaac environment
-    env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
-
-    # --- Insert dropout wrapper here ---
-    # Load dropout config and key indices
+    # Load dropout config and key indices (move this up so dropout_cfg is defined before use)
     config_path = os.path.join(os.path.dirname(__file__), '../config.yaml')
     config_path = os.path.abspath(config_path)
     key_indices = load_task_dropout_config(config_path, args_cli.task)
@@ -182,8 +162,22 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         config_yaml = yaml.safe_load(f)
     task_cfg = config_yaml.get(args_cli.task, {})
     dropout_cfg = task_cfg.get('dropout', {'schedule_type': 'constant', 'base_probability': 0.0})
+    if 'base_probability' in dropout_cfg:
+        dropout_prob = dropout_cfg['base_probability']
+    if dropout_prob is not None:
+        exp_name = f"{exp_name}_{dropout_prob}"
     dropout_scheduler = DropoutScheduler(dropout_cfg)
-    env = IsaacProbabilisticDropoutWrapper(env, key_indices, dropout_scheduler, seed=args_cli.seed)
+
+    # read configurations about the agent-training
+    rl_device = agent_cfg["params"]["config"]["device"]
+    clip_obs = agent_cfg["params"]["env"].get("clip_observations", math.inf)
+    clip_actions = agent_cfg["params"]["env"].get("clip_actions", math.inf)
+
+    # create isaac environment
+    base_env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+
+    # --- Insert dropout wrapper here ---
+    env = IsaacProbabilisticDropoutWrapper(base_env, task_name=args_cli.task, seed=args_cli.seed)
     # --- End dropout wrapper insertion ---
 
     # convert to single-agent instance if required by the RL algorithm
@@ -247,26 +241,38 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # close the simulator
     env.close()
-    
-    # Evaluate all checkpoints after training
-    if args_cli.evaluate and global_rank == 0:
-        # Find the nn folder with checkpoints
-        nn_folder = os.path.join(log_root_path, log_dir, "nn")
-        if os.path.exists(nn_folder):
-            print(f"[INFO] Starting evaluation of checkpoints in {nn_folder}")
-            evaluate_all_checkpoints(
-                checkpoint_folder=nn_folder,
-                task_name=args_cli.task,
-                wandb_project=wandb_project if args_cli.track else None,
-                wandb_entity=args_cli.wandb_entity if args_cli.track else None,
-                num_eval_episodes=10,
-                num_envs=env_cfg.scene.num_envs
-            )
-        else:
-            print(f"[WARNING] No nn folder found at {nn_folder}, skipping evaluation")
+
+    # --- Directly call evaluation after training ---
+    print(f"[INFO] Running evaluation for task {args_cli.task} after training.")
+    import yaml
+    from baselines_isaac.evaluation import evaluate_all_checkpoints
+    config_path = os.path.join(os.path.dirname(__file__), "../config.yaml")
+    with open(config_path, 'r') as f:
+        all_config = yaml.safe_load(f)
+    task_cfg = all_config.get(args_cli.task, {})
+    eval_cfg = task_cfg.get('eval', {})
+    # checkpoint_folder is determined from log_root_path and log_dir, not config
+    checkpoint_folder = os.path.join(log_root_path, log_dir, 'nn')
+    num_eval_episodes = eval_cfg.get('num_eval_episodes', 100)
+    num_envs = eval_cfg.get('num_envs', 100)
+    # Use the same wandb project, entity, and run name as training
+    wandb_project = config_name if args_cli.wandb_project_name is None else args_cli.wandb_project_name
+    wandb_run_name = log_dir if args_cli.wandb_name is None else args_cli.wandb_name
+    wandb_entity = args_cli.wandb_entity
+    evaluate_all_checkpoints(
+        task=args_cli.task,
+        checkpoint_folder=checkpoint_folder,
+        num_eval_episodes=num_eval_episodes,
+        num_envs=num_envs,
+        env=base_env,  # Pass the unwrapped environment
+        wandb_project=wandb_project if args_cli.track else None,
+        wandb_entity=wandb_entity if args_cli.track else None,
+        wandb_run_name=wandb_run_name if args_cli.track else None
+    )
+    # Now it is safe to close the simulation app
+    simulation_app.close()
 
 
 if __name__ == "__main__":
     # run the main function
     main()
-    simulation_app.close()

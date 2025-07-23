@@ -34,6 +34,17 @@ from isaaclab_tasks.utils import load_cfg_from_registry, parse_env_cfg
 import glob
 import yaml
 import random
+from baselines_isaac.ppo_dropout_any.isaac_dropout_wrapper import (
+    IsaacProbabilisticDropoutWrapper, DropoutScheduler, load_task_dropout_config
+)
+import numpy as np
+
+def set_global_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 def rollout_policy(env, agent, num_eval_episodes, rl_device):
     # Collect the first episode to finish for each of the first num_eval_episodes env indices
@@ -43,14 +54,20 @@ def rollout_policy(env, agent, num_eval_episodes, rl_device):
     num_envs = env.unwrapped.num_envs
 
     obs = env.reset()
-    if isinstance(obs, dict):
-        obs = obs["obs"]
+    # Do not extract obs['obs'] here; pass the full dict to the agent if present
     _ = agent.get_batch_size(obs, 1)
     if agent.is_rnn:
         agent.init_rnn()
 
     episode_rewards = torch.zeros(num_envs, device=rl_device)
     episode_lengths_env = torch.zeros(num_envs, device=rl_device)
+
+    def extract_array(val):
+        if isinstance(val, dict):
+            if 'policy' in val:
+                return val['policy']
+            return next(iter(val.values()))
+        return val
 
     while len(collected) < num_eval_episodes:
         try:
@@ -63,7 +80,9 @@ def rollout_policy(env, agent, num_eval_episodes, rl_device):
         result = env.step(actions)
         if len(result) == 5:
             obs, rewards, terminated, truncated, infos = result
-            dones = torch.logical_or(torch.as_tensor(terminated), torch.as_tensor(truncated))
+            terminated_arr = extract_array(terminated)
+            truncated_arr = extract_array(truncated)
+            dones = torch.logical_or(torch.as_tensor(terminated_arr), torch.as_tensor(truncated_arr))
         else:
             obs, rewards, dones, infos = result
 
@@ -132,7 +151,7 @@ def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_env
         wandb.init(project=wandb_project, entity=wandb_entity, name=wandb_run_name, resume="allow")
     # Load agent config to get steps_per_epoch
     agent_cfg = load_cfg_from_registry(task, "rl_games_cfg_entry_point")
-    steps_per_epoch = agent_cfg["params"]["config"].get("steps_num", 1)
+    steps_per_epoch = agent_cfg["params"].get("steps_num", 1)
     # Find all checkpoint files matching regex ep_\d+
     checkpoint_pattern = os.path.join(checkpoint_folder, "*.pth")
     all_checkpoint_files = glob.glob(checkpoint_pattern)
@@ -142,6 +161,11 @@ def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_env
         print(f"[WARNING] No checkpoint files found in {checkpoint_folder}")
         return
     print(f"[INFO] Found {len(checkpoint_files)} checkpoint files to evaluate")
+    # Prepare dropout probabilities
+    dropout_probs = [0.0, 0.1, 0.25, 0.5]
+    # Load key indices for dropout wrapper
+    config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+    key_indices = load_task_dropout_config(config_path, task)
     # Create environment ONCE if not provided
     close_env = False
     if env is None:
@@ -149,57 +173,68 @@ def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_env
         env_cfg = parse_env_cfg(
             task, device=agent_cfg["params"]["config"]["device"], num_envs=num_envs, use_fabric=True
         )
-        env = gym.make(task, cfg=env_cfg, render_mode=None)
-        if isinstance(env.unwrapped, DirectMARLEnv):
-            env = multi_agent_to_single_agent(env)
+        base_env = gym.make(task, cfg=env_cfg, render_mode=None)
+        if isinstance(base_env.unwrapped, DirectMARLEnv):
+            base_env = multi_agent_to_single_agent(base_env)
         rl_device = agent_cfg["params"]["config"]["device"]
         clip_obs = agent_cfg["params"]["env"].get("clip_observations", math.inf)
         clip_actions = agent_cfg["params"]["env"].get("clip_actions", math.inf)
-        env = RlGamesVecEnvWrapper(env, rl_device, clip_obs, clip_actions)
-        vecenv.register(
-            "IsaacRlgWrapper", lambda config_name, num_actors, **kwargs: RlGamesGpuEnv(config_name, num_actors, **kwargs)
-        )
-        env_configurations.register("rlgpu", {"vecenv_type": "IsaacRlgWrapper", "env_creator": lambda **kwargs: env})
         close_env = True
     else:
-        # Assume env is already wrapped and ready
         agent_cfg = load_cfg_from_registry(task, "rl_games_cfg_entry_point")
         rl_device = agent_cfg["params"]["config"]["device"]
+        base_env = env
+        # Ensure clip_obs and clip_actions are set even if env is provided
+        clip_obs = agent_cfg["params"]["env"].get("clip_observations", math.inf)
+        clip_actions = agent_cfg["params"]["env"].get("clip_actions", math.inf)
     for checkpoint_path in checkpoint_files:
-        # --- Deep reset the environment before evaluating this checkpoint ---
-        env.reset()
-        # ---
-        avg_reward, avg_episode_length = None, None
-        # Evaluate and get metrics
-        result = evaluate_checkpoint(
-            env,
-            checkpoint_path,
-            task,
-            num_eval_episodes,
-            rl_device
-        )
-        # result is printed, but also capture for wandb
-        # Extract epoch/step from checkpoint_path
-        checkpoint_name = os.path.basename(checkpoint_path)
-        epoch = None
-        global_step = None
-        match = re.search(r'ep_(\d+)', checkpoint_name)
-        if match:
-            epoch = int(match.group(1))
-            global_step = epoch * steps_per_epoch
-        # Log to wandb if enabled
-        if wandb is not None and result is not None:
-            wandb.log({
-                "eval/avg_reward": result[0],
-                "eval/avg_episode_length": result[1],
-                "eval/checkpoint": checkpoint_name,
-                "eval/epoch": epoch,
-                "global_step": global_step
-            })
+        for prob in dropout_probs:
+            seed = int.from_bytes(os.urandom(4), 'little')
+            set_global_seed(seed)
+            # Re-register the wrapped environment for RL-Games (match train.py logic)
+            dropout_wrapped_env = IsaacProbabilisticDropoutWrapper(base_env, task_name=task, seed=seed)
+            wrapped_env = RlGamesVecEnvWrapper(dropout_wrapped_env, rl_device, clip_obs, clip_actions)
+            # De-register old 'rlgpu' env if possible
+            if 'rlgpu' in env_configurations.configurations:
+                del env_configurations.configurations['rlgpu']
+            # Register both vecenv and env_configurations for 'rlgpu'
+            vecenv.register(
+                "IsaacRlgWrapper", lambda config_name, num_actors, **kwargs: RlGamesGpuEnv(config_name, num_actors, **kwargs)
+            )
+            env_configurations.register("rlgpu", {"vecenv_type": "IsaacRlgWrapper", "env_creator": lambda **kwargs: wrapped_env})
+            wrapped_env.reset()
+            avg_reward, avg_episode_length = None, None
+            result = evaluate_checkpoint(
+                wrapped_env,
+                checkpoint_path,
+                task,
+                num_eval_episodes,
+                rl_device
+            )
+            # Extract epoch/step from checkpoint_path
+            checkpoint_name = os.path.basename(checkpoint_path)
+            epoch = None
+            global_step = None
+            match = re.search(r'ep_(\d+)', checkpoint_name)
+            if match:
+                epoch = int(match.group(1))
+                global_step = epoch * steps_per_epoch
+            # Print and log with dropout suffix
+            print(f"[RESULT] Dropout {prob}: Checkpoint: {checkpoint_name}")
+            print(f"[RESULT] Dropout {prob}: Avg Reward: {result[0]:.2f}")
+            print(f"[RESULT] Dropout {prob}: Avg Episode Length: {result[1]:.1f}")
+            if wandb is not None and result is not None:
+                wandb.log({
+                    f"eval/avg_reward_dropout_{prob}": result[0],
+                    f"eval/avg_episode_length_dropout_{prob}": result[1],
+                    "eval/checkpoint": checkpoint_name,
+                    "eval/epoch": epoch,
+                    "global_step": global_step
+                })
     if wandb is not None:
         wandb.finish()
     if close_env:
-        env.close()
+        base_env.close()
     # simulation_app.close() is handled outside
 
 def main():
