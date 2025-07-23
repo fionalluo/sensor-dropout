@@ -39,6 +39,14 @@ parser.add_argument(
     const=True,
     help="if toggled, this experiment will be tracked with Weights and Biases",
 )
+parser.add_argument(
+    "--evaluate",
+    type=lambda x: bool(strtobool(x)),
+    default=True,
+    nargs="?",
+    const=True,
+    help="if toggled, evaluate all checkpoints after training",
+)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
@@ -86,6 +94,7 @@ import yaml
 from baselines_isaac.ppo_dropout_any.isaac_dropout_wrapper import (
     IsaacProbabilisticDropoutWrapper, DropoutScheduler, load_task_dropout_config
 )
+from baselines_isaac.evaluation import evaluate_all_checkpoints
 
 # PLACEHOLDER: Extension template (do not remove this comment)
 
@@ -227,6 +236,23 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # close the simulator
     env.close()
+    
+    # Evaluate all checkpoints after training
+    if args_cli.evaluate and global_rank == 0:
+        # Find the nn folder with checkpoints
+        nn_folder = os.path.join(log_root_path, log_dir, "nn")
+        if os.path.exists(nn_folder):
+            print(f"[INFO] Starting evaluation of checkpoints in {nn_folder}")
+            evaluate_all_checkpoints(
+                checkpoint_folder=nn_folder,
+                task_name=args_cli.task,
+                wandb_project=wandb_project if args_cli.track else None,
+                wandb_entity=args_cli.wandb_entity if args_cli.track else None,
+                num_eval_episodes=10,
+                num_envs=env_cfg.scene.num_envs
+            )
+        else:
+            print(f"[WARNING] No nn folder found at {nn_folder}, skipping evaluation")
 
 
 if __name__ == "__main__":

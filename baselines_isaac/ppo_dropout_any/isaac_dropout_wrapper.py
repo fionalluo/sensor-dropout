@@ -27,10 +27,6 @@ def load_task_dropout_config(config_path, task_name):
     key_indices = task_cfg['keys']
     return key_indices
 
-
-import gym
-import torch
-
 class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
     """
     Efficient dropout wrapper for IsaacLab: keeps dropout mask fixed during episodes,

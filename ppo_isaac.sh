@@ -2,9 +2,9 @@
 
 # User: specify your list of tasks and wandb project here
 TASKS=(
-  # "Isaac-Ant-v0"
+  "Isaac-Ant-v0"
   # "Isaac-Humanoid-v0"
-  "Isaac-Lift-Cube-Franka-v0"
+  # "Isaac-Lift-Cube-Franka-v0"
 )
 WANDB_PROJECT="isaac-test"
 WANDB_ENTITY="fionalluo"
