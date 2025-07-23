@@ -10,6 +10,7 @@
 import argparse
 import sys
 from distutils.util import strtobool
+import copy
 
 from isaaclab.app import AppLauncher
 
@@ -231,5 +232,4 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 if __name__ == "__main__":
     # run the main function
     main()
-    # close sim app
     simulation_app.close()

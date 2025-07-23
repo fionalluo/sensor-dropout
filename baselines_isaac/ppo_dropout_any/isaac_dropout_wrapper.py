@@ -28,59 +28,76 @@ def load_task_dropout_config(config_path, task_name):
     return key_indices
 
 
+import gym
+import torch
+
 class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
     """
-    For IsaacLab envs: for each observation, each key has a probability (schedule) of being zeroed out.
-    Uses config file for key->indices mapping. Works for both single and vectorized envs.
+    Efficient dropout wrapper for IsaacLab: keeps dropout mask fixed during episodes,
+    re-samples on reset or when an env is done. Fully vectorized for speed.
     """
     def __init__(self, env, key_indices, dropout_scheduler, seed=None):
         super().__init__(env)
-        self.key_indices = key_indices  # dict: key -> [start, end]
+        self.key_indices = key_indices
         self.keys = list(key_indices.keys())
         self.dropout_scheduler = dropout_scheduler
-        self.rng = torch.Generator()
+        self.rng = torch.Generator(device="cpu")  # Generator remains on CPU
         if seed is not None:
             self.rng.manual_seed(seed)
 
+        self.current_masks = None
+
+    def _generate_masks(self, num_envs, device):
+        """Generate a dropout mask for each env in the batch."""
+        prob = self.dropout_scheduler.get_prob(0)
+        # Generate on CPU, then move to target device
+        masks = {}
+        for k in self.keys:
+            drop_flags = (torch.rand(num_envs, generator=self.rng) >= prob).float().unsqueeze(1).to(device)
+            masks[k] = drop_flags  # shape: [N, 1]
+        return masks
+
     def _mask_obs(self, obs):
-        prob = self.dropout_scheduler.get_prob(0)  # No step tracking, always use base prob
-        # If obs is a dict with 'policy', mask that tensor
-        if isinstance(obs, dict) and "policy" in obs:
-            obs = obs.copy()
-            policy_obs = obs["policy"].clone()
-            for k in self.keys:
-                rand_val = torch.rand(1, generator=self.rng).item()
-                if rand_val < prob:
-                    # print(f"[Dropout] Zeroing key: {k} (rand={rand_val:.3f} < prob={prob})")
-                    start, end = self.key_indices[k]
-                    policy_obs[..., start:end] = 0
-            obs["policy"] = policy_obs
+        if not isinstance(obs, dict) or "policy" not in obs:
             return obs
-        elif torch.is_tensor(obs):
-            masked = obs.clone()
-            for k in self.keys:
-                rand_val = torch.rand(1, generator=self.rng).item()
-                if rand_val < prob:
-                    # print(f"[Dropout] Zeroing key: {k} (rand={rand_val:.3f} < prob={prob})")
-                    start, end = self.key_indices[k]
-                    masked[..., start:end] = 0
-            return masked
-        else:
+
+        policy_obs = obs["policy"]
+        if self.current_masks is None:
             return obs
+
+        for k, (start, end) in self.key_indices.items():
+            if k not in self.current_masks:
+                continue
+            mask = self.current_masks[k]  # shape: [N, 1]
+            policy_obs[:, start:end] *= mask
+
+        return obs
 
     def reset(self, **kwargs):
         result = self.env.reset(**kwargs)
-        if isinstance(result, tuple):
-            obs, info = result
-            return self._mask_obs(obs), info
+        obs, info = result if isinstance(result, tuple) else (result, {})
+
+        if isinstance(obs, dict) and "policy" in obs:
+            num_envs = obs["policy"].shape[0]
+            device = obs["policy"].device
         else:
-            return self._mask_obs(result)
+            num_envs = obs.shape[0] if torch.is_tensor(obs) and obs.ndim > 1 else 1
+            device = obs.device if torch.is_tensor(obs) else torch.device("cpu")
+
+        self.current_masks = self._generate_masks(num_envs, device)
+        return (self._mask_obs(obs), info) if isinstance(result, tuple) else self._mask_obs(obs)
 
     def step(self, action):
         result = self.env.step(action)
-        if len(result) == 5:
-            obs, reward, terminated, truncated, info = result
-            return self._mask_obs(obs), reward, terminated, truncated, info
-        else:
-            obs, reward, done, info = result
-            return self._mask_obs(obs), reward, done, info 
+        obs, reward, terminated, truncated, info = result if len(result) == 5 else (*result, None)
+        done_flags = torch.logical_or(torch.as_tensor(terminated), torch.as_tensor(truncated)) if truncated is not None else torch.as_tensor(terminated)
+
+        if self.current_masks is not None:
+            done_indices = torch.nonzero(done_flags).squeeze(1)
+            for k in self.current_masks:
+                prob = self.dropout_scheduler.get_prob(0)
+                mask = self.current_masks[k]
+                new_flags = (torch.rand(len(done_indices), generator=self.rng) >= prob).float().unsqueeze(1).to(mask.device)
+                mask[done_indices] = new_flags
+
+        return (self._mask_obs(obs), reward, terminated, truncated, info) if truncated is not None else (self._mask_obs(obs), reward, terminated, info)
