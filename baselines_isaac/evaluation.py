@@ -189,10 +189,8 @@ def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_env
         clip_actions = agent_cfg["params"]["env"].get("clip_actions", math.inf)
     for checkpoint_path in checkpoint_files:
         for prob in dropout_probs:
-            seed = int.from_bytes(os.urandom(4), 'little')
-            set_global_seed(seed)
-            # Re-register the wrapped environment for RL-Games (match train.py logic)
-            dropout_wrapped_env = IsaacProbabilisticDropoutWrapper(base_env, task_name=task, seed=seed)
+            # Pass dropout_prob to the wrapper
+            dropout_wrapped_env = IsaacProbabilisticDropoutWrapper(base_env, task_name=task, dropout_prob=prob)
             wrapped_env = RlGamesVecEnvWrapper(dropout_wrapped_env, rl_device, clip_obs, clip_actions)
             # De-register old 'rlgpu' env if possible
             if 'rlgpu' in env_configurations.configurations:

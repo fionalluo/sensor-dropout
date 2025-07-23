@@ -33,7 +33,7 @@ class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
     re-samples on reset or when an env is done. Fully vectorized for speed.
     For each key, all indices for that key are zeroed together per environment, with probability given by the dropout scheduler.
     """
-    def __init__(self, env, task_name, seed=None):
+    def __init__(self, env, task_name, seed=None, dropout_prob=None):
         super().__init__(env)
         # Fixed config path: always relative to this file
         config_path = os.path.join(os.path.dirname(__file__), '../config.yaml')
@@ -45,7 +45,12 @@ class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
             raise ValueError(f"Task {task_name} not found in config file {config_path}")
         task_cfg = config[task_name]
         key_indices = task_cfg['keys']
-        dropout_cfg = task_cfg.get('dropout', {'schedule_type': 'constant', 'base_probability': 0.0})
+        # If dropout_prob is provided, override config
+        if dropout_prob is not None:
+            dropout_cfg = {'schedule_type': 'constant', 'base_probability': dropout_prob}
+            print("Dropout probability set to", dropout_prob)
+        else:
+            dropout_cfg = task_cfg.get('dropout', {'schedule_type': 'constant', 'base_probability': 0.0})
         self.key_indices = key_indices
         self.keys = list(key_indices.keys())
         self.dropout_scheduler = DropoutScheduler(dropout_cfg)
@@ -53,7 +58,7 @@ class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
         if seed is not None:
             self.rng.manual_seed(seed)
 
-        self.current_masks = None
+        self.reset()
 
     def _generate_masks(self, num_envs, device):
         """Generate a dropout mask for each key, for each env in the batch. Each env gets an independent mask for each key."""
@@ -70,20 +75,34 @@ class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
         return masks
 
     def _mask_obs(self, obs):
-        if not isinstance(obs, dict) or "policy" not in obs:
-            return obs
-
-        policy_obs = obs["policy"]
+        # print("Observation is", obs)
         if self.current_masks is None:
+            # print("Current masks is None")
             return obs
 
-        for k, (start, end) in self.key_indices.items():
-            if k not in self.current_masks:
-                continue
-            mask = self.current_masks[k]  # shape: [N, 1]
-            # Broadcast mask to all indices for this key
-            policy_obs[:, start:end] *= mask
+        # If obs is a dict with 'policy', mask as before
+        if isinstance(obs, dict) and "policy" in obs:
+            policy_obs = obs["policy"]
+            for k, (start, end) in self.key_indices.items():
+                if k not in self.current_masks:
+                    continue
+                mask = self.current_masks[k]  # shape: [N, 1]
+                policy_obs[:, start:end] *= mask
+            # print("Returning masked observation with probability", self.dropout_scheduler.get_prob(0))
+            return obs
 
+        # If obs is a tensor, mask it directly
+        elif torch.is_tensor(obs):
+            masked_obs = obs.clone()
+            for k, (start, end) in self.key_indices.items():
+                if k not in self.current_masks:
+                    continue
+                mask = self.current_masks[k]  # shape: [N, 1]
+                masked_obs[:, start:end] *= mask
+            # print("Returning masked tensor observation with probability", self.dropout_scheduler.get_prob(0))
+            return masked_obs
+
+        # print("Obs is not a dict or tensor, returning as is")
         return obs
 
     def reset(self, **kwargs):
