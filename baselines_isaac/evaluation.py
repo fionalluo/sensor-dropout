@@ -14,22 +14,8 @@ from distutils.util import strtobool
 from isaaclab.app import AppLauncher
 
 # add argparse arguments
-parser = argparse.ArgumentParser(description="Evaluate all checkpoints in a folder.")
-parser.add_argument("--checkpoint_folder", type=str, required=True, help="Folder containing checkpoint files")
-parser.add_argument("--task", type=str, required=True, help="Name of the task to evaluate")
-parser.add_argument("--num_eval_episodes", type=int, default=100, help="Number of episodes to evaluate per checkpoint")
-parser.add_argument("--num_envs", type=int, default=100, help="Number of environments to simulate")
-# append AppLauncher cli args
-AppLauncher.add_app_launcher_args(parser)
-# parse the arguments
-args_cli, hydra_args = parser.parse_known_args()
-
-# clear out sys.argv for Hydra
-sys.argv = [sys.argv[0]] + hydra_args
-
-# launch omniverse app
-app_launcher = AppLauncher(args_cli)
-simulation_app = app_launcher.app
+# Only require --task as CLI argument, everything else comes from config.yaml
+# (Remove CLI parsing and AppLauncher from top level)
 
 """Rest everything follows."""
 
@@ -46,23 +32,27 @@ from isaaclab_rl.rl_games import RlGamesGpuEnv, RlGamesVecEnvWrapper
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import load_cfg_from_registry, parse_env_cfg
 import glob
+import yaml
+import random
 
 def rollout_policy(env, agent, num_eval_episodes, rl_device):
-    total_rewards = []
-    episode_lengths = []
-    total_episodes = 0
+    # Collect the first episode to finish for each of the first num_eval_episodes env indices
+    total_rewards = [None] * num_eval_episodes
+    episode_lengths = [None] * num_eval_episodes
+    collected = set()
     num_envs = env.unwrapped.num_envs
-    # Ensure env.reset() is outside any torch context
+
     obs = env.reset()
     if isinstance(obs, dict):
         obs = obs["obs"]
     _ = agent.get_batch_size(obs, 1)
     if agent.is_rnn:
         agent.init_rnn()
+
     episode_rewards = torch.zeros(num_envs, device=rl_device)
     episode_lengths_env = torch.zeros(num_envs, device=rl_device)
-    while total_episodes < num_eval_episodes:
-        # Only use inference_mode/no_grad for agent forward, not for env.step or env.reset
+
+    while len(collected) < num_eval_episodes:
         try:
             context = torch.inference_mode()
         except AttributeError:
@@ -70,26 +60,33 @@ def rollout_policy(env, agent, num_eval_episodes, rl_device):
         with context:
             obs_torch = agent.obs_to_torch(obs)
             actions = agent.get_action(obs_torch, is_deterministic=getattr(agent, 'is_deterministic', True))
-        # env.step is outside the context!
         result = env.step(actions)
         if len(result) == 5:
             obs, rewards, terminated, truncated, infos = result
             dones = torch.logical_or(torch.as_tensor(terminated), torch.as_tensor(truncated))
         else:
             obs, rewards, dones, infos = result
+
         episode_rewards += rewards
         episode_lengths_env += 1
+
         if torch.any(dones):
             done_indices = torch.nonzero(dones).squeeze(1)
             for idx in done_indices:
-                total_rewards.append(episode_rewards[idx].item())
-                episode_lengths.append(episode_lengths_env[idx].item())
-                total_episodes += 1
+                idx_int = int(idx)
+                if idx_int < num_eval_episodes and idx_int not in collected:
+                    total_rewards[idx_int] = episode_rewards[idx].item()
+                    episode_lengths[idx_int] = episode_lengths_env[idx].item()
+                    collected.add(idx_int)
                 episode_rewards[idx] = 0.0
                 episode_lengths_env[idx] = 0.0
             if agent.is_rnn and agent.states is not None:
                 for s in agent.states:
                     s[:, dones, :] = 0.0
+
+    # Filter out any None (shouldn't happen, but for safety)
+    total_rewards = [r for r in total_rewards if r is not None]
+    episode_lengths = [l for l in episode_lengths if l is not None]
     return total_rewards, episode_lengths
 
 def evaluate_checkpoint(env, checkpoint_path, task, num_eval_episodes, rl_device):
@@ -118,43 +115,85 @@ def evaluate_checkpoint(env, checkpoint_path, task, num_eval_episodes, rl_device
     import gc
     gc.collect()
 
-def main():
-    # Create environment ONCE
-    agent_cfg = load_cfg_from_registry(args_cli.task, "rl_games_cfg_entry_point")
-    env_cfg = parse_env_cfg(
-        args_cli.task, device=agent_cfg["params"]["config"]["device"], num_envs=args_cli.num_envs, use_fabric=True
-    )
-    env = gym.make(args_cli.task, cfg=env_cfg, render_mode=None)
-    if isinstance(env.unwrapped, DirectMARLEnv):
-        env = multi_agent_to_single_agent(env)
-    rl_device = agent_cfg["params"]["config"]["device"]
-    clip_obs = agent_cfg["params"]["env"].get("clip_observations", math.inf)
-    clip_actions = agent_cfg["params"]["env"].get("clip_actions", math.inf)
-    env = RlGamesVecEnvWrapper(env, rl_device, clip_obs, clip_actions)
-    vecenv.register(
-        "IsaacRlgWrapper", lambda config_name, num_actors, **kwargs: RlGamesGpuEnv(config_name, num_actors, **kwargs)
-    )
-    env_configurations.register("rlgpu", {"vecenv_type": "IsaacRlgWrapper", "env_creator": lambda **kwargs: env})
+def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_envs, env=None):
+    """
+    Evaluate all checkpoints in a folder. If env is provided, use it; otherwise, create a new environment.
+    Only close the environment if it was created here.
+    Deeply reset the environment before each checkpoint evaluation.
+    """
     # Find all checkpoint files matching regex ep_\d+
-    checkpoint_pattern = os.path.join(args_cli.checkpoint_folder, "*.pth")
+    checkpoint_pattern = os.path.join(checkpoint_folder, "*.pth")
     all_checkpoint_files = glob.glob(checkpoint_pattern)
     import re
     checkpoint_files = [f for f in all_checkpoint_files if re.search(r'ep_\d+', os.path.basename(f))]
     checkpoint_files = sorted(checkpoint_files, key=os.path.basename)
     if not checkpoint_files:
-        print(f"[WARNING] No checkpoint files found in {args_cli.checkpoint_folder}")
+        print(f"[WARNING] No checkpoint files found in {checkpoint_folder}")
         return
     print(f"[INFO] Found {len(checkpoint_files)} checkpoint files to evaluate")
+    # Create environment ONCE if not provided
+    close_env = False
+    if env is None:
+        agent_cfg = load_cfg_from_registry(task, "rl_games_cfg_entry_point")
+        env_cfg = parse_env_cfg(
+            task, device=agent_cfg["params"]["config"]["device"], num_envs=num_envs, use_fabric=True
+        )
+        env = gym.make(task, cfg=env_cfg, render_mode=None)
+        if isinstance(env.unwrapped, DirectMARLEnv):
+            env = multi_agent_to_single_agent(env)
+        rl_device = agent_cfg["params"]["config"]["device"]
+        clip_obs = agent_cfg["params"]["env"].get("clip_observations", math.inf)
+        clip_actions = agent_cfg["params"]["env"].get("clip_actions", math.inf)
+        env = RlGamesVecEnvWrapper(env, rl_device, clip_obs, clip_actions)
+        vecenv.register(
+            "IsaacRlgWrapper", lambda config_name, num_actors, **kwargs: RlGamesGpuEnv(config_name, num_actors, **kwargs)
+        )
+        env_configurations.register("rlgpu", {"vecenv_type": "IsaacRlgWrapper", "env_creator": lambda **kwargs: env})
+        close_env = True
+    else:
+        # Assume env is already wrapped and ready
+        agent_cfg = load_cfg_from_registry(task, "rl_games_cfg_entry_point")
+        rl_device = agent_cfg["params"]["config"]["device"]
     for checkpoint_path in checkpoint_files:
+        env.reset()
+        # ---
         evaluate_checkpoint(
             env,
             checkpoint_path,
-            args_cli.task,
-            args_cli.num_eval_episodes,
+            task,
+            num_eval_episodes,
             rl_device
         )
-    env.close()
-    simulation_app.close()
+    if close_env:
+        env.close()
+    # simulation_app.close() is handled outside
+
+def main():
+    import argparse
+    # CLI argument parsing and AppLauncher initialization only happen here
+    parser = argparse.ArgumentParser(description="Evaluate all checkpoints in a folder using config.yaml.")
+    parser.add_argument("--task", type=str, required=True, help="Name of the task to evaluate (must match key in config.yaml)")
+    AppLauncher.add_app_launcher_args(parser)
+    args_cli, hydra_args = parser.parse_known_args()
+    sys.argv = [sys.argv[0]] + hydra_args
+    app_launcher = AppLauncher(args_cli)
+    simulation_app = app_launcher.app
+
+    # Load config from baselines_isaac/config.yaml
+    config_path = os.path.join(os.path.dirname(__file__), "config.yaml")
+    with open(config_path, 'r') as f:
+        all_config = yaml.safe_load(f)
+
+    task_cfg = all_config.get(args_cli.task, {})
+    eval_cfg = task_cfg.get('eval', {})
+    checkpoint_folder = eval_cfg.get('checkpoint_folder', None)
+    num_eval_episodes = eval_cfg.get('num_eval_episodes', 100)
+    num_envs = eval_cfg.get('num_envs', 100)
+
+    if checkpoint_folder is None:
+        raise ValueError(f"checkpoint_folder must be specified for task {args_cli.task} in config.yaml under eval")
+
+    evaluate_all_checkpoints(args_cli.task, checkpoint_folder, num_eval_episodes, num_envs)
 
 if __name__ == "__main__":
     main() 

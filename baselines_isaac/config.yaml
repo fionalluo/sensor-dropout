@@ -14,6 +14,8 @@ Isaac-Ant-v0:
   dropout:
     schedule_type: 'constant'
     base_probability: 0.25
+  eval: 
+    num_eval_episodes: 1000
 
 Isaac-Humanoid-v0:
   keys: 

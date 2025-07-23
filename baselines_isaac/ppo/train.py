@@ -96,9 +96,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         args_cli.seed = random.randint(0, 10000)
 
     agent_cfg["params"]["seed"] = args_cli.seed if args_cli.seed is not None else agent_cfg["params"]["seed"]
-    agent_cfg["params"]["config"]["max_epochs"] = (
-        args_cli.max_iterations if args_cli.max_iterations is not None else agent_cfg["params"]["config"]["max_epochs"]
-    )
+    # TEMP: Limit training to 1 million steps for quick testing
+    agent_cfg["params"]["config"]["max_epochs"] = min(1000000, agent_cfg["params"]["config"].get("max_epochs", 1000000))
     if args_cli.checkpoint is not None:
         resume_path = retrieve_file_path(args_cli.checkpoint)
         agent_cfg["params"]["load_checkpoint"] = True
@@ -206,11 +205,35 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         runner.run({"train": True, "play": False, "sigma": train_sigma})
 
     # close the simulator
+    # env.close() # This line is removed as per the new_code, as evaluation.py will handle closing.
+
+    # --- Directly call evaluation after training ---
+    print(f"[INFO] Running evaluation for task {args_cli.task} after training.")
+    import yaml
+    from baselines_isaac.evaluation import evaluate_all_checkpoints
+    config_path = os.path.join(os.path.dirname(__file__), "../config.yaml")
+    with open(config_path, 'r') as f:
+        all_config = yaml.safe_load(f)
+    task_cfg = all_config.get(args_cli.task, {})
+    eval_cfg = task_cfg.get('eval', {})
+    # checkpoint_folder is determined from log_root_path and log_dir, not config
+    checkpoint_folder = os.path.join(log_root_path, log_dir, 'nn')
+    num_eval_episodes = eval_cfg.get('num_eval_episodes', 100)
+    num_envs = eval_cfg.get('num_envs', 100)
+    evaluate_all_checkpoints(
+        task=args_cli.task,
+        checkpoint_folder=checkpoint_folder,
+        num_eval_episodes=num_eval_episodes,
+        num_envs=num_envs,
+        env=env
+    )
     env.close()
+    # Now it is safe to close the simulation app
+    simulation_app.close()
 
 
 if __name__ == "__main__":
     # run the main function
     main()
     # close sim app
-    simulation_app.close()
+    # simulation_app.close() # This line is removed as per the new_code, as evaluation.py will handle closing.
