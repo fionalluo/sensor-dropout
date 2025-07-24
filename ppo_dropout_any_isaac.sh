@@ -26,12 +26,14 @@ export MUJOCO_GL=egl;
 export ISAAC_SIM_USE_EGL=1
 export DISPLAY=
 
-for TASK in "${TASKS[@]}"; do
-  for SEED in "${SEEDS[@]}"; do
+for ((i=0; i<$NUM_SEEDS; i++)); do
+  for TASK in "${TASKS[@]}"; do
+    SEED=$((INITIAL_SEED + i))
     echo "Running RL-Games PPO baseline with task ${TASK}, seed ${SEED}, wandb_project ${WANDB_PROJECT}"
 
     /workspace/isaaclab/isaaclab.sh -p /workspace/sensor-dropout/baselines_isaac/ppo_dropout_any/train.py \
       --task "$TASK" \
+      --seed $SEED \
       --wandb-project-name "$WANDB_PROJECT" \
       --wandb-entity "$WANDB_ENTITY" \
       --track \
@@ -39,6 +41,6 @@ for TASK in "${TASKS[@]}"; do
 
     echo "-----------------------"
   done
-done
+}
 
 echo "All tasks complete." 

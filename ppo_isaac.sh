@@ -3,8 +3,8 @@
 # User: specify your list of tasks and wandb project here
 TASKS=(
   "Isaac-Ant-v0"
-  # "Isaac-Humanoid-v0"
-  # "Isaac-Lift-Cube-Franka-v0"
+  "Isaac-Humanoid-v0"
+  "Isaac-Lift-Cube-Franka-v0"
 )
 WANDB_PROJECT="isaac-test-2"
 WANDB_ENTITY="fionalluo"
@@ -26,8 +26,9 @@ export MUJOCO_GL=egl;
 export ISAAC_SIM_USE_EGL=1
 export DISPLAY=
 
-for TASK in "${TASKS[@]}"; do
-  for SEED in "${SEEDS[@]}"; do
+for ((i=0; i<$NUM_SEEDS; i++)); do
+  for TASK in "${TASKS[@]}"; do
+    SEED=$((INITIAL_SEED + i))
     echo "Running RL-Games PPO baseline with task ${TASK}, seed ${SEED}, wandb_project ${WANDB_PROJECT}"
 
     /workspace/isaaclab/isaaclab.sh -p /workspace/sensor-dropout/baselines_isaac/ppo/train.py \
@@ -40,6 +41,6 @@ for TASK in "${TASKS[@]}"; do
 
     echo "-----------------------"
   done
-done
+}
 
 echo "All tasks complete." 
