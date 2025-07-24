@@ -109,6 +109,9 @@ def rollout_policy(env, agent, num_eval_episodes, rl_device):
     return total_rewards, episode_lengths
 
 def evaluate_checkpoint(env, checkpoint_path, task, num_eval_episodes, rl_device):
+    # Reset the environment
+    obs = env.reset()
+    # Load the agent
     import copy
     agent_cfg = load_cfg_from_registry(task, "rl_games_cfg_entry_point")
     agent_cfg["params"]["load_checkpoint"] = True
@@ -121,7 +124,6 @@ def evaluate_checkpoint(env, checkpoint_path, task, num_eval_episodes, rl_device
     agent.restore(checkpoint_path)
     agent.reset()
     # Ensure env.reset() is outside any torch context
-    obs = env.reset()
     total_rewards, episode_lengths = rollout_policy(env, agent, num_eval_episodes, rl_device)
     avg_reward = sum(total_rewards) / len(total_rewards) if total_rewards else 0.0
     avg_episode_length = sum(episode_lengths) / len(episode_lengths) if episode_lengths else 0.0
@@ -134,6 +136,15 @@ def evaluate_checkpoint(env, checkpoint_path, task, num_eval_episodes, rl_device
     import gc
     gc.collect()
     return avg_reward, avg_episode_length
+
+def find_dropout_wrapper(env):
+    """Walk through .env chain to find a wrapper with set_dropout_probability."""
+    current = env
+    while current is not None:
+        if hasattr(current, 'set_dropout_probability'):
+            return current
+        current = getattr(current, 'env', None)
+    return None
 
 def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_envs, env=None, wandb_project=None, wandb_entity=None, wandb_run_name=None):
     """
@@ -189,20 +200,28 @@ def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_env
         clip_actions = agent_cfg["params"]["env"].get("clip_actions", math.inf)
     for checkpoint_path in checkpoint_files:
         for prob in dropout_probs:
-            # Pass dropout_prob to the wrapper
-            dropout_wrapped_env = IsaacProbabilisticDropoutWrapper(base_env, task_name=task, dropout_prob=prob)
-            wrapped_env = RlGamesVecEnvWrapper(dropout_wrapped_env, rl_device, clip_obs, clip_actions)
-            # De-register old 'rlgpu' env if possible
-            if 'rlgpu' in env_configurations.configurations:
-                del env_configurations.configurations['rlgpu']
-            # Register both vecenv and env_configurations for 'rlgpu'
-            vecenv.register(
-                "IsaacRlgWrapper", lambda config_name, num_actors, **kwargs: RlGamesGpuEnv(config_name, num_actors, **kwargs)
-            )
-            env_configurations.register("rlgpu", {"vecenv_type": "IsaacRlgWrapper", "env_creator": lambda **kwargs: wrapped_env})
-            wrapped_env.reset()
-            avg_reward, avg_episode_length = None, None
-            result = evaluate_checkpoint(
+            # Use the helper to find the dropout wrapper, if present
+            dropout_env = find_dropout_wrapper(base_env)
+            if dropout_env is not None:
+                print("Found dropout wrapper, setting probability to", prob)
+                dropout_env.set_dropout_probability(prob)
+                dropout_env.reset()  # Important: reset after changing probability to regenerate mask
+                wrapped_env = base_env
+            else:
+                print("No dropout wrapper found, creating a new one")
+                dropout_wrapped_env = IsaacProbabilisticDropoutWrapper(base_env, task_name=task, dropout_prob=prob)
+                wrapped_env = RlGamesVecEnvWrapper(dropout_wrapped_env, rl_device, clip_obs, clip_actions)
+                # De-register old 'rlgpu' env if possible
+                if 'rlgpu' in env_configurations.configurations:
+                    del env_configurations.configurations['rlgpu']
+                # Register both vecenv and env_configurations for 'rlgpu'
+                vecenv.register(
+                    "IsaacRlgWrapper", lambda config_name, num_actors, **kwargs: RlGamesGpuEnv(config_name, num_actors, **kwargs)
+                )
+                env_configurations.register("rlgpu", {"vecenv_type": "IsaacRlgWrapper", "env_creator": lambda **kwargs: wrapped_env})
+
+            # --- Only evaluation and logging below this line ---
+            avg_reward, avg_episode_length = evaluate_checkpoint(
                 wrapped_env,
                 checkpoint_path,
                 task,
@@ -217,18 +236,18 @@ def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_env
             if match:
                 epoch = int(match.group(1))
                 global_step = epoch * steps_per_epoch
-            # Print and log with dropout suffix
             print(f"[RESULT] Dropout {prob}: Checkpoint: {checkpoint_name}")
-            print(f"[RESULT] Dropout {prob}: Avg Reward: {result[0]:.2f}")
-            print(f"[RESULT] Dropout {prob}: Avg Episode Length: {result[1]:.1f}")
-            if wandb is not None and result is not None:
+            print(f"[RESULT] Dropout {prob}: Avg Reward: {avg_reward:.2f}")
+            print(f"[RESULT] Dropout {prob}: Avg Episode Length: {avg_episode_length:.1f}")
+            if wandb is not None and avg_reward is not None:
                 wandb.log({
-                    f"eval/avg_reward_dropout_{prob}": result[0],
-                    f"eval/avg_episode_length_dropout_{prob}": result[1],
+                    f"eval/avg_reward_dropout_{prob}": avg_reward,
+                    f"eval/avg_episode_length_dropout_{prob}": avg_episode_length,
                     "eval/checkpoint": checkpoint_name,
                     "eval/epoch": epoch,
                     "global_step": global_step
                 })
+
     if wandb is not None:
         wandb.finish()
     if close_env:

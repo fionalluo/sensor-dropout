@@ -15,7 +15,7 @@ Isaac-Ant-v0:
     schedule_type: 'constant'
     base_probability: 0.25
   eval: 
-    num_eval_episodes: 1000
+    num_eval_episodes: 100
 
 Isaac-Humanoid-v0:
   keys: 

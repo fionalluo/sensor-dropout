@@ -32,6 +32,13 @@ class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
     Efficient dropout wrapper for IsaacLab: keeps dropout mask fixed during episodes,
     re-samples on reset or when an env is done. Fully vectorized for speed.
     For each key, all indices for that key are zeroed together per environment, with probability given by the dropout scheduler.
+    
+    NOTE: The reason there is a lot of conditional logic around the observation lengths and return types, 
+    is because we designed the wrapper to be able to wrap around the BASE environment but also the 
+    VECTORIZED environment, which have different observation lengths and return types. 
+    
+    This logic can be simplified in the future -- if we use a wrapper around every environment
+    and dynamically change the wrapper properties instead! 
     """
     def __init__(self, env, task_name, seed=None, dropout_prob=None):
         super().__init__(env)
@@ -58,8 +65,6 @@ class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
         if seed is not None:
             self.rng.manual_seed(seed)
 
-        self.reset()
-
     def _generate_masks(self, num_envs, device):
         """Generate a dropout mask for each key, for each env in the batch. Each env gets an independent mask for each key."""
         prob = self.dropout_scheduler.get_prob(0)
@@ -77,7 +82,7 @@ class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
     def _mask_obs(self, obs):
         # print("Observation is", obs)
         if self.current_masks is None:
-            # print("Current masks is None")
+            print("Current masks is None")
             return obs
 
         # If obs is a dict with 'policy', mask as before
@@ -185,3 +190,11 @@ class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
                 masked_obs = {"policy": masked_obs}
             # Not expected, but fallback to 5-item return
             return masked_obs, None, None, None, {}
+
+    def set_dropout_probability(self, prob):
+        """Set a new dropout probability for this wrapper."""
+        if hasattr(self.dropout_scheduler, 'base_prob'):
+            self.dropout_scheduler.base_prob = float(prob)
+        else:
+            # If the scheduler is not constant, this will error as intended
+            raise ValueError("DropoutScheduler does not support changing probability dynamically.")

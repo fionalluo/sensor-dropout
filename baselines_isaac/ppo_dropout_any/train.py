@@ -239,9 +239,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     else:
         runner.run({"train": True, "play": False, "sigma": train_sigma})
 
-    # close the simulator
-    env.close()
-
     # --- Directly call evaluation after training ---
     print(f"[INFO] Running evaluation for task {args_cli.task} after training.")
     import yaml
@@ -259,17 +256,19 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     wandb_project = config_name if args_cli.wandb_project_name is None else args_cli.wandb_project_name
     wandb_run_name = log_dir if args_cli.wandb_name is None else args_cli.wandb_name
     wandb_entity = args_cli.wandb_entity
+
     evaluate_all_checkpoints(
         task=args_cli.task,
         checkpoint_folder=checkpoint_folder,
         num_eval_episodes=num_eval_episodes,
         num_envs=num_envs,
-        env=base_env,  # Pass the unwrapped environment
-        wandb_project=wandb_project if args_cli.track else None,
-        wandb_entity=wandb_entity if args_cli.track else None,
-        wandb_run_name=wandb_run_name if args_cli.track else None
+        env=env,
+        wandb_project=wandb_project,
+        wandb_entity=wandb_entity,
+        wandb_run_name=wandb_run_name
     )
-    # Now it is safe to close the simulation app
+    # Now it is safe to close the simulation app and environment
+    env.close()
     simulation_app.close()
 
 
