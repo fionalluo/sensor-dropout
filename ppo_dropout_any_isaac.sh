@@ -6,7 +6,7 @@ TASKS=(
   # "Isaac-Humanoid-v0"
   # "Isaac-Lift-Cube-Franka-v0"
 )
-WANDB_PROJECT="isaac-test"
+WANDB_PROJECT="isaac-test-2"
 WANDB_ENTITY="fionalluo"
 
 # Function to generate a unique seed

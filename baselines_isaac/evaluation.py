@@ -54,7 +54,8 @@ def rollout_policy(env, agent, num_eval_episodes, rl_device):
     num_envs = env.unwrapped.num_envs
 
     obs = env.reset()
-    # Do not extract obs['obs'] here; pass the full dict to the agent if present
+    if isinstance(obs, tuple):
+        obs = obs[0]
     _ = agent.get_batch_size(obs, 1)
     if agent.is_rnn:
         agent.init_rnn()
@@ -108,31 +109,15 @@ def rollout_policy(env, agent, num_eval_episodes, rl_device):
     episode_lengths = [l for l in episode_lengths if l is not None]
     return total_rewards, episode_lengths
 
-def evaluate_checkpoint(env, checkpoint_path, task, num_eval_episodes, rl_device):
-    # Reset the environment
-    obs = env.reset()
-    # Load the agent
-    import copy
-    agent_cfg = load_cfg_from_registry(task, "rl_games_cfg_entry_point")
-    agent_cfg["params"]["load_checkpoint"] = True
-    agent_cfg["params"]["load_path"] = checkpoint_path
-    agent_cfg["params"]["config"]["num_actors"] = env.unwrapped.num_envs
-    from rl_games.torch_runner import Runner
-    runner = Runner()
-    runner.load(agent_cfg)
-    agent: BasePlayer = runner.create_player()
-    agent.restore(checkpoint_path)
+def evaluate_checkpoint(env, agent, checkpoint_path, task, num_eval_episodes, rl_device):
+    # Reset the agent (to clear RNN state, etc.)
     agent.reset()
-    # Ensure env.reset() is outside any torch context
     total_rewards, episode_lengths = rollout_policy(env, agent, num_eval_episodes, rl_device)
     avg_reward = sum(total_rewards) / len(total_rewards) if total_rewards else 0.0
     avg_episode_length = sum(episode_lengths) / len(episode_lengths) if episode_lengths else 0.0
     print(f"[RESULT] Checkpoint: {os.path.basename(checkpoint_path)}")
     print(f"[RESULT] Avg Reward: {avg_reward:.2f}")
     print(f"[RESULT] Avg Episode Length: {avg_episode_length:.1f}")
-    # Cleanup agent and runner only
-    del agent
-    del runner
     import gc
     gc.collect()
     return avg_reward, avg_episode_length
@@ -198,31 +183,49 @@ def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_env
         # Ensure clip_obs and clip_actions are set even if env is provided
         clip_obs = agent_cfg["params"]["env"].get("clip_observations", math.inf)
         clip_actions = agent_cfg["params"]["env"].get("clip_actions", math.inf)
+
+    # --- Ensure there is a dropout wrapper ONCE ---
+    dropout_env = find_dropout_wrapper(base_env)
+    if dropout_env is not None:
+        print("Found dropout wrapper in the environment chain.")
+        wrapped_env_for_eval = base_env
+    else:
+        print("No dropout wrapper found, inserting it just above gym.make (underneath any RlGamesVecEnvWrapper if present).")
+        from baselines_isaac.ppo_dropout_any.isaac_dropout_wrapper import IsaacProbabilisticDropoutWrapper
+        from isaaclab_rl.rl_games import RlGamesVecEnvWrapper
+        if isinstance(base_env, RlGamesVecEnvWrapper):
+            inner_env = base_env.env
+            dropout_wrapped = IsaacProbabilisticDropoutWrapper(inner_env, task_name=task)
+            wrapped_env_for_eval = RlGamesVecEnvWrapper(dropout_wrapped, rl_device, clip_obs, clip_actions)
+        else:
+            wrapped_env_for_eval = IsaacProbabilisticDropoutWrapper(base_env, task_name=task)
+
     for checkpoint_path in checkpoint_files:
+        # --- Create agent ONCE per checkpoint ---
+        import copy
+        agent_cfg = load_cfg_from_registry(task, "rl_games_cfg_entry_point")
+        agent_cfg["params"]["load_checkpoint"] = True
+        agent_cfg["params"]["load_path"] = checkpoint_path
+        agent_cfg["params"]["config"]["num_actors"] = wrapped_env_for_eval.unwrapped.num_envs
+        from rl_games.torch_runner import Runner
+        runner = Runner()
+        runner.load(agent_cfg)
+        agent: BasePlayer = runner.create_player()
+        agent.restore(checkpoint_path)
+        # --- End agent creation ---
         for prob in dropout_probs:
-            # Use the helper to find the dropout wrapper, if present
-            dropout_env = find_dropout_wrapper(base_env)
+            dropout_env = find_dropout_wrapper(wrapped_env_for_eval)
             if dropout_env is not None:
-                print("Found dropout wrapper, setting probability to", prob)
+                print("Setting dropout probability to", prob)
                 dropout_env.set_dropout_probability(prob)
-                dropout_env.reset()  # Important: reset after changing probability to regenerate mask
-                wrapped_env = base_env
+                wrapped_env = wrapped_env_for_eval
             else:
-                print("No dropout wrapper found, creating a new one")
-                dropout_wrapped_env = IsaacProbabilisticDropoutWrapper(base_env, task_name=task, dropout_prob=prob)
-                wrapped_env = RlGamesVecEnvWrapper(dropout_wrapped_env, rl_device, clip_obs, clip_actions)
-                # De-register old 'rlgpu' env if possible
-                if 'rlgpu' in env_configurations.configurations:
-                    del env_configurations.configurations['rlgpu']
-                # Register both vecenv and env_configurations for 'rlgpu'
-                vecenv.register(
-                    "IsaacRlgWrapper", lambda config_name, num_actors, **kwargs: RlGamesGpuEnv(config_name, num_actors, **kwargs)
-                )
-                env_configurations.register("rlgpu", {"vecenv_type": "IsaacRlgWrapper", "env_creator": lambda **kwargs: wrapped_env})
+                raise RuntimeError("No dropout wrapper found in the environment, even after trying to create one!")
 
             # --- Only evaluation and logging below this line ---
             avg_reward, avg_episode_length = evaluate_checkpoint(
                 wrapped_env,
+                agent,
                 checkpoint_path,
                 task,
                 num_eval_episodes,
@@ -247,6 +250,11 @@ def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_env
                     "eval/epoch": epoch,
                     "global_step": global_step
                 })
+        # Cleanup agent and runner only once per checkpoint
+        del agent
+        del runner
+        import gc
+        gc.collect()
 
     if wandb is not None:
         wandb.finish()

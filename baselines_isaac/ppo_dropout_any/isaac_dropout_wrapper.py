@@ -55,9 +55,10 @@ class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
         # If dropout_prob is provided, override config
         if dropout_prob is not None:
             dropout_cfg = {'schedule_type': 'constant', 'base_probability': dropout_prob}
-            print("Dropout probability set to", dropout_prob)
+            print("During initialization, dropout probability set to", dropout_prob)
         else:
             dropout_cfg = task_cfg.get('dropout', {'schedule_type': 'constant', 'base_probability': 0.0})
+            print("Dropout probability set to", dropout_cfg['base_probability'])
         self.key_indices = key_indices
         self.keys = list(key_indices.keys())
         self.dropout_scheduler = DropoutScheduler(dropout_cfg)
@@ -80,10 +81,17 @@ class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
         return masks
 
     def _mask_obs(self, obs):
-        # print("Observation is", obs)
+        # If current_masks is None, generate a new mask based on the observation
         if self.current_masks is None:
-            print("Current masks is None")
-            return obs
+            # Determine num_envs and device for mask generation
+            if isinstance(obs, dict) and "policy" in obs:
+                num_envs = obs["policy"].shape[0]
+                device = obs["policy"].device
+            else:
+                num_envs = obs.shape[0] if torch.is_tensor(obs) and obs.ndim > 1 else 1
+                device = obs.device if torch.is_tensor(obs) else torch.device("cpu")
+            self.current_masks = self._generate_masks(num_envs, device)
+            # Comment: Always generate a mask if missing, never return obs unmasked
 
         # If obs is a dict with 'policy', mask as before
         if isinstance(obs, dict) and "policy" in obs:
@@ -93,7 +101,6 @@ class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
                     continue
                 mask = self.current_masks[k]  # shape: [N, 1]
                 policy_obs[:, start:end] *= mask
-            # print("Returning masked observation with probability", self.dropout_scheduler.get_prob(0))
             return obs
 
         # If obs is a tensor, mask it directly
@@ -104,10 +111,8 @@ class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
                     continue
                 mask = self.current_masks[k]  # shape: [N, 1]
                 masked_obs[:, start:end] *= mask
-            # print("Returning masked tensor observation with probability", self.dropout_scheduler.get_prob(0))
             return masked_obs
 
-        # print("Obs is not a dict or tensor, returning as is")
         return obs
 
     def reset(self, **kwargs):
