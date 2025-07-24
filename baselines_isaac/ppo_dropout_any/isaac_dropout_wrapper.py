@@ -183,7 +183,7 @@ class IsaacProbabilisticDropoutWrapper(gym.Wrapper):
                 #     print(f"[DropoutWrapper] Regenerated mask for key '{k}' at env 0: mask={flag0}")
 
     def step(self, action):
-        print("[DropoutWrapper] step() called, applying masking...")
+        # print("[DropoutWrapper] step() called, applying masking...")
         result = self.env.step(action)
         # result can be (obs, reward, terminated, truncated, info) or similar
         if isinstance(result, tuple) and len(result) >= 3:
