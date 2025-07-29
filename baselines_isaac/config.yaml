@@ -45,3 +45,67 @@ Isaac-Lift-Cube-Franka-v0:
     schedule_type: 'constant'
     base_probability: 0.25
 
+Isaac-Repose-Cube-Shadow-Direct-v0:
+  keys:
+    hand_joint_pos_scaled: [0, 24]
+    hand_joint_vel: [24, 48]
+    object_pos: [48, 51]
+    object_rot: [51, 55]
+    object_lin_vel: [55, 58]
+    object_ang_vel: [58, 61]
+    goal_pos: [61, 64]
+    goal_rot: [64, 68]
+    rel_obj_goal_rot: [68, 72]
+    fingertip_pos: [72, 87]
+    fingertip_rot: [87, 107]
+    fingertip_vel: [107, 137]
+    last_actions: [137, 157]
+  dropout:
+    schedule_type: 'constant'
+    base_probability: 0.25
+
+Isaac-Repose-Cube-Shadow-With-Contact-Sensors-Direct-v0:
+  keys:
+    hand_joint_pos_scaled: [0, 24]
+    hand_joint_vel: [24, 48]
+    object_pos: [48, 51]
+    object_rot: [51, 55]
+    object_lin_vel: [55, 58]
+    object_ang_vel: [58, 61]
+    goal_pos: [61, 64]
+    goal_rot: [64, 68]
+    rel_obj_goal_rot: [68, 72]
+    fingertip_pos: [72, 87]
+    fingertip_rot: [87, 107]
+    fingertip_vel: [107, 137]
+    last_actions: [137, 157]
+  contact_keys:
+    robot0_hand_mount:     [157, 160]
+    robot0_forearm:        [160, 163]
+    robot0_wrist:          [163, 166]
+    robot0_palm:           [166, 169]
+    robot0_ffknuckle:      [169, 172]
+    robot0_ffproximal:     [172, 175]
+    robot0_ffmiddle:       [175, 178]
+    robot0_ffdistal:       [178, 181]
+    robot0_mfknuckle:      [181, 184]
+    robot0_mfproximal:     [184, 187]
+    robot0_mfmiddle:       [187, 190]
+    robot0_mfdistal:       [190, 193]
+    robot0_rfknuckle:      [193, 196]
+    robot0_rfproximal:     [196, 199]
+    robot0_rfmiddle:       [199, 202]
+    robot0_rfdistal:       [202, 205]
+    robot0_lfmetacarpal:   [205, 208]
+    robot0_lfknuckle:      [208, 211]
+    robot0_lfproximal:     [211, 214]
+    robot0_lfmiddle:       [214, 217]
+    robot0_lfdistal:       [217, 220]
+    robot0_thbase:         [220, 223]
+    robot0_thproximal:     [223, 226]
+    robot0_thhub:          [226, 229]
+    robot0_thmiddle:       [229, 232]
+    robot0_thdistal:       [232, 235]
+  dropout:
+    schedule_type: 'constant'
+    base_probability: 0.25
