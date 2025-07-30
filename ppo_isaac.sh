@@ -6,7 +6,9 @@ TASKS=(
   # "Isaac-Humanoid-v0"
   # "Isaac-Lift-Cube-Franka-v0"
   # "Isaac-Repose-Cube-Shadow-Direct-v0"
-  "Isaac-Repose-Cube-Shadow-With-Contact-Sensors-Direct-v0"
+  # "Isaac-Repose-Cube-Shadow-With-Contact-Sensors-Direct-v0"
+  # "Isaac-Repose-Cube-Shadow-With-Binary-Contact-Sensors-Direct-v0"
+  "Isaac-Repose-Cube-Shadow-With-Magnitude-Contact-Sensors-Direct-v0"
 )
 WANDB_PROJECT="isaac-test-729"
 WANDB_ENTITY="fionalluo"
