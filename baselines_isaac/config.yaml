@@ -16,6 +16,7 @@ Isaac-Ant-v0:
     base_probability: 0.25
   eval: 
     num_eval_episodes: 20
+    dropout_probs: [0.0, 0.1, 0.25, 0.5]
 
 Isaac-Humanoid-v0:
   keys: 
@@ -33,6 +34,9 @@ Isaac-Humanoid-v0:
   dropout:
     schedule_type: 'constant'
     base_probability: 0.25
+  eval: 
+    num_eval_episodes: 20
+    dropout_probs: [0.0, 0.1, 0.25, 0.5]
 
 Isaac-Lift-Cube-Franka-v0:
   keys: 
@@ -44,6 +48,9 @@ Isaac-Lift-Cube-Franka-v0:
   dropout:
     schedule_type: 'constant'
     base_probability: 0.25
+  eval: 
+    num_eval_episodes: 20
+    dropout_probs: [0.0, 0.1, 0.25, 0.5]
 
 Isaac-Repose-Cube-Shadow-Direct-v0:
   keys:
@@ -63,6 +70,9 @@ Isaac-Repose-Cube-Shadow-Direct-v0:
   dropout:
     schedule_type: 'constant'
     base_probability: 0.25
+  eval: 
+    num_eval_episodes: 100
+    dropout_probs: [0.0, 0.1, 0.25, 0.5]
 
 Isaac-Repose-Cube-Shadow-With-Contact-Sensors-Direct-v0:
   keys:
@@ -109,6 +119,9 @@ Isaac-Repose-Cube-Shadow-With-Contact-Sensors-Direct-v0:
   dropout:
     schedule_type: 'constant'
     base_probability: 0.25
+  eval: 
+    num_eval_episodes: 100
+    dropout_probs: [0.0, 0.1, 0.25, 0.5]
 
 Isaac-Repose-Cube-Shadow-With-Binary-Contact-Sensors-Direct-v0:
   keys:
@@ -155,6 +168,9 @@ Isaac-Repose-Cube-Shadow-With-Binary-Contact-Sensors-Direct-v0:
   dropout:
     schedule_type: 'constant'
     base_probability: 0.25
+  eval: 
+    num_eval_episodes: 100
+    dropout_probs: [0.0, 0.1, 0.25, 0.5]
 
 Isaac-Repose-Cube-Shadow-With-Magnitude-Contact-Sensors-Direct-v0:
   keys:
@@ -201,3 +217,6 @@ Isaac-Repose-Cube-Shadow-With-Magnitude-Contact-Sensors-Direct-v0:
   dropout:
     schedule_type: 'constant'
     base_probability: 0.25
+  eval: 
+    num_eval_episodes: 100
+    dropout_probs: [0.0, 0.1, 0.25, 0.5]

@@ -50,6 +50,7 @@ def rollout_policy(env, agent, num_eval_episodes, rl_device):
     # Collect the first episode to finish for each of the first num_eval_episodes env indices
     total_rewards = [None] * num_eval_episodes
     episode_lengths = [None] * num_eval_episodes
+    successes = [None] * num_eval_episodes
     collected = set()
     num_envs = env.unwrapped.num_envs
 
@@ -62,6 +63,7 @@ def rollout_policy(env, agent, num_eval_episodes, rl_device):
 
     episode_rewards = torch.zeros(num_envs, device=rl_device)
     episode_lengths_env = torch.zeros(num_envs, device=rl_device)
+    episode_successes = torch.zeros(num_envs, device=rl_device)
 
     def extract_array(val):
         if isinstance(val, dict):
@@ -89,6 +91,15 @@ def rollout_policy(env, agent, num_eval_episodes, rl_device):
 
         episode_rewards += rewards
         episode_lengths_env += 1
+        
+        # Track successes from infos
+        if isinstance(infos, dict) and 'success' in infos:
+            episode_successes += infos['success'].float()
+        elif isinstance(infos, list) and len(infos) > 0:
+            # Handle case where infos is a list of dicts
+            for i, info in enumerate(infos):
+                if isinstance(info, dict) and 'success' in info:
+                    episode_successes[i] += info['success']
 
         if torch.any(dones):
             done_indices = torch.nonzero(dones).squeeze(1)
@@ -97,9 +108,11 @@ def rollout_policy(env, agent, num_eval_episodes, rl_device):
                 if idx_int < num_eval_episodes and idx_int not in collected:
                     total_rewards[idx_int] = episode_rewards[idx].item()
                     episode_lengths[idx_int] = episode_lengths_env[idx].item()
+                    successes[idx_int] = episode_successes[idx].item()
                     collected.add(idx_int)
                 episode_rewards[idx] = 0.0
                 episode_lengths_env[idx] = 0.0
+                episode_successes[idx] = 0.0
             if agent.is_rnn and agent.states is not None:
                 for s in agent.states:
                     s[:, dones, :] = 0.0
@@ -107,20 +120,23 @@ def rollout_policy(env, agent, num_eval_episodes, rl_device):
     # Filter out any None (shouldn't happen, but for safety)
     total_rewards = [r for r in total_rewards if r is not None]
     episode_lengths = [l for l in episode_lengths if l is not None]
-    return total_rewards, episode_lengths
+    successes = [s for s in successes if s is not None]
+    return total_rewards, episode_lengths, successes
 
 def evaluate_checkpoint(env, agent, checkpoint_path, task, num_eval_episodes, rl_device):
     # Reset the agent (to clear RNN state, etc.)
     agent.reset()
-    total_rewards, episode_lengths = rollout_policy(env, agent, num_eval_episodes, rl_device)
+    total_rewards, episode_lengths, successes = rollout_policy(env, agent, num_eval_episodes, rl_device)
     avg_reward = sum(total_rewards) / len(total_rewards) if total_rewards else 0.0
     avg_episode_length = sum(episode_lengths) / len(episode_lengths) if episode_lengths else 0.0
+    avg_success_rate = sum(successes) / len(successes) if successes else 0.0
     print(f"[RESULT] Checkpoint: {os.path.basename(checkpoint_path)}")
     print(f"[RESULT] Avg Reward: {avg_reward:.2f}")
     print(f"[RESULT] Avg Episode Length: {avg_episode_length:.1f}")
+    print(f"[RESULT] Avg Success Rate: {avg_success_rate:.2f}")
     import gc
     gc.collect()
-    return avg_reward, avg_episode_length
+    return avg_reward, avg_episode_length, avg_success_rate
 
 def find_dropout_wrapper(env):
     """Walk through .env chain to find a wrapper with set_dropout_probability."""
@@ -131,9 +147,10 @@ def find_dropout_wrapper(env):
         current = getattr(current, 'env', None)
     return None
 
-def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_envs, env=None, wandb_project=None, wandb_entity=None, wandb_run_name=None):
+def evaluate_checkpoints(task, checkpoint_folder, num_eval_episodes, num_envs, env=None, wandb_project=None, wandb_entity=None, wandb_run_name=None, evaluate_all_checkpoints_flag=False, dropout_probs=None):
     """
-    Evaluate all checkpoints in a folder. If env is provided, use it; otherwise, create a new environment.
+    Evaluate checkpoints in a folder. If evaluate_all_checkpoints_flag is False, only evaluate the best checkpoint (without number).
+    If evaluate_all_checkpoints_flag is True, evaluate all checkpoints like before.
     Only close the environment if it was created here.
     Deeply reset the environment before each checkpoint evaluation.
     Optionally log results to wandb if wandb_project, wandb_entity, and wandb_run_name are provided.
@@ -148,17 +165,43 @@ def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_env
     # Load agent config to get steps_per_epoch
     agent_cfg = load_cfg_from_registry(task, "rl_games_cfg_entry_point")
     steps_per_epoch = agent_cfg["params"].get("steps_num", 1)
-    # Find all checkpoint files matching regex ep_\d+
-    checkpoint_pattern = os.path.join(checkpoint_folder, "*.pth")
-    all_checkpoint_files = glob.glob(checkpoint_pattern)
-    checkpoint_files = [f for f in all_checkpoint_files if re.search(r'ep_\d+', os.path.basename(f))]
-    checkpoint_files = sorted(checkpoint_files, key=os.path.basename)
+    
+    # Find checkpoint files based on flag
+    if evaluate_all_checkpoints_flag:
+        # Find all checkpoint files matching regex ep_\d+ (original behavior)
+        checkpoint_pattern = os.path.join(checkpoint_folder, "*.pth")
+        all_checkpoint_files = glob.glob(checkpoint_pattern)
+        checkpoint_files = [f for f in all_checkpoint_files if re.search(r'ep_\d+', os.path.basename(f))]
+        checkpoint_files = sorted(checkpoint_files, key=os.path.basename)
+        print(f"[INFO] Evaluating all checkpoints: {len(checkpoint_files)} files found")
+    else:
+        # Find only the checkpoint without a number in filename
+        checkpoint_pattern = os.path.join(checkpoint_folder, "*.pth")
+        all_checkpoint_files = glob.glob(checkpoint_pattern)
+        # Filter out files with numbers in the filename
+        checkpoint_files = [f for f in all_checkpoint_files if not re.search(r'\d+', os.path.basename(f))]
+        if len(checkpoint_files) == 1:
+            print(f"[INFO] Evaluating best checkpoint: {checkpoint_files[0]}")
+        else:
+            print(f"[WARNING] Best checkpoint not found in {checkpoint_folder}")
+            print(f"[INFO] No evaluation performed")
+            return
+    
     if not checkpoint_files:
         print(f"[WARNING] No checkpoint files found in {checkpoint_folder}")
         return
     print(f"[INFO] Found {len(checkpoint_files)} checkpoint files to evaluate")
-    # Prepare dropout probabilities
-    dropout_probs = [0.0, 0.1, 0.25, 0.5]
+    
+    # Use dropout_probs from config if not provided
+    if dropout_probs is None:
+        # Load config to get dropout_probs for this task
+        config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+        with open(config_path, 'r') as f:
+            all_config = yaml.safe_load(f)
+        task_cfg = all_config.get(task, {})
+        eval_cfg = task_cfg.get('eval', {})
+        dropout_probs = eval_cfg.get('dropout_probs', [0.0, 0.1, 0.25, 0.5])
+    
     # Load key indices for dropout wrapper
     config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
     key_indices = load_task_dropout_config(config_path, task)
@@ -223,7 +266,7 @@ def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_env
                 raise RuntimeError("No dropout wrapper found in the environment, even after trying to create one!")
 
             # --- Only evaluation and logging below this line ---
-            avg_reward, avg_episode_length = evaluate_checkpoint(
+            avg_reward, avg_episode_length, avg_success_rate = evaluate_checkpoint(
                 wrapped_env,
                 agent,
                 checkpoint_path,
@@ -242,10 +285,12 @@ def evaluate_all_checkpoints(task, checkpoint_folder, num_eval_episodes, num_env
             print(f"[RESULT] Dropout {prob}: Checkpoint: {checkpoint_name}")
             print(f"[RESULT] Dropout {prob}: Avg Reward: {avg_reward:.2f}")
             print(f"[RESULT] Dropout {prob}: Avg Episode Length: {avg_episode_length:.1f}")
-            if wandb is not None and avg_reward is not None:
+            print(f"[RESULT] Dropout {prob}: Avg Success Rate: {avg_success_rate:.2f}")
+            if wandb is not None:
                 wandb.log({
                     f"eval/avg_reward_dropout_{prob}": avg_reward,
                     f"eval/avg_episode_length_dropout_{prob}": avg_episode_length,
+                    f"eval/avg_success_rate_dropout_{prob}": avg_success_rate,
                     "eval/checkpoint": checkpoint_name,
                     "eval/epoch": epoch,
                     "global_step": global_step
@@ -267,6 +312,7 @@ def main():
     # CLI argument parsing and AppLauncher initialization only happen here
     parser = argparse.ArgumentParser(description="Evaluate all checkpoints in a folder using config.yaml.")
     parser.add_argument("--task", type=str, required=True, help="Name of the task to evaluate (must match key in config.yaml)")
+    parser.add_argument("--evaluate-all-checkpoints", action="store_true", help="Evaluate all checkpoints (default: evaluate best checkpoint)")
     AppLauncher.add_app_launcher_args(parser)
     args_cli, hydra_args = parser.parse_known_args()
     sys.argv = [sys.argv[0]] + hydra_args
@@ -287,7 +333,7 @@ def main():
     if checkpoint_folder is None:
         raise ValueError(f"checkpoint_folder must be specified for task {args_cli.task} in config.yaml under eval")
 
-    evaluate_all_checkpoints(args_cli.task, checkpoint_folder, num_eval_episodes, num_envs)
+    evaluate_checkpoints(args_cli.task, checkpoint_folder, num_eval_episodes, num_envs, evaluate_all_checkpoints_flag=args_cli.evaluate_all_checkpoints)
 
 if __name__ == "__main__":
     main() 

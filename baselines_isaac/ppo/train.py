@@ -38,6 +38,12 @@ parser.add_argument(
     const=True,
     help="if toggled, this experiment will be tracked with Weights and Biases",
 )
+parser.add_argument(
+    "--evaluate-all-checkpoints",
+    action="store_true",
+    default=False,
+    help="Evaluate all checkpoints instead of just the best checkpoint",
+)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
@@ -215,7 +221,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # --- Directly call evaluation after training ---
     print(f"[INFO] Running evaluation for task {args_cli.task} after training.")
     import yaml
-    from baselines_isaac.evaluation import evaluate_all_checkpoints
+    from baselines_isaac.evaluation import evaluate_checkpoints
     config_path = os.path.join(os.path.dirname(__file__), "../config.yaml")
     with open(config_path, 'r') as f:
         all_config = yaml.safe_load(f)
@@ -225,11 +231,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     checkpoint_folder = os.path.join(log_root_path, log_dir, 'nn')
     num_eval_episodes = eval_cfg.get('num_eval_episodes', 100)
     num_envs = eval_cfg.get('num_envs', 100)
+    dropout_probs = eval_cfg.get('dropout_probs', [0.0, 0.1, 0.25, 0.5])
     # Use the same wandb project, entity, and run name as training
     wandb_project = config_name if args_cli.wandb_project_name is None else args_cli.wandb_project_name
     wandb_run_name = log_dir if args_cli.wandb_name is None else args_cli.wandb_name
     wandb_entity = args_cli.wandb_entity
-    evaluate_all_checkpoints(
+    evaluate_checkpoints(
         task=args_cli.task,
         checkpoint_folder=checkpoint_folder,
         num_eval_episodes=num_eval_episodes,
@@ -237,7 +244,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         env=env,
         wandb_project=wandb_project,
         wandb_entity=wandb_entity,
-        wandb_run_name=wandb_run_name
+        wandb_run_name=wandb_run_name,
+        evaluate_all_checkpoints_flag=args_cli.evaluate_all_checkpoints,
+        dropout_probs=dropout_probs
     )
     env.close()
     # Now it is safe to close the simulation app
