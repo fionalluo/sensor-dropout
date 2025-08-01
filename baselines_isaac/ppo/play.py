@@ -32,6 +32,10 @@ parser.add_argument(
     help="When no checkpoint provided, use the last saved model. Otherwise use the best saved model.",
 )
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
+parser.add_argument("--camera_eye", type=float, nargs=3, default=[1.0, 0.0, 1.0], 
+                   help="Camera eye position (x y z) for video recording.")
+parser.add_argument("--camera_target", type=float, nargs=3, default=[1.0, 1.0, 0.3], 
+                   help="Camera target position (x y z) for video recording.")
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
@@ -115,6 +119,18 @@ def main():
     # convert to single-agent instance if required by the RL algorithm
     if isinstance(env.unwrapped, DirectMARLEnv):
         env = multi_agent_to_single_agent(env)
+
+    # Adjust camera position for better video recording
+    if args_cli.video:
+        # Set camera to a much closer position for viewing the shadow hand manipulation
+        # Position very close to the hand and object for detailed view
+        env.unwrapped.sim.set_camera_view(
+            eye=tuple(args_cli.camera_eye),  # Camera position from command line
+            target=tuple(args_cli.camera_target),  # Target position from command line
+            camera_prim_path="/OmniverseKit_Persp"
+        )
+        print(f"[INFO] Adjusted camera position for close-up video recording.")
+        print(f"[INFO] Camera eye: {args_cli.camera_eye}, target: {args_cli.camera_target}")
 
     # wrap for video recording
     if args_cli.video:

@@ -44,6 +44,12 @@ parser.add_argument(
     default=False,
     help="Evaluate all checkpoints instead of just the best checkpoint",
 )
+parser.add_argument(
+    "--evaluate-dropout",
+    type=lambda x: bool(strtobool(x)),
+    default=True,
+    help="If true, evaluate with dropout probabilities from config. If false, only evaluate with dropout 0.0",
+)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
@@ -246,7 +252,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         wandb_entity=wandb_entity,
         wandb_run_name=wandb_run_name,
         evaluate_all_checkpoints_flag=args_cli.evaluate_all_checkpoints,
-        dropout_probs=dropout_probs
+        dropout_probs=dropout_probs,
+        evaluate_dropout=args_cli.evaluate_dropout
     )
     env.close()
     # Now it is safe to close the simulation app

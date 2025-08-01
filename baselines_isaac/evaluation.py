@@ -147,7 +147,7 @@ def find_dropout_wrapper(env):
         current = getattr(current, 'env', None)
     return None
 
-def evaluate_checkpoints(task, checkpoint_folder, num_eval_episodes, num_envs, env=None, wandb_project=None, wandb_entity=None, wandb_run_name=None, evaluate_all_checkpoints_flag=False, dropout_probs=None):
+def evaluate_checkpoints(task, checkpoint_folder, num_eval_episodes, num_envs, env=None, wandb_project=None, wandb_entity=None, wandb_run_name=None, evaluate_all_checkpoints_flag=False, dropout_probs=None, evaluate_dropout=True):
     """
     Evaluate checkpoints in a folder. If evaluate_all_checkpoints_flag is False, only evaluate the best checkpoint (without number).
     If evaluate_all_checkpoints_flag is True, evaluate all checkpoints like before.
@@ -201,6 +201,14 @@ def evaluate_checkpoints(task, checkpoint_folder, num_eval_episodes, num_envs, e
         task_cfg = all_config.get(task, {})
         eval_cfg = task_cfg.get('eval', {})
         dropout_probs = eval_cfg.get('dropout_probs', [0.0, 0.1, 0.25, 0.5])
+    
+    # Control dropout evaluation based on flag
+    if not evaluate_dropout:
+        # Only evaluate with dropout 0.0 (no dropout)
+        dropout_probs = [0.0]
+        print(f"[INFO] Dropout evaluation disabled. Only evaluating with dropout 0.0")
+    else:
+        print(f"[INFO] Dropout evaluation enabled. Evaluating with dropout probabilities: {dropout_probs}")
     
     # Load key indices for dropout wrapper
     config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
@@ -287,14 +295,25 @@ def evaluate_checkpoints(task, checkpoint_folder, num_eval_episodes, num_envs, e
             print(f"[RESULT] Dropout {prob}: Avg Episode Length: {avg_episode_length:.1f}")
             print(f"[RESULT] Dropout {prob}: Avg Success Rate: {avg_success_rate:.2f}")
             if wandb is not None:
-                wandb.log({
-                    f"eval/avg_reward_dropout_{prob}": avg_reward,
-                    f"eval/avg_episode_length_dropout_{prob}": avg_episode_length,
-                    f"eval/avg_success_rate_dropout_{prob}": avg_success_rate,
-                    "eval/checkpoint": checkpoint_name,
-                    "eval/epoch": epoch,
-                    "global_step": global_step
-                })
+                # When evaluating only the best checkpoint (not all numbered checkpoints),
+                # log as single scalar values without step information for bar chart viewing
+                if not evaluate_all_checkpoints_flag:
+                    wandb.log({
+                        f"final_eval/avg_reward_dropout_{prob}": avg_reward,
+                        f"final_eval/avg_episode_length_dropout_{prob}": avg_episode_length,
+                        f"final_eval/avg_success_rate_dropout_{prob}": avg_success_rate,
+                        "final_eval/checkpoint": checkpoint_name
+                    })
+                else:
+                    # Original behavior for evaluating all checkpoints
+                    wandb.log({
+                        f"eval/avg_reward_dropout_{prob}": avg_reward,
+                        f"eval/avg_episode_length_dropout_{prob}": avg_episode_length,
+                        f"eval/avg_success_rate_dropout_{prob}": avg_success_rate,
+                        "eval/checkpoint": checkpoint_name,
+                        "eval/epoch": epoch,
+                        "global_step": global_step
+                    })
         # Cleanup agent and runner only once per checkpoint
         del agent
         del runner
